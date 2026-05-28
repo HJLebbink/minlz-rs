@@ -124,8 +124,8 @@ fn ensure_bench_file(filename: &str) -> std::io::Result<PathBuf> {
 }
 
 fn load_bench_file(filename: &str) -> Vec<u8> {
-    let path = ensure_bench_file(filename)
-        .unwrap_or_else(|e| panic!("ensure bench file {filename}: {e}"));
+    let path =
+        ensure_bench_file(filename).unwrap_or_else(|e| panic!("ensure bench file {filename}: {e}"));
     std::fs::read(&path).unwrap_or_else(|e| panic!("read {}: {e}", Path::new(&path).display()))
 }
 
