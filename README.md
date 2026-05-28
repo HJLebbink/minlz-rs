@@ -450,6 +450,13 @@ the harness itself is at
 
 The `mz` binary at `bin/mz/` is a Rust port of the Go `cmd/mz` tool.
 
+Build or install from a checkout of this repo:
+
+```sh
+cargo install --path bin/mz            # installs to ~/.cargo/bin/mz
+cargo build --release -p mz            # or just build; binary at target/release/mz
+```
+
 ```
 mz c -2 input.json                     # compress to input.json.mz
 mz d input.json.mz                     # decompress back to input.json

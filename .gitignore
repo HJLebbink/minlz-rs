@@ -3,3 +3,7 @@ Cargo.lock
 /testdata/bench/
 /.claude
 /.idea
+/crates/minlz/fuzz/corpus/
+/crates/minlz/fuzz/artifacts/
+/crates/minlz/fuzz/coverage/
+/crates/minlz/fuzz/target/
