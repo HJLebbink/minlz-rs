@@ -109,7 +109,7 @@ fn ensure_bench_file(filename: &str) -> std::io::Result<PathBuf> {
     eprintln!("minlz bench: downloading {url} -> {}", path.display());
     let resp = ureq::get(&url)
         .call()
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("GET {url}: {e}")))?;
+        .map_err(|e| std::io::Error::other(format!("GET {url}: {e}")))?;
     let mut body = Vec::new();
     resp.into_reader().read_to_end(&mut body)?;
     let tmp = dir.join(format!("{filename}.partial"));
