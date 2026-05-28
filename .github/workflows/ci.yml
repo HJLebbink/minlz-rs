@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest, ubuntu-24.04-arm]
         rust: [stable, "1.75"]   # 1.75 = MSRV pinned in rust-toolchain.toml
     runs-on: ${{ matrix.os }}
     steps:
