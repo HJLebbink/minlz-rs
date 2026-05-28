@@ -109,7 +109,7 @@ fn ensure_bench_file(filename: &str) -> std::io::Result<PathBuf> {
     eprintln!("minlz bench: downloading {url} -> {}", path.display());
     let resp = ureq::get(&url)
         .call()
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("GET {url}: {e}")))?;
+        .map_err(|e| std::io::Error::other(format!("GET {url}: {e}")))?;
     let mut body = Vec::new();
     resp.into_reader().read_to_end(&mut body)?;
     let tmp = dir.join(format!("{filename}.partial"));
@@ -124,8 +124,8 @@ fn ensure_bench_file(filename: &str) -> std::io::Result<PathBuf> {
 }
 
 fn load_bench_file(filename: &str) -> Vec<u8> {
-    let path = ensure_bench_file(filename)
-        .unwrap_or_else(|e| panic!("ensure bench file {filename}: {e}"));
+    let path =
+        ensure_bench_file(filename).unwrap_or_else(|e| panic!("ensure bench file {filename}: {e}"));
     std::fs::read(&path).unwrap_or_else(|e| panic!("read {}: {e}", Path::new(&path).display()))
 }
 
