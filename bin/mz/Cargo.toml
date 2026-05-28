@@ -1,0 +1,22 @@
+[package]
+name = "mz"
+version = "0.1.0"
+description = "MinLZ command-line tool (Rust port)"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[[bin]]
+name = "mz"
+path = "src/main.rs"
+
+[dependencies]
+minlz = { path = "../../crates/minlz" }
+
+[lints.rust]
+unsafe_op_in_unsafe_fn = "forbid"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
