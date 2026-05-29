@@ -499,8 +499,8 @@ fn reduce_triggered_by_append_to() {
     // emitted byte stream parses back to ≤ MAX_INDEX_ENTRIES entries.
     let mut idx = Index::default();
     idx.reset(4 << 10); // est_block ≥ 1 MiB
-                        // Manually inject more than MAX_INDEX_ENTRIES so append_to.reduce()
-                        // is what shrinks them.
+    // Manually inject more than MAX_INDEX_ENTRIES so append_to.reduce()
+    // is what shrinks them.
     idx.offsets.clear();
     let n = MAX_INDEX_ENTRIES + 5_000;
     for i in 0..n {
@@ -601,7 +601,7 @@ fn load_rejects_entries_above_max() {
     super::put_varint(&mut buf, 1 << 20); // est_block
     super::put_varint(&mut buf, (MAX_INDEX_ENTRIES + 1) as i64); // bad
     buf.push(0); // has_uncomp
-                 // Stuff a fake trailer so we hit the entry-count check before short-EOF.
+    // Stuff a fake trailer so we hit the entry-count check before short-EOF.
     let size = (buf.len() + 4 + INDEX_TRAILER.len()) as u32;
     buf.extend_from_slice(&size.to_le_bytes());
     buf.extend_from_slice(INDEX_TRAILER);

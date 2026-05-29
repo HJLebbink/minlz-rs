@@ -84,11 +84,7 @@ fn small_copy() {
 /// Cap iteration count under miri so tests still finish in reasonable time.
 /// (Miri is 50-100× slower than native.)
 fn cap(n: usize) -> usize {
-    if cfg!(miri) {
-        n.min(512)
-    } else {
-        n
-    }
+    if cfg!(miri) { n.min(512) } else { n }
 }
 
 /// Ports `TestSmallRand` from `minlz_test.go:218`.

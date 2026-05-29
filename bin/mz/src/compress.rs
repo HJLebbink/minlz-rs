@@ -18,13 +18,13 @@ use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 use std::time::Instant;
 
-use minlz::stream::{MtWriterBuilder, WriterBuilder, MAX_BLOCK_SIZE};
 use minlz::Level;
+use minlz::stream::{MAX_BLOCK_SIZE, MtWriterBuilder, WriterBuilder};
 
 use crate::args::Options;
 use crate::io_util::{
-    mb_per_sec, open_input, open_output, open_output_send, resolve_threads, CountingReader,
-    CountingWriter,
+    CountingReader, CountingWriter, mb_per_sec, open_input, open_output, open_output_send,
+    resolve_threads,
 };
 
 const EXT_STREAM: &str = "mz";
@@ -172,8 +172,8 @@ fn compress_block(input: &Path, opts: &Options) -> io::Result<()> {
     let mut dst = open_output(&dst_path)?;
     let level = if opts.uncompressed {
         Level::Fastest // block::encode has no uncompressed mode; the encoder
-                       // will fall back to the inline literal block if the
-                       // data doesn't compress, which is the closest analog.
+    // will fall back to the inline literal block if the
+    // data doesn't compress, which is the closest analog.
     } else {
         opts.level.unwrap_or(Level::Balanced)
     };

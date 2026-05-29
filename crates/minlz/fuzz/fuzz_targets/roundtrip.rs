@@ -19,7 +19,7 @@
 #![no_main]
 
 use libfuzzer_sys::fuzz_target;
-use minlz::{decode, encode, Level};
+use minlz::{Level, decode, encode};
 
 fuzz_target!(|data: &[u8]| {
     // Block codec only handles inputs up to `MAX_BLOCK_SIZE` (8 MiB).

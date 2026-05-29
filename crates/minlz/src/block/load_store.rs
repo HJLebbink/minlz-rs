@@ -25,7 +25,10 @@
 /// # Safety
 /// `i + 2 <= b.len()` must hold.
 #[inline(always)]
-#[allow(dead_code)] // used by L2/L3 in future stages
+#[expect(
+    dead_code,
+    reason = "load primitive kept for parity with load32/load64; no current caller"
+)]
 pub(super) unsafe fn load16(b: &[u8], i: usize) -> u16 {
     // SAFETY: caller guarantees `i + 2 <= b.len()`; `read_unaligned` does
     // not require alignment, and `b.as_ptr().add(i)` stays within the slice.
@@ -37,7 +40,6 @@ pub(super) unsafe fn load16(b: &[u8], i: usize) -> u16 {
 /// # Safety
 /// `i + 4 <= b.len()` must hold.
 #[inline(always)]
-#[allow(dead_code)] // used by L2/L3 in future stages
 pub(super) unsafe fn load32(b: &[u8], i: usize) -> u32 {
     // SAFETY: see `load16`.
     unsafe { core::ptr::read_unaligned(b.as_ptr().add(i) as *const u32).to_le() }

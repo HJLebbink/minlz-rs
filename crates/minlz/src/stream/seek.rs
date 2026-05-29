@@ -20,7 +20,7 @@
 
 use std::io::{self, BufRead, Read, Seek, SeekFrom};
 
-use crate::index::{restore_index_headers, Index, CHUNK_TYPE_INDEX, LEGACY_INDEX_CHUNK};
+use crate::index::{CHUNK_TYPE_INDEX, Index, LEGACY_INDEX_CHUNK, restore_index_headers};
 
 use super::Reader;
 

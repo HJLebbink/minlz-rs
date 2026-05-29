@@ -15,8 +15,8 @@
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
 use std::num::NonZeroUsize;
 
-use crate::stream::{MtWriter, MtWriterBuilder, ReadSeeker, Reader};
 use crate::Index;
+use crate::stream::{MtWriter, MtWriterBuilder, ReadSeeker, Reader};
 
 fn round_trip_concurrency(payload: &[u8], concurrency: usize) -> Vec<u8> {
     let n = NonZeroUsize::new(concurrency).unwrap();

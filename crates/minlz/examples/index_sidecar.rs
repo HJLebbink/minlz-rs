@@ -31,9 +31,9 @@
 
 use std::io::{Cursor, Read, Write};
 
+use minlz::Index;
 use minlz::index::{index_stream, remove_index_headers, restore_index_headers};
 use minlz::stream::{ReaderBuilder, WriterBuilder};
-use minlz::Index;
 
 fn main() {
     // -------------------- 1. Produce sample data --------------------
