@@ -491,6 +491,10 @@ targets (decode-arbitrary, roundtrip, stream-roundtrip,
 stream-decode-arbitrary, index-load).  See its
 [`RUNBOOK.md`](crates/minlz/fuzz/RUNBOOK.md) for setup.
 
+Performance work — what was tried, kept, or reverted, plus the benchmark
+noise caveats — is recorded in
+[`docs/optimization-notes.md`](docs/optimization-notes.md).
+
 MSRV: **Rust 1.85**.
 
 ## License

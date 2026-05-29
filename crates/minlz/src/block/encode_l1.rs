@@ -17,6 +17,8 @@
 //! Ports `encode_l1.go:encodeBlockGo` (for inputs > 64 KiB) and
 //! `encode_l1.go:encodeBlockGo64K` (for inputs ≤ 64 KiB).
 
+use std::cell::RefCell;
+
 use super::emit::{emit_copy, emit_copy_lits2, emit_copy_lits3, emit_literal, emit_repeat};
 use super::format::{
     INPUT_MARGIN, MAX_COPY2_LITS, MAX_COPY3_LITS, MAX_COPY3_OFFSET, MIN_COPY2_OFFSET,
@@ -24,6 +26,31 @@ use super::format::{
 };
 use super::hash::{hash5, hash6};
 use super::load_store::{load32, load64};
+
+/// Hash-table sizing for the > 64 KiB path.
+const TABLE_BITS_BIG: u32 = 15;
+const TABLE_SIZE_BIG: usize = 1 << TABLE_BITS_BIG;
+
+thread_local! {
+    /// Per-thread scratch hash table for [`encode_block_big`], lent via
+    /// [`with_table_big`].  Avoids a 128 KiB allocation per block encode
+    /// (Go's `sync.Pool` analog; matches the L2/L3 approach in this crate).
+    static TABLE_BIG: RefCell<Vec<u32>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Lend the per-thread big-input hash table to `f`, lazily allocating on
+/// first use and zero-clearing on every borrow.
+fn with_table_big<R>(f: impl FnOnce(&mut [u32]) -> R) -> R {
+    TABLE_BIG.with(|cell| {
+        let mut t = cell.borrow_mut();
+        if t.len() < TABLE_SIZE_BIG {
+            t.resize(TABLE_SIZE_BIG, 0);
+        } else {
+            t.iter_mut().for_each(|x| *x = 0);
+        }
+        f(&mut t[..TABLE_SIZE_BIG])
+    })
+}
 
 /// Entry point: dispatches on `src.len()`.  Returns the number of bytes
 /// written into `dst` or `0` if the block is incompressible.
@@ -40,13 +67,23 @@ pub(super) fn encode_block(dst: &mut [u8], src: &[u8]) -> usize {
 
 /// L1 encoder for inputs > 64 KiB (port of `encodeBlockGo`).
 fn encode_block_big(dst: &mut [u8], src: &[u8]) -> usize {
-    const TABLE_BITS: u32 = 15;
-    const TABLE_SIZE: usize = 1 << TABLE_BITS;
-    const SKIP_LOG: u32 = 6;
-
-    let mut table = vec![0u32; TABLE_SIZE].into_boxed_slice();
     let s_limit = src.len() - INPUT_MARGIN;
     let dst_limit = src.len() - (src.len() >> 5) - 6;
+    with_table_big(|table| encode_inner_big(dst, src, s_limit, dst_limit, table))
+}
+
+/// Inner L1 big-input encoder.  `table` is a zeroed `TABLE_SIZE_BIG`-entry
+/// scratch buffer lent by [`with_table_big`].
+fn encode_inner_big(
+    dst: &mut [u8],
+    src: &[u8],
+    s_limit: usize,
+    dst_limit: usize,
+    table: &mut [u32],
+) -> usize {
+    const TABLE_BITS: u32 = TABLE_BITS_BIG;
+    const SKIP_LOG: u32 = 6;
+
     let mut next_emit: usize = 0;
     let mut s: usize = 1;
     // SAFETY: s + 8 = 9 ≤ src.len() (caller ensures src.len() ≥ MIN_NON_LITERAL_BLOCK_SIZE = 16).
@@ -55,7 +92,10 @@ fn encode_block_big(dst: &mut [u8], src: &[u8]) -> usize {
     let mut d: usize = 0;
 
     'outer: loop {
-        // Inner search loop — find a 4-byte match.
+        // Inner search loop — find a 4-byte match.  This loop is ~89% of L1
+        // encode time; its cost is the 128 KiB `table` probes (L2 latency) and
+        // candidate-branch mispredicts, not the hashing (~8%).  Annotated
+        // profile: docs/l1-hot-loop-profile.md.
         let candidate;
         loop {
             let next_s = s + ((s - next_emit) >> SKIP_LOG) + 4;
