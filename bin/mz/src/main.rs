@@ -42,8 +42,8 @@ Usage:
   mz bench [options] <input>   Repeat compress/decompress and report throughput.
 
 If no subcommand is given, the input filename's extension decides:
-  *.mz / *.mzb  -> decompress
-  anything else -> compress
+  *.mz / *.mzb / *.igz  -> decompress
+  anything else         -> compress
 
 Options (compress):
   -1, -2, -3          Level shortcut (fastest / balanced / smallest).
@@ -53,6 +53,9 @@ Options (compress):
   --pad N             Pad total output to a multiple of N bytes.
   --block             Single-block mode (.mzb).  Loads entire input into memory.
   --index, --no-index Toggle seek-index appending (default: on).
+  --iguana            Use the Iguana codec (LZ + rANS entropy) instead of MinLZ,
+                      writing a self-contained .igz file.  Higher ratio, slower.
+                      Decompression auto-detects .igz vs MinLZ — no flag needed.
 
 Options (decompress):
   --offset SIZE       Seek to uncompressed offset before reading.  Requires

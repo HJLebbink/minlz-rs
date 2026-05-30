@@ -96,6 +96,139 @@ fn round_trip_each_level() {
 }
 
 #[test]
+fn iguana_round_trip_autodetect() {
+    let dir = tmp_dir();
+    let src = dir.join("ig_input.txt");
+    let payload = sample_payload(99, 96 * 1024);
+    fs::write(&src, &payload).unwrap();
+
+    // Compress with --iguana -> writes <src>.igz as a block-framed Iguana stream.
+    run_ok(
+        Command::new(mz_bin())
+            .args(["c", "--iguana", "-q"])
+            .arg(&src),
+    );
+    let igz = dir.join("ig_input.txt.igz");
+    let bytes = fs::read(&igz).unwrap();
+    assert_eq!(&bytes[..4], b"IGZS", "missing Iguana stream magic");
+    assert!(bytes.len() < payload.len(), "iguana did not compress");
+
+    // Decompress WITHOUT any codec flag — must auto-detect the container.
+    let out = dir.join("ig_decoded.bin");
+    run_ok(
+        Command::new(mz_bin())
+            .args(["d", "-q"])
+            .arg("-o")
+            .arg(&out)
+            .arg(&igz),
+    );
+    assert_eq!(
+        fs::read(&out).unwrap(),
+        payload,
+        "iguana round-trip mismatch"
+    );
+
+    // `--iguana --verify` round-trips internally without writing output.
+    run_ok(
+        Command::new(mz_bin())
+            .args(["c", "--iguana", "--verify", "-q"])
+            .arg(&src),
+    );
+}
+
+#[test]
+fn iguana_seek_offset_and_tail() {
+    let dir = tmp_dir();
+    let src = dir.join("ig_seek.txt");
+    let payload = sample_payload(55, 400 * 1024);
+    fs::write(&src, &payload).unwrap();
+    // Small blocks so the offset/tail land mid-stream across several blocks.
+    run_ok(
+        Command::new(mz_bin())
+            .args(["c", "--iguana", "--block-size", "32K", "-q"])
+            .arg(&src),
+    );
+    let igz = dir.join("ig_seek.txt.igz");
+
+    // --offset N -> bytes [N..].
+    let off = 123_456usize;
+    let out = dir.join("off.bin");
+    run_ok(
+        Command::new(mz_bin())
+            .args(["d", "--offset", &off.to_string(), "-q"])
+            .arg("-o")
+            .arg(&out)
+            .arg(&igz),
+    );
+    assert_eq!(fs::read(&out).unwrap(), &payload[off..], "--offset span");
+
+    // --tail N -> last N bytes.
+    let n = 5000usize;
+    let tail = dir.join("tail.bin");
+    run_ok(
+        Command::new(mz_bin())
+            .args(["d", "--tail", &n.to_string(), "-q"])
+            .arg("-o")
+            .arg(&tail)
+            .arg(&igz),
+    );
+    assert_eq!(
+        fs::read(&tail).unwrap(),
+        &payload[payload.len() - n..],
+        "--tail span"
+    );
+}
+
+#[test]
+fn iguana_streaming_multiblock_and_stdin() {
+    let dir = tmp_dir();
+    let src = dir.join("ig_big.txt");
+    // ~600 KiB so a small --block-size forces many independent blocks.
+    let payload = sample_payload(123, 600 * 1024);
+    fs::write(&src, &payload).unwrap();
+
+    // Force ~9 blocks via a 64 KiB block size; decompress must reassemble them.
+    run_ok(
+        Command::new(mz_bin())
+            .args(["c", "--iguana", "--block-size", "64K", "-q"])
+            .arg(&src),
+    );
+    let igz = dir.join("ig_big.txt.igz");
+    let out = dir.join("ig_big.out");
+    run_ok(
+        Command::new(mz_bin())
+            .args(["d", "-q"])
+            .arg("-o")
+            .arg(&out)
+            .arg(&igz),
+    );
+    assert_eq!(fs::read(&out).unwrap(), payload, "multi-block round-trip");
+
+    // stdin -> stdin streaming (compress then decompress through pipes).
+    let mut c = Command::new(mz_bin())
+        .args(["c", "--iguana", "-c", "-q", "-"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    c.stdin.as_mut().unwrap().write_all(&payload).unwrap();
+    let compressed = c.wait_with_output().unwrap().stdout;
+    assert_eq!(&compressed[..4], b"IGZS");
+
+    let mut d = Command::new(mz_bin())
+        .args(["d", "-c", "-q", "-"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .unwrap();
+    d.stdin.as_mut().unwrap().write_all(&compressed).unwrap();
+    let decoded = d.wait_with_output().unwrap().stdout;
+    assert_eq!(decoded, payload, "stdin streaming round-trip");
+}
+
+#[test]
 fn block_round_trip() {
     let dir = tmp_dir();
     let src = dir.join("input.txt");

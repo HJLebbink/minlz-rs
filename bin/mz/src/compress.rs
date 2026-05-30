@@ -29,6 +29,7 @@ use crate::io_util::{
 
 const EXT_STREAM: &str = "mz";
 const EXT_BLOCK: &str = "mzb";
+const EXT_IGUANA: &str = "igz";
 
 /// CLI default block size — matches Go `cmd/mz`'s `-bs 8M` default.
 /// (Library default in `stream::DEFAULT_BLOCK_SIZE` is 2 MiB.)
@@ -43,11 +44,85 @@ pub fn run(opts: Options, input: Option<PathBuf>) -> io::Result<()> {
         return crate::bench::run_compress(&opts, &input);
     }
 
-    if opts.block {
+    if opts.iguana {
+        compress_iguana(&input, &opts)
+    } else if opts.block {
         compress_block(&input, &opts)
     } else {
         compress_stream(&input, &opts)
     }
+}
+
+/// Compress the input with the Iguana codec (LZ + rANS) into a `.igz` file using
+/// the block-framed streaming writer ([`iguana::stream`]) — so memory stays
+/// bounded to ~one block and stdin/large files don't need to be held whole. `-0`
+/// selects the structural-only `None` entropy mode; otherwise ANS32 is used.
+/// `--block-size` sets the per-block size.
+fn compress_iguana(input: &Path, opts: &Options) -> io::Result<()> {
+    let mode = if opts.uncompressed {
+        iguana::EntropyMode::None
+    } else {
+        iguana::EntropyMode::Ans32
+    };
+    let block = opts
+        .block_size
+        .unwrap_or(iguana::stream::DEFAULT_BLOCK_SIZE);
+    let dst_path = dest_path(input, opts, EXT_IGUANA);
+
+    // `--verify` re-decodes for comparison, which needs the input again; buffer
+    // it (verify is a correctness check, not the throughput path).
+    if opts.verify {
+        let (mut src, src_size) = open_input(input)?;
+        let mut buf = Vec::with_capacity(src_size.unwrap_or(0) as usize);
+        src.read_to_end(&mut buf)?;
+        if !opts.quiet {
+            eprint!("Compressing {} -> {}", input.display(), dst_path.display());
+        }
+        let start = Instant::now();
+        let mut w = iguana::stream::Writer::with_options(Vec::new(), mode, block);
+        w.write_all(&buf)?;
+        let framed = w.finish()?;
+        let mut dst = open_output(&dst_path)?;
+        dst.write_all(&framed)?;
+        dst.flush()?;
+        print_compress_summary(opts, buf.len() as u64, framed.len() as u64, start.elapsed());
+        let mut dec = Vec::with_capacity(buf.len());
+        iguana::stream::Reader::new(&framed[..]).read_to_end(&mut dec)?;
+        if dec != buf {
+            return Err(io::Error::other("verify: decoded content mismatch"));
+        }
+        if !opts.quiet {
+            eprintln!("... Verified ok.");
+        }
+        if opts.remove && input != Path::new("-") {
+            std::fs::remove_file(input)?;
+        }
+        return Ok(());
+    }
+
+    // Streaming path: input -> Iguana stream -> output, bounded memory. Uses the
+    // multi-threaded bounded pipeline when more than one worker is available
+    // (`--threads`); `threads == 1` is the single-threaded writer internally.
+    let threads = resolve_threads(opts.threads).get();
+    let (mut src, _) = open_input(input)?;
+    let dst = open_output_send(&dst_path)?;
+    if !opts.quiet {
+        eprint!("Compressing {} -> {}", input.display(), dst_path.display());
+    }
+    let start = Instant::now();
+    let mut counted_src = CountingReader::new(&mut src);
+    let counted_dst = CountingWriter::new(dst);
+    let counted_dst =
+        iguana::stream::compress(&mut counted_src, counted_dst, threads, mode, block)?;
+    let elapsed = start.elapsed();
+    print_compress_summary(opts, counted_src.bytes, counted_dst.bytes, elapsed);
+    if opts.remove && input != Path::new("-") {
+        std::fs::remove_file(input)?;
+        if !opts.quiet {
+            eprintln!("Removing {}", input.display());
+        }
+    }
+    Ok(())
 }
 
 fn compress_stream(input: &Path, opts: &Options) -> io::Result<()> {

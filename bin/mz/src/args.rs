@@ -69,6 +69,9 @@ pub struct Options {
     /// `--follow` / `-follow`: re-open the input file when EOF is
     /// reached, like `tail -f`.  Sleeps 1 s between retries.
     pub follow: bool,
+    /// Compress with the Iguana codec (LZ + rANS entropy) instead of MinLZ,
+    /// writing a self-contained `.igz` container. Decompression auto-detects it.
+    pub iguana: bool,
     pub help: bool,
 }
 
@@ -92,6 +95,7 @@ impl Default for Options {
             tail: None,
             tail_next_nl: false,
             follow: false,
+            iguana: false,
             help: false,
         }
     }
@@ -295,6 +299,7 @@ fn apply_long_flag<I: Iterator<Item = OsString>>(
         "help" => opts.help = true,
         "no-index" => opts.index = false,
         "follow" => opts.follow = true,
+        "iguana" => opts.iguana = true,
         _ => {
             // Long flags that take a separate argument.
             let val = it
@@ -462,7 +467,7 @@ pub fn parse_size(s: &str) -> Result<u64, &'static str> {
 fn is_compressed_filename(path: &std::path::Path) -> bool {
     matches!(
         path.extension().and_then(|s| s.to_str()),
-        Some("mz") | Some("mzb")
+        Some("mz") | Some("mzb") | Some("igz")
     )
 }
 

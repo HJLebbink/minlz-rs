@@ -23,8 +23,8 @@ use minlz::stream::{ConcurrentDecode, ReadSeeker, Reader};
 
 use crate::args::Options;
 use crate::io_util::{
-    CountingReader, CountingWriter, mb_per_sec, open_input, open_output, open_output_send,
-    resolve_threads,
+    CountingReader, CountingWriter, IGUANA_MAGIC, mb_per_sec, open_input, open_output,
+    open_output_send, resolve_threads,
 };
 
 pub fn run(opts: Options, input: Option<PathBuf>) -> io::Result<()> {
@@ -32,12 +32,236 @@ pub fn run(opts: Options, input: Option<PathBuf>) -> io::Result<()> {
     if opts.bench_n.is_some() {
         return crate::bench::run_decompress(&opts, &input);
     }
+
+    // Auto-detect the Iguana (`.igz`) container by its magic.
+    let plain = opts.offset.is_none() && opts.tail.is_none() && !opts.follow;
+    if plain {
+        if input == Path::new("-") {
+            // stdin can't be re-opened: peek without consuming, then dispatch.
+            return decompress_stdin_auto(&opts);
+        }
+        if first_bytes_match(&input, IGUANA_MAGIC)? {
+            return decompress_iguana_file(&input, &opts);
+        }
+    } else if !opts.follow
+        && (opts.offset.is_some() || opts.tail.is_some())
+        && input != Path::new("-")
+        && first_bytes_match(&input, IGUANA_MAGIC)?
+    {
+        // Random access into an indexed `.igz` (`--follow` is MinLZ-only).
+        return decompress_iguana_seek(&input, &opts);
+    }
+
     let is_block = opts.block || extension_matches(&input, "mzb");
     if is_block {
         decompress_block(&input, &opts)
     } else {
         decompress_stream(&input, &opts)
     }
+}
+
+/// Whether `input`'s first bytes equal `magic` (false on a too-short file).
+fn first_bytes_match(input: &Path, magic: &[u8]) -> io::Result<bool> {
+    let mut f = File::open(input)?;
+    let mut head = vec![0u8; magic.len()];
+    match f.read_exact(&mut head) {
+        Ok(()) => Ok(head == magic),
+        Err(e) if e.kind() == io::ErrorKind::UnexpectedEof => Ok(false),
+        Err(e) => Err(e),
+    }
+}
+
+/// Decompress a detected `.igz` file by streaming it through the Iguana stream
+/// reader (bounded memory).
+fn decompress_iguana_file(input: &Path, opts: &Options) -> io::Result<()> {
+    let (src, _) = open_input(input)?;
+    stream_decode_iguana(src, input, opts)
+}
+
+/// Auto-detecting stdin decompressor. Peeks the first bytes without consuming
+/// them, so every format is decoded **incrementally** from the same reader:
+/// `.igz` via the Iguana stream reader, MinLZ streams via the MinLZ reader, and
+/// MinLZ blocks (only with `--block`) read whole.
+fn decompress_stdin_auto(opts: &Options) -> io::Result<()> {
+    use std::io::BufRead;
+    let stdin = io::stdin();
+    let mut br = BufReader::with_capacity(256 * 1024, stdin.lock());
+    let is_iguana = {
+        let head = br.fill_buf()?;
+        head.len() >= IGUANA_MAGIC.len() && &head[..IGUANA_MAGIC.len()] == IGUANA_MAGIC
+    };
+    let dash = Path::new("-");
+    if is_iguana {
+        return stream_decode_iguana(br, dash, opts);
+    }
+    if opts.block {
+        let mut buf = Vec::new();
+        br.read_to_end(&mut buf)?;
+        return decode_minlz_block(&buf, dash, opts);
+    }
+    // MinLZ stream from stdin — decoded incrementally (not buffered whole).
+    let dst_path = dest_path(dash, opts);
+    if !opts.quiet {
+        eprint!("Decompressing {} -> {}", dash.display(), dst_path.display());
+    }
+    let mut counted_src = CountingReader::new(br);
+    let mut reader = Reader::new(&mut counted_src);
+    let start = Instant::now();
+    if opts.verify {
+        io::copy(&mut reader, &mut io::sink())?;
+        print_decompress_summary(opts, counted_src.bytes, 0, start.elapsed());
+        if !opts.quiet {
+            eprintln!("... Verified ok.");
+        }
+        return Ok(());
+    }
+    let dst = open_output(&dst_path)?;
+    let mut counted_dst = CountingWriter::new(dst);
+    io::copy(&mut reader, &mut counted_dst)?;
+    counted_dst.flush()?;
+    print_decompress_summary(opts, counted_src.bytes, counted_dst.bytes, start.elapsed());
+    Ok(())
+}
+
+/// Stream-decode an Iguana (`.igz`) stream from `reader` to the output, with
+/// bounded memory. Uses the multi-threaded bounded pipeline when `--threads`
+/// allows (`threads == 1` is the single-threaded reader internally). Honours
+/// `--verify` and `--rm`.
+fn stream_decode_iguana<R: Read>(reader: R, input: &Path, opts: &Options) -> io::Result<()> {
+    let dst_path = dest_path(input, opts);
+    let threads = resolve_threads(opts.threads).get();
+    if !opts.quiet {
+        eprint!(
+            "Decompressing {} -> {}",
+            input.display(),
+            dst_path.display()
+        );
+    }
+    let start = Instant::now();
+    let mut counted_src = CountingReader::new(reader);
+    let out_bytes: u64 = if opts.verify {
+        let sink = CountingWriter::new(io::sink());
+        iguana::stream::decompress(&mut counted_src, sink, threads)?.bytes
+    } else {
+        let dst = open_output_send(&dst_path)?;
+        let counted_dst = CountingWriter::new(dst);
+        iguana::stream::decompress(&mut counted_src, counted_dst, threads)?.bytes
+    };
+    print_decompress_summary(opts, counted_src.bytes, out_bytes, start.elapsed());
+    if opts.verify && !opts.quiet {
+        eprintln!("... Verified ok.");
+    }
+    if opts.remove && input != Path::new("-") && !opts.verify {
+        std::fs::remove_file(input)?;
+        if !opts.quiet {
+            eprintln!("Removing {}", input.display());
+        }
+    }
+    Ok(())
+}
+
+/// Random access into an indexed `.igz`: seek to `--offset` / `--tail` and emit
+/// the requested span using the block seek index (decodes only the blocks
+/// covering it).
+fn decompress_iguana_seek(input: &Path, opts: &Options) -> io::Result<()> {
+    let file = File::open(input)?;
+    let mut sr = iguana::stream::SeekReader::new(file).map_err(|e| {
+        io::Error::other(format!(
+            "--offset / --tail require an Iguana seek index: {e}"
+        ))
+    })?;
+    let total = sr.total_uncompressed();
+    let (start, limit) = match (opts.offset, opts.tail) {
+        (Some(off), None) => (off, total.saturating_sub(off)),
+        (None, Some(t)) => {
+            let t = t.min(total);
+            (total - t, t)
+        }
+        (Some(off), Some(t)) => {
+            let end = off.saturating_add(t).min(total);
+            (off, end.saturating_sub(off))
+        }
+        (None, None) => unreachable!("decompress_iguana_seek without offset/tail"),
+    };
+    sr.seek_uncompressed(start)?;
+    if opts.tail_next_nl {
+        advance_past_newline(&mut sr)?;
+    }
+
+    let dst_path = dest_path(input, opts);
+    if !opts.quiet {
+        eprint!(
+            "Decompressing {} -> {}",
+            input.display(),
+            dst_path.display()
+        );
+    }
+    let start_t = Instant::now();
+    let out_bytes = if opts.verify {
+        io::copy(&mut (&mut sr).take(limit), &mut io::sink())?
+    } else {
+        let dst = open_output(&dst_path)?;
+        let mut counted = CountingWriter::new(dst);
+        io::copy(&mut (&mut sr).take(limit), &mut counted)?;
+        counted.flush()?;
+        counted.bytes
+    };
+    print_decompress_summary(opts, total, out_bytes, start_t.elapsed());
+    if opts.verify && !opts.quiet {
+        eprintln!("... Verified ok.");
+    }
+    Ok(())
+}
+
+/// Decode a whole MinLZ block buffer and write the result.
+fn decode_minlz_block(buf: &[u8], input: &Path, opts: &Options) -> io::Result<()> {
+    let dst_path = dest_path(input, opts);
+    if !opts.quiet {
+        eprint!(
+            "Decompressing {} -> {}",
+            input.display(),
+            dst_path.display()
+        );
+    }
+    let start = Instant::now();
+    let mut dec = Vec::with_capacity(buf.len() * 2);
+    minlz::decode(&mut dec, buf).map_err(io::Error::other)?;
+    finish_decoded(
+        &dst_path,
+        input,
+        opts,
+        buf.len() as u64,
+        &dec,
+        start.elapsed(),
+    )
+}
+
+/// Shared tail for the whole-buffer decoders: write (unless `--verify`), print
+/// the summary, and honour `--rm`.
+fn finish_decoded(
+    dst_path: &Path,
+    input: &Path,
+    opts: &Options,
+    in_len: u64,
+    dec: &[u8],
+    elapsed: std::time::Duration,
+) -> io::Result<()> {
+    if !opts.verify {
+        let mut dst = open_output(dst_path)?;
+        dst.write_all(dec)?;
+        dst.flush()?;
+    }
+    print_decompress_summary(opts, in_len, dec.len() as u64, elapsed);
+    if opts.verify && !opts.quiet {
+        eprintln!("... Verified ok.");
+    }
+    if opts.remove && input != Path::new("-") && !opts.verify {
+        std::fs::remove_file(input)?;
+        if !opts.quiet {
+            eprintln!("Removing {}", input.display());
+        }
+    }
+    Ok(())
 }
 
 fn decompress_stream(input: &Path, opts: &Options) -> io::Result<()> {
@@ -280,7 +504,7 @@ fn dest_path(input: &Path, opts: &Options) -> PathBuf {
     }
     // Strip a recognized compression extension to get the destination name.
     let ext = input.extension().and_then(|s| s.to_str()).unwrap_or("");
-    if matches!(ext, "mz" | "mzb") {
+    if matches!(ext, "mz" | "mzb" | "igz") {
         input.with_extension("")
     } else {
         // Unrecognised extension — write to `<input>.out` to avoid clobbering.

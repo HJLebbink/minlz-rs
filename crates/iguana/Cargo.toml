@@ -1,0 +1,29 @@
+[package]
+name = "iguana"
+version = "0.0.0"
+description = "PoC Rust port of Sneller's Iguana compressor — scalar rANS entropy stage"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[lib]
+path = "src/lib.rs"
+
+[build-dependencies]
+nasm-rs = "0.3"
+cc = "1"
+
+[dev-dependencies]
+criterion = { version = "0.8.2", default-features = false, features = ["html_reports"] }
+minlz = { path = "../minlz" }
+
+# Head-to-head Iguana-vs-MinLZ corpus bake-off (ratio + encode/decode speed).
+[[bench]]
+name = "codec"
+harness = false
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }

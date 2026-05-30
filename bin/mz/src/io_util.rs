@@ -28,6 +28,12 @@ pub fn resolve_threads(opt: Option<NonZeroUsize>) -> NonZeroUsize {
 
 const BUF_SIZE: usize = 256 * 1024;
 
+/// 4-byte magic that prefixes a `.igz` file written by `mz c --iguana`. The
+/// container is the block-framed Iguana **stream** (`iguana::stream`), whose own
+/// header starts with these bytes. Chosen so it can't be mistaken for a MinLZ
+/// input: MinLZ blocks start with `0x00` and streams with `0xff`, neither `0x49`.
+pub const IGUANA_MAGIC: &[u8; 4] = b"IGZS";
+
 /// Open `path` for reading.  `-` means stdin.  Returns the boxed reader and
 /// the input size in bytes (`None` if unknown, e.g. stdin or a pipe).
 pub fn open_input(path: &Path) -> io::Result<(Box<dyn Read>, Option<u64>)> {

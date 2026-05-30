@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/minlz", "bin/mz"]
+members = ["crates/minlz", "crates/iguana", "bin/mz"]
 # The cargo-fuzz crate at `crates/minlz/fuzz` is a stand-alone manifest
 # (its own `[workspace]` block) and is not part of this workspace.
 
