@@ -26,7 +26,7 @@ mod hash;
 mod load_store;
 mod match_len;
 
-pub use format::{max_encoded_len, MAX_BLOCK_SIZE};
+pub use format::{MAX_BLOCK_SIZE, max_encoded_len};
 
 use crate::Error;
 

@@ -752,9 +752,5 @@ fn best_of(a: Match, b: Match) -> Match {
     if a.nextrep != b.nextrep {
         return if a.nextrep { a } else { b };
     }
-    if a.offset > b.offset {
-        a
-    } else {
-        b
-    }
+    if a.offset > b.offset { a } else { b }
 }

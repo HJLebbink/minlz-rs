@@ -21,7 +21,7 @@ use std::env;
 use std::fs;
 use std::time::Instant;
 
-use minlz::{decode, encode, Level};
+use minlz::{Level, decode, encode};
 
 fn main() {
     let args: Vec<String> = env::args().collect();

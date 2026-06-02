@@ -19,6 +19,13 @@
 /// Maximum uncompressed block size (8 MiB).  Mirrors Go's `MaxBlockSize`.
 pub const MAX_BLOCK_SIZE: usize = 8 << 20;
 
+// Compile-time invariant: the encoders store block-relative source positions
+// as `u32` (the L1/L2 hash tables are `[u32]`; L3 packs two positions into a
+// `u64`).  Those casts are only lossless while every position — bounded by
+// `MAX_BLOCK_SIZE` — fits in 32 bits.  This trips the build if the block size
+// is ever raised past `u32::MAX`.
+const _: () = assert!(MAX_BLOCK_SIZE <= u32::MAX as usize);
+
 /// Tag values for the lower 2 bits of a tag byte (SPEC §2 table).
 pub(super) const TAG_LITERAL: u8 = 0b00;
 pub(super) const TAG_REPEAT: u8 = 1 << 2;

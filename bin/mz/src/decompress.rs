@@ -23,8 +23,8 @@ use minlz::stream::{ReadSeeker, Reader};
 
 use crate::args::Options;
 use crate::io_util::{
-    mb_per_sec, open_input, open_output, open_output_send, resolve_threads, CountingReader,
-    CountingWriter,
+    CountingReader, CountingWriter, mb_per_sec, open_input, open_output, open_output_send,
+    resolve_threads,
 };
 
 pub fn run(opts: Options, input: Option<PathBuf>) -> io::Result<()> {

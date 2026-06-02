@@ -20,8 +20,8 @@ use std::io::{self, BufRead, Read, Write};
 use std::path::PathBuf;
 use std::time::Instant;
 
-use minlz::stream::{MtWriterBuilder, Reader, WriterBuilder};
 use minlz::Level;
+use minlz::stream::{MtWriterBuilder, Reader, WriterBuilder};
 
 use crate::args::Options;
 use crate::io_util::{mb_per_sec, open_input, resolve_threads};

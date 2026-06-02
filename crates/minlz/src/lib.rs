@@ -54,12 +54,12 @@ pub mod index;
 pub mod stream;
 
 pub use block::{
-    append_decoded, append_encoded, decode, decoded_len, encode, is_minlz, max_encoded_len,
-    try_encode, Level, MAX_BLOCK_SIZE,
+    Level, MAX_BLOCK_SIZE, append_decoded, append_encoded, decode, decoded_len, encode, is_minlz,
+    max_encoded_len, try_encode,
 };
 pub use error::Error;
 pub use index::{
-    index_stream, remove_index_headers, restore_index_headers, Index, OffsetPair, CHUNK_TYPE_INDEX,
+    CHUNK_TYPE_INDEX, Index, OffsetPair, index_stream, remove_index_headers, restore_index_headers,
 };
 
 /// A specialized [`Result`] type for MinLZ operations.

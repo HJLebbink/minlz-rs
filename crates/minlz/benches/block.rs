@@ -34,9 +34,8 @@
 
 #![allow(missing_docs)] // criterion_group! emits an undocumented fn
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use minlz::{decode, encode, Level};
-use std::io::Read;
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use minlz::{Level, decode, encode};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -124,8 +123,10 @@ fn ensure_bench_file(filename: &str) -> std::io::Result<PathBuf> {
     let resp = ureq::get(&url)
         .call()
         .map_err(|e| std::io::Error::other(format!("GET {url}: {e}")))?;
-    let mut body = Vec::new();
-    resp.into_reader().read_to_end(&mut body)?;
+    let body = resp
+        .into_body()
+        .read_to_vec()
+        .map_err(|e| std::io::Error::other(format!("read body {url}: {e}")))?;
     let tmp = dir.join(format!("{filename}.partial"));
     let res = (|| -> std::io::Result<()> {
         std::fs::write(&tmp, &body)?;

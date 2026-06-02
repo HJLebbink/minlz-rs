@@ -32,12 +32,12 @@ use crate::block;
 use super::crc::masked_crc32c;
 use super::error::Error;
 use super::format::{
-    block_size_from_indicator, get_uvarint, read_chunk_len, read_u32_le, CHECKSUM_SIZE,
-    CHUNK_HEADER_SIZE, CHUNK_TYPE_EOF, CHUNK_TYPE_MINLZ_COMPRESSED_DATA,
+    CHECKSUM_SIZE, CHUNK_HEADER_SIZE, CHUNK_TYPE_EOF, CHUNK_TYPE_MINLZ_COMPRESSED_DATA,
     CHUNK_TYPE_MINLZ_COMPRESSED_DATA_COMP_CRC, CHUNK_TYPE_STREAM_IDENTIFIER,
     CHUNK_TYPE_UNCOMPRESSED_DATA, MAGIC_BODY, MAGIC_BODY_LEN, MAX_BLOCK_SIZE,
     MAX_NON_SKIPPABLE_CHUNK, MAX_USER_NON_SKIPPABLE_CHUNK, MAX_VARINT_LEN_64,
-    MIN_USER_NON_SKIPPABLE_CHUNK, MIN_USER_SKIPPABLE_CHUNK,
+    MIN_USER_NON_SKIPPABLE_CHUNK, MIN_USER_SKIPPABLE_CHUNK, block_size_from_indicator, get_uvarint,
+    read_chunk_len, read_u32_le,
 };
 use super::mt_pool::BufferPool;
 use super::reader::Reader;

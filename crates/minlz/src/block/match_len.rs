@@ -22,7 +22,10 @@ use super::load_store::load64;
 ///
 /// Requires `a.len() <= b.len()`.
 #[inline]
-#[allow(dead_code)] // used by L2/L3 in future stages
+#[allow(
+    dead_code,
+    reason = "reference impl exercised only by tests; the L1/L2/L3 encoders use inline load64-XOR SWAR for match extension"
+)]
 pub(super) fn match_len(a: &[u8], b: &[u8]) -> usize {
     debug_assert!(a.len() <= b.len());
     let mut checked = 0;

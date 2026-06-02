@@ -34,9 +34,9 @@ use std::time::Duration;
 
 use std::io::Cursor;
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use minlz::stream::{MtWriterBuilder, ReadSeeker, Reader, WriterBuilder};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use minlz::Level;
+use minlz::stream::{MtWriterBuilder, ReadSeeker, Reader, WriterBuilder};
 
 fn load_twain() -> Vec<u8> {
     let mut candidates: Vec<PathBuf> = Vec::new();
@@ -250,7 +250,7 @@ fn bench_index_seek_random(c: &mut Criterion) {
                 let mut rs = ReadSeeker::new(reader, &[]).expect("ReadSeeker::new");
                 for &off in &offsets {
                     let n = rs.read_at(&mut buf, off).expect("read_at");
-                    criterion::black_box(&buf[..n]);
+                    std::hint::black_box(&buf[..n]);
                 }
             });
         },

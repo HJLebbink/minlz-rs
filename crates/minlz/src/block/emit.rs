@@ -23,7 +23,7 @@ use super::format::{
     MAX_COPY1_OFFSET, MAX_COPY2_LITS, MAX_COPY2_OFFSET, MAX_COPY3_LITS, MIN_COPY2_OFFSET,
     MIN_COPY3_OFFSET, TAG_COPY1, TAG_COPY2, TAG_COPY2_FUSED, TAG_COPY3, TAG_LITERAL, TAG_REPEAT,
 };
-use super::load_store::{store16, store32, store8};
+use super::load_store::{store8, store16, store32};
 
 /// Write a literal chunk and return the number of bytes written.
 ///

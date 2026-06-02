@@ -31,8 +31,8 @@ use std::io::{Read, Write};
 use std::num::NonZeroUsize;
 
 use libfuzzer_sys::fuzz_target;
-use minlz::stream::{MtWriterBuilder, Reader, WriterBuilder};
 use minlz::Level;
+use minlz::stream::{MtWriterBuilder, Reader, WriterBuilder};
 
 fuzz_target!(|data: &[u8]| {
     if data.is_empty() || data.len() > 9 * 1024 * 1024 {
@@ -49,7 +49,11 @@ fuzz_target!(|data: &[u8]| {
         2 => Level::Smallest,
         _ => Level::Balanced,
     };
-    let block_size = if mode & 0x40 != 0 { 4 * 1024 } else { 2 * 1024 * 1024 };
+    let block_size = if mode & 0x40 != 0 {
+        4 * 1024
+    } else {
+        2 * 1024 * 1024
+    };
 
     // 1) Single-threaded encode + decode.
     {
