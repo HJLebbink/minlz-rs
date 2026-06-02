@@ -1,3 +1,17 @@
+// Copyright 2026 MinIO Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! MinLZ — Rust port of the Go reference (`github.com/minio/minlz`).
 //!
 //! Implements the MinLZ v1.0 specification.  See `SPEC.md` §1–§4 in the
@@ -40,12 +54,12 @@ pub mod index;
 pub mod stream;
 
 pub use block::{
-    append_decoded, append_encoded, decode, decoded_len, encode, is_minlz, max_encoded_len,
-    try_encode, Level, MAX_BLOCK_SIZE,
+    Level, MAX_BLOCK_SIZE, append_decoded, append_encoded, decode, decoded_len, encode, is_minlz,
+    max_encoded_len, try_encode,
 };
 pub use error::Error;
 pub use index::{
-    index_stream, remove_index_headers, restore_index_headers, Index, OffsetPair, CHUNK_TYPE_INDEX,
+    CHUNK_TYPE_INDEX, Index, OffsetPair, index_stream, remove_index_headers, restore_index_headers,
 };
 
 /// A specialized [`Result`] type for MinLZ operations.

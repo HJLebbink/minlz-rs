@@ -1,9 +1,30 @@
+// Copyright 2026 MinIO Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Block format constants, tag values, and varint codec.
 //!
 //! Reference: SPEC.md §1–§2 in the upstream Go repository.
 
 /// Maximum uncompressed block size (8 MiB).  Mirrors Go's `MaxBlockSize`.
 pub const MAX_BLOCK_SIZE: usize = 8 << 20;
+
+// Compile-time invariant: the encoders store block-relative source positions
+// as `u32` (the L1/L2 hash tables are `[u32]`; L3 packs two positions into a
+// `u64`).  Those casts are only lossless while every position — bounded by
+// `MAX_BLOCK_SIZE` — fits in 32 bits.  This trips the build if the block size
+// is ever raised past `u32::MAX`.
+const _: () = assert!(MAX_BLOCK_SIZE <= u32::MAX as usize);
 
 /// Tag values for the lower 2 bits of a tag byte (SPEC §2 table).
 pub(super) const TAG_LITERAL: u8 = 0b00;

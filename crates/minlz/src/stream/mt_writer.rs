@@ -1,3 +1,17 @@
+// Copyright 2026 MinIO Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Multi-threaded streaming writer.
 //!
 //! A worker pool compresses blocks in parallel while a single writer
@@ -25,10 +39,10 @@ use crate::index::Index;
 use super::crc::masked_crc32c;
 use super::error::Error;
 use super::format::{
-    make_stream_header, put_uvarint, CHECKSUM_SIZE, CHUNK_HEADER_SIZE, CHUNK_TYPE_EOF,
-    CHUNK_TYPE_MINLZ_COMPRESSED_DATA, CHUNK_TYPE_PADDING, CHUNK_TYPE_UNCOMPRESSED_DATA,
-    DEFAULT_BLOCK_SIZE, MAX_BLOCK_SIZE, MAX_USER_CHUNK_SIZE, MAX_USER_NON_SKIPPABLE_CHUNK,
-    MAX_VARINT_LEN_64, MIN_BLOCK_SIZE, MIN_USER_SKIPPABLE_CHUNK,
+    CHECKSUM_SIZE, CHUNK_HEADER_SIZE, CHUNK_TYPE_EOF, CHUNK_TYPE_MINLZ_COMPRESSED_DATA,
+    CHUNK_TYPE_PADDING, CHUNK_TYPE_UNCOMPRESSED_DATA, DEFAULT_BLOCK_SIZE, MAX_BLOCK_SIZE,
+    MAX_USER_CHUNK_SIZE, MAX_USER_NON_SKIPPABLE_CHUNK, MAX_VARINT_LEN_64, MIN_BLOCK_SIZE,
+    MIN_USER_SKIPPABLE_CHUNK, make_stream_header, put_uvarint,
 };
 use super::mt_pool::BufferPool;
 

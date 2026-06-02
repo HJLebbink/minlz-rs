@@ -1,3 +1,17 @@
+// Copyright 2026 MinIO Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Unaligned little-endian loads/stores.
 //!
 //! Direct ports of `unsafe_enabled.go`'s `loadN` / `storeN`.  On supported
@@ -11,7 +25,10 @@
 /// # Safety
 /// `i + 2 <= b.len()` must hold.
 #[inline(always)]
-#[allow(dead_code)] // used by L2/L3 in future stages
+#[expect(
+    dead_code,
+    reason = "load primitive kept for parity with load32/load64; no current caller"
+)]
 pub(super) unsafe fn load16(b: &[u8], i: usize) -> u16 {
     // SAFETY: caller guarantees `i + 2 <= b.len()`; `read_unaligned` does
     // not require alignment, and `b.as_ptr().add(i)` stays within the slice.
@@ -23,7 +40,6 @@ pub(super) unsafe fn load16(b: &[u8], i: usize) -> u16 {
 /// # Safety
 /// `i + 4 <= b.len()` must hold.
 #[inline(always)]
-#[allow(dead_code)] // used by L2/L3 in future stages
 pub(super) unsafe fn load32(b: &[u8], i: usize) -> u32 {
     // SAFETY: see `load16`.
     unsafe { core::ptr::read_unaligned(b.as_ptr().add(i) as *const u32).to_le() }

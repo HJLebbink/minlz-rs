@@ -1,3 +1,17 @@
+// Copyright 2026 MinIO Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Tests ported from Go `index_test.go` plus Rust-specific edge cases.
 
 use std::io::{Cursor, Read, Seek, SeekFrom, Write};
@@ -485,8 +499,8 @@ fn reduce_triggered_by_append_to() {
     // emitted byte stream parses back to ≤ MAX_INDEX_ENTRIES entries.
     let mut idx = Index::default();
     idx.reset(4 << 10); // est_block ≥ 1 MiB
-                        // Manually inject more than MAX_INDEX_ENTRIES so append_to.reduce()
-                        // is what shrinks them.
+    // Manually inject more than MAX_INDEX_ENTRIES so append_to.reduce()
+    // is what shrinks them.
     idx.offsets.clear();
     let n = MAX_INDEX_ENTRIES + 5_000;
     for i in 0..n {
@@ -587,7 +601,7 @@ fn load_rejects_entries_above_max() {
     super::put_varint(&mut buf, 1 << 20); // est_block
     super::put_varint(&mut buf, (MAX_INDEX_ENTRIES + 1) as i64); // bad
     buf.push(0); // has_uncomp
-                 // Stuff a fake trailer so we hit the entry-count check before short-EOF.
+    // Stuff a fake trailer so we hit the entry-count check before short-EOF.
     let size = (buf.len() + 4 + INDEX_TRAILER.len()) as u32;
     buf.extend_from_slice(&size.to_le_bytes());
     buf.extend_from_slice(INDEX_TRAILER);

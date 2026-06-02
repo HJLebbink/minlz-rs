@@ -1,3 +1,17 @@
+// Copyright 2026 MinIO Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Criterion benchmarks for the streaming codec.
 //!
 //! Mirrors the shape of `block.rs` — Twain corpus at a couple of sizes,
@@ -20,9 +34,9 @@ use std::time::Duration;
 
 use std::io::Cursor;
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use minlz::stream::{MtWriterBuilder, ReadSeeker, Reader, WriterBuilder};
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 use minlz::Level;
+use minlz::stream::{MtWriterBuilder, ReadSeeker, Reader, WriterBuilder};
 
 fn load_twain() -> Vec<u8> {
     let mut candidates: Vec<PathBuf> = Vec::new();
@@ -236,7 +250,7 @@ fn bench_index_seek_random(c: &mut Criterion) {
                 let mut rs = ReadSeeker::new(reader, &[]).expect("ReadSeeker::new");
                 for &off in &offsets {
                     let n = rs.read_at(&mut buf, off).expect("read_at");
-                    criterion::black_box(&buf[..n]);
+                    std::hint::black_box(&buf[..n]);
                 }
             });
         },

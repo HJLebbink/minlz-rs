@@ -1,3 +1,17 @@
+// Copyright 2026 MinIO Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 use std::cell::RefCell;
 use std::io::{self, Cursor, Read};
 use std::rc::Rc;
@@ -5,9 +19,9 @@ use std::rc::Rc;
 use crate::block;
 use crate::stream::crc::masked_crc32c;
 use crate::stream::format::{
-    make_stream_header, put_uvarint, CHECKSUM_SIZE, CHUNK_TYPE_EOF,
-    CHUNK_TYPE_MINLZ_COMPRESSED_DATA, CHUNK_TYPE_MINLZ_COMPRESSED_DATA_COMP_CRC,
-    CHUNK_TYPE_PADDING, CHUNK_TYPE_UNCOMPRESSED_DATA, DEFAULT_BLOCK_SIZE,
+    CHECKSUM_SIZE, CHUNK_TYPE_EOF, CHUNK_TYPE_MINLZ_COMPRESSED_DATA,
+    CHUNK_TYPE_MINLZ_COMPRESSED_DATA_COMP_CRC, CHUNK_TYPE_PADDING, CHUNK_TYPE_UNCOMPRESSED_DATA,
+    DEFAULT_BLOCK_SIZE, make_stream_header, put_uvarint,
 };
 use crate::stream::{Reader, ReaderBuilder};
 
@@ -444,7 +458,7 @@ fn fuzz_crashes_2026_05_27_do_not_panic() {
                 0xff, 0x06, 0x00, 0x00, b'M', b'i', b'n', b'L', b'z', 0x00, 0x03, 0x3c, 0x00, 0x00,
                 0x00, 0x00, 0x3c, 0x00, 0x00, 0x00,
             ];
-            v.extend(std::iter::repeat(0u8).take(140));
+            v.extend(std::iter::repeat_n(0u8, 140));
             v
         },
         &[

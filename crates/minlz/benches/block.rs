@@ -1,3 +1,17 @@
+// Copyright 2026 MinIO Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Criterion benchmarks for the block codec.
 //!
 //! Mirrors Go's `BenchmarkTwainEncode1eN` / `BenchmarkTwainDecode1eN` shape
@@ -20,9 +34,8 @@
 
 #![allow(missing_docs)] // criterion_group! emits an undocumented fn
 
-use criterion::{criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
-use minlz::{decode, encode, Level};
-use std::io::Read;
+use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
+use minlz::{Level, decode, encode};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -110,8 +123,10 @@ fn ensure_bench_file(filename: &str) -> std::io::Result<PathBuf> {
     let resp = ureq::get(&url)
         .call()
         .map_err(|e| std::io::Error::other(format!("GET {url}: {e}")))?;
-    let mut body = Vec::new();
-    resp.into_reader().read_to_end(&mut body)?;
+    let body = resp
+        .into_body()
+        .read_to_vec()
+        .map_err(|e| std::io::Error::other(format!("read body {url}: {e}")))?;
     let tmp = dir.join(format!("{filename}.partial"));
     let res = (|| -> std::io::Result<()> {
         std::fs::write(&tmp, &body)?;

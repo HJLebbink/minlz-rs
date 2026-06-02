@@ -1,3 +1,17 @@
+// Copyright 2026 MinIO Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Block-level integration tests, ported from `minlz_test.go`.
 
 use super::*;
@@ -70,11 +84,7 @@ fn small_copy() {
 /// Cap iteration count under miri so tests still finish in reasonable time.
 /// (Miri is 50-100× slower than native.)
 fn cap(n: usize) -> usize {
-    if cfg!(miri) {
-        n.min(512)
-    } else {
-        n
-    }
+    if cfg!(miri) { n.min(512) } else { n }
 }
 
 /// Ports `TestSmallRand` from `minlz_test.go:218`.

@@ -1,3 +1,17 @@
+// Copyright 2026 MinIO Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Hash helpers used by the L1/L2/L3 encoders.
 //!
 //! Ported from `encode_l1.go:hash6` and `encode_l2.go:hash4..hash8`.  Each
@@ -7,7 +21,6 @@
 
 /// 4-byte hash (prime 2654435761).
 #[inline(always)]
-#[allow(dead_code)] // used by L2/L3 in future stages
 pub(super) fn hash4(u: u64, h: u32) -> u32 {
     const PRIME4: u32 = 2_654_435_761;
     ((u as u32).wrapping_mul(PRIME4)) >> ((32 - h) & 31)
@@ -29,7 +42,6 @@ pub(super) fn hash6(u: u64, h: u32) -> u32 {
 
 /// 7-byte hash (prime 58295818150454627).
 #[inline(always)]
-#[allow(dead_code)] // used by L2/L3 in future stages
 pub(super) fn hash7(u: u64, h: u32) -> u32 {
     const PRIME7: u64 = 58_295_818_150_454_627;
     (((u << (64 - 56)).wrapping_mul(PRIME7)) >> ((64 - h) & 63)) as u32
@@ -37,7 +49,6 @@ pub(super) fn hash7(u: u64, h: u32) -> u32 {
 
 /// 8-byte hash (prime 0xcf1bbcdcb7a56463).
 #[inline(always)]
-#[allow(dead_code)] // used by L2/L3 in future stages
 pub(super) fn hash8(u: u64, h: u32) -> u32 {
     const PRIME8: u64 = 0xcf1b_bcdc_b7a5_6463;
     ((u.wrapping_mul(PRIME8)) >> ((64 - h) & 63)) as u32

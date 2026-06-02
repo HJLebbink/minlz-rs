@@ -1,3 +1,17 @@
+// Copyright 2026 MinIO Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! Encode primitives: literal, repeat, copy1/2/3, fused copy2/3.
 //!
 //! Ported from `asm_none.go` (`emitLiteral`, `emitRepeat`, `emitCopy`,
@@ -9,7 +23,7 @@ use super::format::{
     MAX_COPY1_OFFSET, MAX_COPY2_LITS, MAX_COPY2_OFFSET, MAX_COPY3_LITS, MIN_COPY2_OFFSET,
     MIN_COPY3_OFFSET, TAG_COPY1, TAG_COPY2, TAG_COPY2_FUSED, TAG_COPY3, TAG_LITERAL, TAG_REPEAT,
 };
-use super::load_store::{store16, store32, store8};
+use super::load_store::{store8, store16, store32};
 
 /// Write a literal chunk and return the number of bytes written.
 ///
