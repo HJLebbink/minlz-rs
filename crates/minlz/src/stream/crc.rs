@@ -29,6 +29,15 @@
 
 use std::sync::OnceLock;
 
+#[cfg(all(
+    any(
+        target_arch = "x86_64",
+        all(target_arch = "aarch64", target_endian = "little")
+    ),
+    not(miri)
+))]
+mod mlir;
+
 const POLY: u32 = 0x82F6_3B78;
 
 const TABLE: [u32; 256] = build_table();
@@ -59,6 +68,16 @@ fn dispatch() -> CrcFn {
 }
 
 fn select_impl() -> CrcFn {
+    #[cfg(all(
+        any(
+            target_arch = "x86_64",
+            all(target_arch = "aarch64", target_endian = "little")
+        ),
+        not(miri)
+    ))]
+    if let Some(f) = mlir::best() {
+        return f;
+    }
     #[cfg(target_arch = "x86_64")]
     {
         if std::is_x86_feature_detected!("sse4.2") {
@@ -332,6 +351,19 @@ mod tests {
         );
     }
 
+    /// Returns n bytes from a linear congruential generator that starts at seed.
+    fn lcg_bytes(seed: u64, n: usize) -> Vec<u8> {
+        let mut x = seed;
+        (0..n)
+            .map(|_| {
+                x = x
+                    .wrapping_mul(6364136223846793005)
+                    .wrapping_add(1442695040888963407);
+                (x >> 24) as u8
+            })
+            .collect()
+    }
+
     #[test]
     fn vectors_match_go() {
         // Vectors from minlz-rs/_helpers/crc_vectors/main.go.
@@ -381,21 +413,41 @@ mod tests {
         }
     }
 
+    /// Every folding kernel the CPU has agrees with the table at every length up to a few
+    /// strides and at longer ones, from unaligned starts and a nonzero CRC: the kernels' keys,
+    /// the lane combination and the reduction, and the split between kernel and tail.
+    #[cfg(all(
+        any(
+            target_arch = "x86_64",
+            all(target_arch = "aarch64", target_endian = "little")
+        ),
+        not(miri)
+    ))]
+    #[test]
+    fn fold_kernels_match_table() {
+        let data = lcg_bytes(0x0123_4567_89ab_cdef, 70_000);
+        let isas = mlir::Isa::available();
+        assert!(!isas.is_empty() || cfg!(not(target_arch = "x86_64")));
+        let long = [1_536, 3 * 1_024 + 17, 4_096 + 5, 10_000, 65_536 + 31];
+        for &isa in &isas {
+            for (i, len) in (0..=1_100).chain(long).enumerate() {
+                let start = i % 16;
+                let crc = (i as u32).wrapping_mul(0x9e37_79b9);
+                let slice = &data[start..start + len];
+                // SAFETY: Isa::available checked isa's features.
+                let got = unsafe { mlir::update(isa, crc, slice) };
+                assert_eq!(got, crc32c_update_table(crc, slice), "{isa:?} len {len}");
+            }
+        }
+    }
+
     /// Cover the 3-way pipelined path (input ≥ 3 × STRIDE_BYTES).  Tests
     /// many lengths around the 3-stride boundary so the combine math is
     /// exercised at every tail.
     #[test]
     fn hw_matches_table_in_3way_range() {
-        // Long-enough PRNG-style buffer; reuse a simple LCG.
         let n = 7 * super::STRIDE_BYTES + 257;
-        let mut data = vec![0u8; n];
-        let mut x: u64 = 0xdead_beef_cafe_babe;
-        for slot in &mut data {
-            x = x
-                .wrapping_mul(6364136223846793005)
-                .wrapping_add(1442695040888963407);
-            *slot = (x >> 24) as u8;
-        }
+        let data = lcg_bytes(0xdead_beef_cafe_babe, n);
         // Check at every length crossing the 3-way boundary.
         for end in [
             super::STRIDE_BYTES * 3 - 1,

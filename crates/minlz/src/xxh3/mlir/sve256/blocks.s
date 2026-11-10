@@ -1,5 +1,5 @@
 // minlz_xxh3_blocks of crates/minlz/mlir/xxh3.mlir for sve256, written by
-// crates/minlz/mlir/build.sh. Do not edit.
+// cargo xtask mlir. Do not edit.
 	ptrue	p0.d
 	mov	x8, #128
 	ld2d	{ z0.d, z1.d }, p0/z, [x0]

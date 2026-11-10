@@ -1,6 +1,5 @@
 // Target file for NEON: the 8 accumulator lanes are one vector<8xi64> in four registers.
 
-!p = !ptr.ptr<#llvm.address_space<0>>
 !acc = vector<8xi64>
 
 // lohi returns the product of the low and the high 32-bit half of each lane of x.

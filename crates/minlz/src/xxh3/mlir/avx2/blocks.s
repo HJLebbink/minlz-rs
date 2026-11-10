@@ -1,5 +1,5 @@
 # minlz_xxh3_blocks of crates/minlz/mlir/xxh3.mlir for avx2, written by
-# crates/minlz/mlir/build.sh. Do not edit.
+# cargo xtask mlir. Do not edit.
 	vmovdqu	ymm2, ymmword ptr [rdi]
 	vmovdqu	ymm4, ymmword ptr [rdi + 32]
 	test	rdx, rdx

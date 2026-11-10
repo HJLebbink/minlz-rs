@@ -1,5 +1,5 @@
 // minlz_xxh3_blocks of crates/minlz/mlir/xxh3.mlir for neon, written by
-// crates/minlz/mlir/build.sh. Do not edit.
+// cargo xtask mlir. Do not edit.
 	ldp	q6, q7, [x0, #32]
 	ldp	q3, q5, [x0]
 	cmp	x2, #1

@@ -13,16 +13,14 @@
 // limitations under the License.
 
 //! The stripe loop written once in MLIR (`crates/minlz/mlir/xxh3.mlir`) and lowered by
-//! `crates/minlz/mlir/build.sh` for each target into the assembly in `mlir/`, which the naked
-//! functions below hold: SVE at 128 and 256 bits and NEON on aarch64, AVX2 and AVX-512 on x86-64.
+//! `cargo xtask mlir` for each target into the assembly in `mlir/`, which the naked functions
+//! below hold: SVE at 128 and 256 bits and NEON on aarch64, AVX2 and AVX-512 on x86-64.
 //!
 //! A kernel takes `(acc, p, len, keys)` for [`super::accum`] or `(acc, p, n, keys)` for
 //! [`super::blocks`] and works on the 8 lanes at acc, with keys pointing at [`KEYS`]. An SVE kernel
 //! is only correct, and only stays inside its arguments, at its own vector length. [`accum`] and
 //! [`blocks`] read the vector length on every call and run the NEON kernel at any other length,
 //! so a thread that changes its vector length still hashes correctly.
-
-use core::arch::naked_asm;
 
 use super::{BLOCK, KEYS, STRIPE};
 
@@ -45,43 +43,31 @@ type Kernel = unsafe extern "C" fn(*mut u64, *const u8, usize, *const u8);
 #[cfg(target_arch = "x86_64")]
 type Kernel = unsafe extern "sysv64" fn(*mut u64, *const u8, usize, *const u8);
 
-/// Declares the accum and blocks kernels in `mlir/$dir/`, with the calling convention `$abi` and
-/// the assembler directive `$pre` in front of the code.
+/// Declares the accum and blocks kernels in `mlir/$dir/`, with the assembler directive `$pre` in
+/// front of the code.
 macro_rules! kernels {
-    ($abi:literal, $($pre:literal,)? $accum:ident, $blocks:ident, $dir:literal) => {
-        #[unsafe(naked)]
-        unsafe extern $abi fn $accum(acc: *mut u64, p: *const u8, len: usize, keys: *const u8) {
-            naked_asm!($($pre,)? include_str!(concat!("mlir/", $dir, "/accum.s")), options(raw))
-        }
-        #[unsafe(naked)]
-        unsafe extern $abi fn $blocks(acc: *mut u64, p: *const u8, n: usize, keys: *const u8) {
-            naked_asm!($($pre,)? include_str!(concat!("mlir/", $dir, "/blocks.s")), options(raw))
-        }
+    ($($pre:literal,)? $accum:ident, $blocks:ident, $dir:literal) => {
+        mlir_kernel!(
+            $($pre,)? $accum(acc: *mut u64, p: *const u8, len: usize, keys: *const u8),
+            concat!("mlir/", $dir, "/accum.s")
+        );
+        mlir_kernel!(
+            $($pre,)? $blocks(acc: *mut u64, p: *const u8, n: usize, keys: *const u8),
+            concat!("mlir/", $dir, "/blocks.s")
+        );
     };
 }
 
 #[cfg(target_arch = "aarch64")]
-kernels!("C", ".arch_extension sve", accum_neon, blocks_neon, "neon");
+kernels!(accum_neon, blocks_neon, "neon");
 #[cfg(target_arch = "aarch64")]
-kernels!(
-    "C",
-    ".arch_extension sve",
-    accum_sve128,
-    blocks_sve128,
-    "sve128"
-);
+kernels!(".arch_extension sve", accum_sve128, blocks_sve128, "sve128");
 #[cfg(target_arch = "aarch64")]
-kernels!(
-    "C",
-    ".arch_extension sve",
-    accum_sve256,
-    blocks_sve256,
-    "sve256"
-);
+kernels!(".arch_extension sve", accum_sve256, blocks_sve256, "sve256");
 #[cfg(target_arch = "x86_64")]
-kernels!("sysv64", accum_avx2, blocks_avx2, "avx2");
+kernels!(accum_avx2, blocks_avx2, "avx2");
 #[cfg(target_arch = "x86_64")]
-kernels!("sysv64", accum_avx512, blocks_avx512, "avx512");
+kernels!(accum_avx512, blocks_avx512, "avx512");
 
 impl Isa {
     /// Returns the (accum, blocks) kernels to run now.
@@ -96,11 +82,7 @@ impl Isa {
             #[cfg(target_arch = "aarch64")]
             Isa::Sve => {
                 // SAFETY: the caller checked SVE.
-                match unsafe { vl_bytes() } {
-                    16 => (accum_sve128, blocks_sve128),
-                    32 => (accum_sve256, blocks_sve256),
-                    _ => (accum_neon, blocks_neon),
-                }
+                sve_kernels(unsafe { vl_bytes() }).unwrap_or((accum_neon, blocks_neon))
             }
             #[cfg(target_arch = "x86_64")]
             Isa::Avx2 => (accum_avx2, blocks_avx2),
@@ -144,7 +126,17 @@ pub(super) unsafe fn blocks(isa: Isa, a: &mut [u64; 8], p: &[u8], n: usize) {
 #[cfg(target_arch = "aarch64")]
 pub(super) fn sve_available() -> bool {
     // SAFETY: vl_bytes runs only once SVE is detected.
-    std::arch::is_aarch64_feature_detected!("sve") && matches!(unsafe { vl_bytes() }, 16 | 32)
+    std::arch::is_aarch64_feature_detected!("sve") && sve_kernels(unsafe { vl_bytes() }).is_some()
+}
+
+/// Returns the (accum, blocks) SVE kernels for a vector length of vl bytes, if it has them.
+#[cfg(target_arch = "aarch64")]
+fn sve_kernels(vl: usize) -> Option<(Kernel, Kernel)> {
+    match vl {
+        16 => Some((accum_sve128, blocks_sve128)),
+        32 => Some((accum_sve256, blocks_sve256)),
+        _ => None,
+    }
 }
 
 /// Returns the SVE vector length in bytes.

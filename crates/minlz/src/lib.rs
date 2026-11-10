@@ -59,6 +59,32 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![deny(missing_docs)]
 
+/// Declares the naked function `$name`, a kernel that `cargo xtask mlir` lowered from MLIR: its
+/// body is the assembly in the file `$file`, a path relative to the calling file, with the
+/// assembler directives `$pre` in front. The xtask writes x86-64 kernels for the System V calling
+/// convention on every system, and aarch64 kernels for the C one.
+#[cfg(all(
+    any(
+        target_arch = "x86_64",
+        all(target_arch = "aarch64", target_endian = "little")
+    ),
+    not(miri)
+))]
+macro_rules! mlir_kernel {
+    ($($pre:literal,)? $name:ident($($arg:ident: $ty:ty),*) $(-> $ret:ty)?, $file:expr) => {
+        #[cfg(target_arch = "x86_64")]
+        #[unsafe(naked)]
+        unsafe extern "sysv64" fn $name($($arg: $ty),*) $(-> $ret)? {
+            core::arch::naked_asm!($($pre,)? include_str!($file), options(raw))
+        }
+        #[cfg(target_arch = "aarch64")]
+        #[unsafe(naked)]
+        unsafe extern "C" fn $name($($arg: $ty),*) $(-> $ret)? {
+            core::arch::naked_asm!($($pre,)? include_str!($file), options(raw))
+        }
+    };
+}
+
 pub mod block;
 #[doc(hidden)]
 pub mod cpu;

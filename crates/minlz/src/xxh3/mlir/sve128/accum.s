@@ -1,5 +1,5 @@
 // minlz_xxh3_accum of crates/minlz/mlir/xxh3.mlir for sve128, written by
-// crates/minlz/mlir/build.sh. Do not edit.
+// cargo xtask mlir. Do not edit.
 	stp	d15, d14, [sp, #-64]!
 	ptrue	p0.d
 	stp	d13, d12, [sp, #16]

@@ -1,7 +1,6 @@
 // Target file for 128-bit SVE (vscale 1): the 8 accumulator lanes span four registers, and each
 // half of the split layout two. At any other vector length !acc is not 8 lanes.
 
-!p = !ptr.ptr<#llvm.address_space<0>>
 !acc = vector<[8]xi64>
 !h = vector<[4]xi64>
 

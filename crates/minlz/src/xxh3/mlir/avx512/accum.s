@@ -1,5 +1,5 @@
 # minlz_xxh3_accum of crates/minlz/mlir/xxh3.mlir for avx512, written by
-# crates/minlz/mlir/build.sh. Do not edit.
+# cargo xtask mlir. Do not edit.
 	lea	rax, [rdx - 1]
 	mov	r8, rax
 	shr	r8, 10

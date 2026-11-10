@@ -1,7 +1,6 @@
 // Target file for x86-64 (AVX2 and AVX-512): the 8 accumulator lanes are one vector<8xi64>, which
 // LLVM spreads over as many registers as the target needs.
 
-!p = !ptr.ptr<#llvm.address_space<0>>
 !acc = vector<8xi64>
 
 // lohi returns the product of the low and the high 32-bit half of each lane of x. LLVM makes it

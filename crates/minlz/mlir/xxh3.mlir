@@ -1,11 +1,11 @@
 // The XXH3 stripe loop for every target: accumulate_512 and scramble of the xxHash specification.
-// build.sh puts a target file (target/*.mlir) and a lane layout (xxh3_split.mlir or
-// xxh3_whole.mlir) in front of this file and lowers the result once per target. The naked
-// functions in crates/minlz/src/xxh3/mlir.rs hold the output.
+// `cargo xtask mlir` puts common.mlir, a target file (target/*.mlir) and a lane layout
+// (xxh3_split.mlir or xxh3_whole.mlir) in front of this file and lowers the result once per
+// target. The naked functions in crates/minlz/src/xxh3/mlir.rs hold the output.
 //
 // The loop holds the eight 64-bit accumulator lanes as one value of type !acc, in the order the
 // lane layout keeps them. It uses these names from the files in front of it:
-// - !p, the pointer type, and !acc;
+// - !p, the pointer type, and @at, from common.mlir; !acc;
 // - @lanes_load(!p) -> !acc and @lanes_store(!acc, !p), which read and write 8 lanes;
 // - @swap(!acc) -> !acc, which exchanges neighboring lanes;
 // - @lohi(!acc) -> !acc, the product of the low and the high 32-bit half of each lane.
@@ -28,13 +28,6 @@ func.func private @scramble(%a: !acc, %k: !acc) -> !acc {
   %y = arith.xori %x, %k : !acc
   %r = arith.muli %y, %prime : !acc
   return %r : !acc
-}
-
-// at returns p + o.
-func.func private @at(%p: !p, %o: index) -> !p {
-  %i = arith.index_cast %o : index to i64
-  %r = ptr.ptr_add %p, %i : !p, i64
-  return %r : !p
 }
 
 // stripe returns (a, s) after one stripe, the data at p and the key at k: a plus its products,
