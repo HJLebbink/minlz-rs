@@ -1,53 +1,64 @@
-# minlz_crc32c_fold of crates/minlz/mlir/crc32c.mlir for avx2, written by
+# minlz_crc32c_update of crates/minlz/mlir/crc32c_fold.mlir for avx2, written by
 # cargo xtask mlir. Do not edit.
-	push	r14
-	push	rbx
 	mov	rcx, rdx
+	cmp	rdx, 1024
+	jb	2f
+	mov	r8, rcx
+	and	r8, -128
 	vmovd	xmm0, edi
 	movabs	rax, -1224287136463716352
 	vmovq	xmm4, rax
 	vpclmulqdq	xmm3, xmm0, xmm4, 0
 	vpxor	xmm0, xmm0, xmm0
-	mov	rax, rdx
+	mov	rax, rcx
 	shr	rax, 8
 	movabs	rdx, 2635249153387078803
 	mul	rdx
 	cmp	rcx, 1792
-	jae	2f
+	jae	12f
 	vpxor	xmm2, xmm2, xmm2
 	vpxor	xmm1, xmm1, xmm1
-	jmp	32f
+	imul	rax, rdx, 1792
+	cmp	rax, r8
+	jl	42f
+	jmp	62f
 2:
+	xor	r8d, r8d
+	jmp	72f
+12:
+	push	r15
+	push	r14
+	push	rbx
 	xor	eax, eax
-	vpbroadcastq	ymm5, qword ptr [rip + 62f]
-	vpbroadcastq	ymm6, qword ptr [rip + 72f]
-	vpbroadcastq	ymm7, qword ptr [rip + 82f]
-	vpbroadcastq	ymm8, qword ptr [rip + 92f]
+	vpbroadcastq	ymm5, qword ptr [rip + 212f]
+	vpbroadcastq	ymm6, qword ptr [rip + 222f]
+	vpbroadcastq	ymm7, qword ptr [rip + 232f]
+	vpbroadcastq	ymm8, qword ptr [rip + 242f]
 	movabs	rdi, 4449734295027712000
-	movabs	r8, 7311508529481777152
-	mov	r9, rsi
+	movabs	r9, 7311508529481777152
+	mov	r10, rsi
 	vpxor	xmm2, xmm2, xmm2
 	vpxor	xmm1, xmm1, xmm1
-	.p2align	4
-12:
-	mov	r14, -256
-	xor	r10d, r10d
-	xor	r11d, r11d
-	xor	ebx, ebx
 	.p2align	4
 22:
-	crc32	rbx, qword ptr [r9 + r14 + 1280]
-	crc32	r11, qword ptr [r9 + r14 + 1536]
-	crc32	r10, qword ptr [r9 + r14 + 1792]
-	crc32	rbx, qword ptr [r9 + r14 + 1288]
-	crc32	r11, qword ptr [r9 + r14 + 1544]
-	crc32	r10, qword ptr [r9 + r14 + 1800]
-	crc32	rbx, qword ptr [r9 + r14 + 1296]
-	crc32	r11, qword ptr [r9 + r14 + 1552]
-	crc32	r10, qword ptr [r9 + r14 + 1808]
-	crc32	rbx, qword ptr [r9 + r14 + 1304]
-	crc32	r11, qword ptr [r9 + r14 + 1560]
-	crc32	r10, qword ptr [r9 + r14 + 1816]
+	mov	r15, -256
+	xor	r11d, r11d
+	xor	ebx, ebx
+	xor	r14d, r14d
+	.p2align	4
+32:
+	crc32	r14, qword ptr [r10 + r15 + 1280]
+	crc32	rbx, qword ptr [r10 + r15 + 1536]
+	crc32	r11, qword ptr [r10 + r15 + 1792]
+	crc32	r14, qword ptr [r10 + r15 + 1288]
+	crc32	rbx, qword ptr [r10 + r15 + 1544]
+	crc32	r11, qword ptr [r10 + r15 + 1800]
+	crc32	r14, qword ptr [r10 + r15 + 1296]
+	crc32	rbx, qword ptr [r10 + r15 + 1552]
+	crc32	r11, qword ptr [r10 + r15 + 1808]
+	crc32	r14, qword ptr [r10 + r15 + 1304]
+	crc32	rbx, qword ptr [r10 + r15 + 1560]
+	crc32	r11, qword ptr [r10 + r15 + 1816]
 	vpclmulqdq	ymm9, ymm3, ymm5, 0
 	vpclmulqdq	ymm3, ymm3, ymm6, 17
 	vpxor	ymm3, ymm9, ymm3
@@ -60,12 +71,12 @@
 	vpclmulqdq	ymm9, ymm1, ymm5, 0
 	vpclmulqdq	ymm1, ymm1, ymm6, 17
 	vpxor	ymm1, ymm9, ymm1
-	vpxor	ymm3, ymm3, ymmword ptr [r9 + 4*r14 + 1024]
-	vpxor	ymm0, ymm0, ymmword ptr [r9 + 4*r14 + 1056]
-	vpxor	ymm2, ymm2, ymmword ptr [r9 + 4*r14 + 1088]
-	vpxor	ymm1, ymm1, ymmword ptr [r9 + 4*r14 + 1120]
-	add	r14, 32
-	jne	22b
+	vpxor	ymm3, ymm3, ymmword ptr [r10 + 4*r15 + 1024]
+	vpxor	ymm0, ymm0, ymmword ptr [r10 + 4*r15 + 1056]
+	vpxor	ymm2, ymm2, ymmword ptr [r10 + 4*r15 + 1088]
+	vpxor	ymm1, ymm1, ymmword ptr [r10 + 4*r15 + 1120]
+	add	r15, 32
+	jne	32b
 	vpclmulqdq	ymm9, ymm3, ymm7, 0
 	vpclmulqdq	ymm3, ymm3, ymm8, 17
 	vpxor	ymm3, ymm9, ymm3
@@ -78,29 +89,32 @@
 	vpclmulqdq	ymm9, ymm1, ymm7, 0
 	vpclmulqdq	ymm1, ymm1, ymm8, 17
 	vpxor	ymm1, ymm9, ymm1
-	vmovq	xmm9, rbx
+	vmovq	xmm9, r14
 	vmovq	xmm10, rdi
 	vpclmulqdq	xmm9, xmm9, xmm10, 0
 	vpxor	ymm3, ymm9, ymm3
-	vmovq	xmm9, r11
-	vmovq	xmm10, r8
+	vmovq	xmm9, rbx
+	vmovq	xmm10, r9
 	vpclmulqdq	xmm9, xmm9, xmm10, 0
-	vmovq	xmm10, r10
+	vmovq	xmm10, r11
 	vpclmulqdq	xmm10, xmm10, xmm4, 0
 	vpxor	ymm9, ymm9, ymm10
 	vpxor	ymm3, ymm9, ymm3
 	inc	rax
-	add	r9, 1792
+	add	r10, 1792
 	cmp	rax, rdx
-	jne	12b
-32:
+	jne	22b
+	pop	rbx
+	pop	r14
+	pop	r15
 	imul	rax, rdx, 1792
-	cmp	rax, rcx
-	jge	52f
-	vpbroadcastq	ymm4, qword ptr [rip + 62f]
-	vpbroadcastq	ymm5, qword ptr [rip + 72f]
-	.p2align	4
+	cmp	rax, r8
+	jge	62f
 42:
+	vpbroadcastq	ymm4, qword ptr [rip + 212f]
+	vpbroadcastq	ymm5, qword ptr [rip + 222f]
+	.p2align	4
+52:
 	vpclmulqdq	ymm6, ymm3, ymm4, 0
 	vpclmulqdq	ymm3, ymm3, ymm5, 17
 	vpxor	ymm3, ymm3, ymm6
@@ -118,20 +132,20 @@
 	vpxor	ymm2, ymm2, ymmword ptr [rsi + rax + 64]
 	vpxor	ymm1, ymm1, ymmword ptr [rsi + rax + 96]
 	sub	rax, -128
-	cmp	rax, rcx
-	jl	42b
-52:
-	vpclmulqdq	ymm4, ymm3, ymmword ptr [rip + 102f], 0
-	vpclmulqdq	ymm3, ymm3, ymmword ptr [rip + 112f], 17
+	cmp	rax, r8
+	jl	52b
+62:
+	vpclmulqdq	ymm4, ymm3, ymmword ptr [rip + 252f], 0
+	vpclmulqdq	ymm3, ymm3, ymmword ptr [rip + 262f], 17
 	vpxor	ymm3, ymm3, ymm4
-	vpclmulqdq	ymm4, ymm0, ymmword ptr [rip + 122f], 0
-	vpclmulqdq	ymm0, ymm0, ymmword ptr [rip + 132f], 17
+	vpclmulqdq	ymm4, ymm0, ymmword ptr [rip + 272f], 0
+	vpclmulqdq	ymm0, ymm0, ymmword ptr [rip + 282f], 17
 	vpxor	ymm0, ymm0, ymm4
-	vpclmulqdq	ymm4, ymm2, ymmword ptr [rip + 142f], 0
-	vpclmulqdq	ymm2, ymm2, ymmword ptr [rip + 152f], 17
+	vpclmulqdq	ymm4, ymm2, ymmword ptr [rip + 292f], 0
+	vpclmulqdq	ymm2, ymm2, ymmword ptr [rip + 302f], 17
 	vpxor	ymm2, ymm2, ymm4
-	vpclmulqdq	ymm4, ymm1, ymmword ptr [rip + 162f], 0
-	vpclmulqdq	ymm1, ymm1, ymmword ptr [rip + 172f], 17
+	vpclmulqdq	ymm4, ymm1, ymmword ptr [rip + 312f], 0
+	vpclmulqdq	ymm1, ymm1, ymmword ptr [rip + 322f], 17
 	vpxor	ymm1, ymm1, ymm4
 	vextracti128	xmm4, ymm3, 1
 	vextracti128	xmm5, ymm0, 1
@@ -145,21 +159,21 @@
 	vpxor	xmm1, xmm1, xmm7
 	vpxor	xmm0, xmm0, xmm1
 	vpextrq	rax, xmm0, 1
-	movabs	rcx, 5277230469828575232
-	vmovq	xmm1, rcx
-	vpclmulqdq	xmm0, xmm0, xmm1, 0
-	vmovq	rcx, xmm0
-	mov	rdx, rax
-	shl	rdx, 32
-	xor	rdx, rcx
-	shr	rax, 32
+	movabs	rdx, 5277230469828575232
 	vmovq	xmm1, rdx
-	movabs	rcx, -2502406310683738112
-	vmovq	xmm2, rcx
+	vpclmulqdq	xmm0, xmm0, xmm1, 0
+	vmovq	rdx, xmm0
+	mov	rdi, rax
+	shl	rdi, 32
+	xor	rdi, rdx
+	shr	rax, 32
+	vmovq	xmm1, rdi
+	movabs	rdx, -2502406310683738112
+	vmovq	xmm2, rdx
 	vpclmulqdq	xmm1, xmm1, xmm2, 0
 	vpxor	xmm0, xmm1, xmm0
-	vpextrq	rcx, xmm0, 1
-	xor	eax, ecx
+	vpextrq	rdx, xmm0, 1
+	xor	eax, edx
 	vmovd	xmm0, eax
 	mov	eax, 3735491569
 	vmovq	xmm1, rax
@@ -168,69 +182,139 @@
 	movabs	rax, 4394350321
 	vmovq	xmm1, rax
 	vpclmulqdq	xmm0, xmm0, xmm1, 0
-	vmovq	rax, xmm0
-	xor	rax, rcx
-	shr	rax, 32
-	pop	rbx
-	pop	r14
+	vmovq	rdi, xmm0
+	xor	rdi, rdx
+	shr	rdi, 32
+72:
+	mov	rdx, rcx
+	sub	rdx, r8
+	and	rdx, -64
+	add	rdx, r8
+	mov	eax, edi
+	cmp	r8, rdx
+	jge	92f
+	.p2align	4
+82:
+	crc32	rax, qword ptr [rsi + r8]
+	crc32	rax, qword ptr [rsi + r8 + 8]
+	crc32	rax, qword ptr [rsi + r8 + 16]
+	crc32	rax, qword ptr [rsi + r8 + 24]
+	crc32	rax, qword ptr [rsi + r8 + 32]
+	crc32	rax, qword ptr [rsi + r8 + 40]
+	crc32	rax, qword ptr [rsi + r8 + 48]
+	crc32	rax, qword ptr [rsi + r8 + 56]
+	add	r8, 64
+	cmp	r8, rdx
+	jl	82b
+92:
+	test	cl, 32
+	jne	152f
+	test	cl, 16
+	jne	162f
+102:
+	test	cl, 8
+	jne	172f
+112:
+	test	cl, 4
+	jne	182f
+122:
+	test	cl, 2
+	jne	192f
+132:
+	test	cl, 1
+	jne	202f
+142:
+	vzeroupper
+	ret
+152:
+	crc32	rax, qword ptr [rsi + rdx]
+	crc32	rax, qword ptr [rsi + rdx + 8]
+	crc32	rax, qword ptr [rsi + rdx + 16]
+	crc32	rax, qword ptr [rsi + rdx + 24]
+	or	rdx, 32
+	test	cl, 16
+	je	102b
+162:
+	crc32	rax, qword ptr [rsi + rdx]
+	crc32	rax, qword ptr [rsi + rdx + 8]
+	add	rdx, 16
+	test	cl, 8
+	je	112b
+172:
+	crc32	rax, qword ptr [rsi + rdx]
+	add	rdx, 8
+	test	cl, 4
+	je	122b
+182:
+	crc32	eax, dword ptr [rsi + rdx]
+	add	rdx, 4
+	test	cl, 2
+	je	132b
+192:
+	crc32	eax, word ptr [rsi + rdx]
+	add	rdx, 2
+	test	cl, 1
+	je	142b
+202:
+	crc32	eax, byte ptr [rsi + rdx]
 	vzeroupper
 	ret
 	.p2align	3, 0x0
-62:
+212:
 	.quad	7311508529481777152
 	.p2align	3, 0x0
-72:
+222:
 	.quad	8365178193191108608
 	.p2align	3, 0x0
-82:
+232:
 	.quad	8668591446237904896
 	.p2align	3, 0x0
-92:
+242:
 	.quad	-4163748391475478528
 	.p2align	5, 0x0
-102:
+252:
 	.quad	1627051491397206016
 	.zero	8
 	.quad	-3949769517311197184
 	.zero	8
 	.p2align	5, 0x0
-112:
+262:
 	.zero	8
 	.quad	-7620545986368110592
 	.zero	8
 	.quad	3703423898453278720
 	.p2align	5, 0x0
-122:
+272:
 	.quad	2036429962822549504
 	.zero	8
 	.quad	2024689343301419008
 	.zero	8
 	.p2align	5, 0x0
-132:
+282:
 	.zero	8
 	.quad	7892626757205884928
 	.zero	8
 	.quad	8483555033831440384
 	.p2align	5, 0x0
-142:
+292:
 	.quad	-6598067393069580288
 	.zero	8
 	.quad	3732564607311544320
 	.zero	8
 	.p2align	5, 0x0
-152:
+302:
 	.zero	8
 	.quad	6940368353756184576
 	.zero	8
 	.quad	-6767349809599741952
 	.p2align	5, 0x0
-162:
+312:
 	.quad	3982298886646530048
 	.zero	8
 	.quad	-2502406310683738112
 	.zero	8
 	.p2align	5, 0x0
-172:
+322:
 	.zero	8
 	.quad	3562862082850291712
 	.zero	8

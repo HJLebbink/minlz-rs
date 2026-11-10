@@ -12,25 +12,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The CRC32C target files of `crates/minlz/mlir/crc32c.mlir`, in `crates/minlz/mlir/crc32c/`:
-//! per target, its lanes, its CRC32-chain words k and block folds I, the keys those imply, and the
-//! carry-less multiply and CRC32 instructions.
+//! The CRC32C target files, in `crates/minlz/mlir/crc32c/`: per target, how it computes the CRC,
+//! the sizes and keys that implies, and its instructions.
 //!
-//! A key multiplies a 64-bit word by x^d modulo P, the CRC32C polynomial: it is x^(d-1) mod P,
-//! reflected into 64 bits (`crc32c.mlir` says why). d may be negative, as x has an inverse modulo
-//! P. The tests in `crates/minlz/src/stream/crc.rs` check the keys against a table CRC.
+//! A key multiplies by x^d modulo P, the CRC32C polynomial. For a 64-bit word it is x^(d-1) mod P,
+//! reflected into 64 bits (`crc32c_fold.mlir` says why); `crc32c_chains.mlir` uses a 32-bit form.
+//! d may be negative, as x has an inverse modulo P. The tests in `crates/minlz/src/stream/crc.rs`
+//! check the keys against a table CRC.
 
 use std::fmt::Write;
 
 use crate::Arch;
 
-/// The carry-less multiply of a target.
+/// How a target computes the CRC.
 #[derive(Clone, Copy)]
-pub enum Isa {
-    /// PCLMULQDQ on x86-64 for 128-bit vectors, VPCLMULQDQ for 256 or 512 bits.
-    X86 { bits: u32 },
-    /// PMULL from the AES extension, on aarch64.
-    Neon,
+pub enum Kind {
+    /// `crc32c_fold.mlir`: folding with carry-less multiplies on `lanes` lanes of 128 bits in
+    /// vectors of `bits` bits, beside three CRC32 chains of k words per fold, in blocks of
+    /// `iters` folds. Inputs below `min_len` bytes take one CRC32 chain.
+    Fold {
+        bits: u32,
+        lanes: u32,
+        k: u32,
+        iters: u32,
+        min_len: u32,
+    },
+    /// `crc32c_chains.mlir`: three CRC32 chains over neighboring regions of `bytes` bytes.
+    Chains { bytes: u32 },
 }
 
 /// A CRC32C target.
@@ -39,56 +47,85 @@ pub struct Target {
     pub dir: &'static str,
     /// The target file in `crates/minlz/mlir/crc32c/`, without `.mlir`.
     pub file: &'static str,
-    pub isa: Isa,
-    /// The 128-bit lanes that are folded.
-    pub lanes: u32,
-    /// The words of each CRC32 chain per fold.
-    pub k: u32,
-    /// The folds of a block.
-    pub iters: u32,
+    pub arch: Arch,
+    pub kind: Kind,
     /// The features of the target, as an `-mattr` flag.
     pub mattr: &'static str,
 }
 
-/// The targets. k and I were measured on Sapphire Rapids and on GB10's Cortex-X925 and
-/// Cortex-A725 cores: more CRC32 words per fold help cores that multiply on one pipe and slow
-/// those that multiply on two; I = 8 keeps blocks short enough to fold inputs of 2 KiB. Each
-/// target takes only the features that `stream::crc` checks for it.
-pub const TARGETS: [Target; 4] = [
+/// The targets, each with only the features that `stream::crc` checks for it.
+///
+/// k and I were measured on Sapphire Rapids and on GB10's Cortex-X925 and Cortex-A725 cores: more
+/// CRC32 words per fold help cores that multiply on one pipe and slow those that multiply on two;
+/// I = 8 keeps blocks short enough to fold inputs of 2 KiB. Below `min_len`, combining the lanes
+/// and reducing them costs more than folding saves. With PCLMULQDQ and PMULL it is also a whole
+/// block: Neoverse N-class cores multiply on one pipe, so folding alone is no faster there than
+/// CRC32, and only the block's CRC32 chains gain.
+pub const TARGETS: [Target; 6] = [
+    Target {
+        dir: "sse42",
+        file: "sse42",
+        arch: Arch::X86,
+        kind: Kind::Chains { bytes: 1024 },
+        mattr: "-mattr=+sse4.2,+crc32",
+    },
     Target {
         dir: "pclmul",
         file: "x86_128",
-        isa: Isa::X86 { bits: 128 },
-        lanes: 8,
-        k: 4,
-        iters: 8,
+        arch: Arch::X86,
+        kind: Kind::Fold {
+            bits: 128,
+            lanes: 8,
+            k: 4,
+            iters: 8,
+            min_len: 2048,
+        },
         mattr: "-mattr=+sse4.2,+crc32,+pclmul",
     },
     Target {
         dir: "avx2",
         file: "x86_256",
-        isa: Isa::X86 { bits: 256 },
-        lanes: 8,
-        k: 4,
-        iters: 8,
+        arch: Arch::X86,
+        kind: Kind::Fold {
+            bits: 256,
+            lanes: 8,
+            k: 4,
+            iters: 8,
+            min_len: 1024,
+        },
         mattr: "-mattr=+avx2,+crc32,+pclmul,+vpclmulqdq",
     },
     Target {
         dir: "avx512",
         file: "x86_512",
-        isa: Isa::X86 { bits: 512 },
-        lanes: 16,
-        k: 2,
-        iters: 16,
+        arch: Arch::X86,
+        kind: Kind::Fold {
+            bits: 512,
+            lanes: 16,
+            k: 2,
+            iters: 16,
+            min_len: 1024,
+        },
         mattr: "-mattr=+avx512f,+crc32,+pclmul,+vpclmulqdq,-prefer-256-bit",
+    },
+    Target {
+        dir: "crc",
+        file: "crc",
+        arch: Arch::Arm,
+        kind: Kind::Chains { bytes: 1024 },
+        mattr: "-mattr=+v8a,+crc",
     },
     Target {
         dir: "neon",
         file: "neon",
-        isa: Isa::Neon,
-        lanes: 8,
-        k: 4,
-        iters: 8,
+        arch: Arch::Arm,
+        kind: Kind::Fold {
+            bits: 128,
+            lanes: 8,
+            k: 4,
+            iters: 8,
+            min_len: 2048,
+        },
         mattr: "-mattr=+v8a,+neon,+aes,+crc",
     },
 ];
@@ -127,7 +164,7 @@ fn xpow(d: i64) -> u64 {
     r
 }
 
-/// Returns the key for x^d, as a signed 64-bit MLIR constant.
+/// Returns the key for x^d for a 64-bit word, as a signed 64-bit MLIR constant.
 fn key(d: i64) -> i64 {
     xpow(d - 1).reverse_bits() as i64
 }
@@ -172,18 +209,18 @@ fn dense(vals: &[i64]) -> String {
 }
 
 impl Target {
-    /// Returns the architecture of the target.
-    pub fn arch(&self) -> Arch {
-        match self.isa {
-            Isa::X86 { .. } => Arch::X86,
-            Isa::Neon => Arch::Arm,
+    /// Returns the kernel file that the target file goes with.
+    pub fn kernel(&self) -> &'static str {
+        match self.kind {
+            Kind::Fold { .. } => "crc32c_fold.mlir",
+            Kind::Chains { .. } => "crc32c_chains.mlir",
         }
     }
 
     /// Returns the target file.
     pub fn generate(&self) -> String {
-        match self.isa {
-            Isa::X86 { bits } => {
+        let mut s = match (self.kind, self.arch) {
+            (Kind::Fold { bits, lanes, .. }, Arch::X86) => {
                 let insn = if bits == 128 {
                     "PCLMULQDQ"
                 } else {
@@ -195,23 +232,39 @@ impl Target {
                     _ => "zmm",
                 };
                 let title = format!("x86-64 with {insn} on {bits}-bit vectors");
-                let mut s = self.common(&title, &format!("{reg} registers"));
-                s += &halves(2 * self.lanes, bits / 64);
-                s += &x86(bits, insn);
+                let mut s = self.fold(&title, &format!("{reg} registers"));
+                s += &halves(2 * lanes, bits / 64);
+                s += &x86_clmul(bits, insn);
                 s
             }
-            Isa::Neon => {
-                let mut s = self.common("NEON with PMULL from the AES extension", "q registers");
-                s += &halves(2 * self.lanes, 2);
-                s += NEON;
+            (Kind::Fold { lanes, .. }, Arch::Arm) => {
+                let mut s = self.fold("NEON with PMULL from the AES extension", "q registers");
+                s += &halves(2 * lanes, 2);
+                s += NEON_CLMUL;
                 s
             }
-        }
+            (Kind::Chains { bytes }, arch) => chains(arch, bytes),
+        };
+        s += match self.arch {
+            Arch::X86 => X86_CRC32,
+            Arch::Arm => ARM_CRC32,
+        };
+        s
     }
 
-    /// Returns the head of the target file: its comment, its types, its sizes and its keys.
-    fn common(&self, title: &str, regs: &str) -> String {
-        let (lanes, k, iters) = (self.lanes, self.k, self.iters);
+    /// Returns the head of a folding target's file: its comment, its types, its sizes and its
+    /// keys.
+    fn fold(&self, title: &str, regs: &str) -> String {
+        let Kind::Fold {
+            lanes,
+            k,
+            iters,
+            min_len,
+            ..
+        } = self.kind
+        else {
+            unreachable!("fold is called for folding targets");
+        };
         let stride = 16 * lanes;
         let sl = 8 * k * iters; // the bytes of one scalar region
         assert!(
@@ -236,14 +289,15 @@ impl Target {
         ];
         let (nb, last) = ('\u{a0}', lanes - 1);
         let head = comment(&format!(
-            "Target file of crc32c.mlir for {title}: {lanes} lanes of 128 bits in {regs}, \
+            "Target file of crc32c_fold.mlir for {title}: {lanes} lanes of 128 bits in {regs}, \
              {stride} bytes a fold, and k{nb}={nb}{k} words of each CRC32 chain per fold, in \
              blocks of I{nb}={nb}{iters} folds: {} vector bytes and three scalar regions of {sl} \
-             bytes. The keys multiply by x^d for d{nb}={nb}{bits}{nb}+{nb}64 and {bits} in \
-             fold_keys; 8·3·{sl}{nb}+{nb}64 and 8·3·{sl} in block_keys; \
-             128·({last}{nb}-{nb}j){nb}+{nb}64 and 128·({last}{nb}-{nb}j) for lane j in \
-             lane_keys; and 8·2·{sl}{nb}-{nb}64, 8·{sl}{nb}-{nb}64 and -64, each minus {lane0} \
-             for lane 0, in chain_keys. cargo xtask mlir writes this file.",
+             bytes. Inputs below {min_len} bytes take one CRC32 chain. The keys multiply by x^d \
+             for d{nb}={nb}{bits}{nb}+{nb}64 and {bits} in fold_keys; 8·3·{sl}{nb}+{nb}64 and \
+             8·3·{sl} in block_keys; 128·({last}{nb}-{nb}j){nb}+{nb}64 and \
+             128·({last}{nb}-{nb}j) for lane j in lane_keys; and 8·2·{sl}{nb}-{nb}64, \
+             8·{sl}{nb}-{nb}64 and -64, each minus {lane0} for lane 0, in chain_keys. \
+             cargo xtask mlir writes this file.",
             stride * iters
         ));
         let mut s = head;
@@ -265,6 +319,11 @@ func.func private @words() -> index {{
 
 func.func private @iters() -> index {{
   %r = arith.constant {iters} : index
+  return %r : index
+}}
+
+func.func private @min_len() -> index {{
+  %r = arith.constant {min_len} : index
   return %r : index
 }}
 
@@ -297,6 +356,39 @@ func.func private @chain_keys() -> vector<3xi64> {{
         .expect("writing to a String");
         s
     }
+}
+
+/// Returns the head of a chains target's file: its comment, its region size and its key.
+fn chains(arch: Arch, bytes: u32) -> String {
+    let title = match arch {
+        Arch::X86 => "x86-64 with SSE 4.2's CRC32 alone",
+        Arch::Arm => "aarch64 with the CRC extension alone",
+    };
+    let nb = '\u{a0}';
+    let d = 8 * i64::from(bytes) - 33;
+    // The key in 32 bits: bit j is the coefficient of x^(31 - j).
+    let shift_key = (xpow(d) as u32).reverse_bits();
+    let mut s = comment(&format!(
+        "Target file of crc32c_chains.mlir for {title}: three CRC32 chains over regions of \
+         {bytes} bytes. The key multiplies by x^d for d{nb}={nb}8·{bytes}{nb}-{nb}33. cargo xtask \
+         mlir writes this file."
+    ));
+    write!(
+        s,
+        r#"
+func.func private @chain_bytes() -> index {{
+  %r = arith.constant {bytes} : index
+  return %r : index
+}}
+
+func.func private @shift_key() -> i64 {{
+  %r = arith.constant {shift_key} : i64
+  return %r : i64
+}}
+"#
+    )
+    .expect("writing to a String");
+    s
 }
 
 /// Returns clmul2 on `vector<n x i64>` as the same on each half, down to one register of `leaf`
@@ -346,8 +438,8 @@ func.func private @{name}(%x: {t}, %k: {t}) -> {t} {{
     s
 }
 
-/// Returns the x86-64 instructions: clmul2 on one register, clmul and crc32.
-fn x86(bits: u32, insn: &str) -> String {
+/// Returns the x86-64 carry-less multiplies: clmul2 on one register, and clmul.
+fn x86_clmul(bits: u32, insn: &str) -> String {
     let vt = format!("vector<{}xi64>", bits / 64);
     let intr = match bits {
         128 => "llvm.x86.pclmulqdq".to_string(),
@@ -378,18 +470,12 @@ func.func private @clmul(%a: i64, %b: i64) -> vector<2xi64> {{
       : (vector<2xi64>, vector<2xi64>, i8) -> vector<2xi64>
   return %r : vector<2xi64>
 }}
-
-// crc32 returns the CRC state c after the word w: CRC32 with a 64-bit operand.
-func.func private @crc32(%c: i64, %w: i64) -> i64 {{
-  %r = llvm.call_intrinsic "llvm.x86.sse42.crc32.64.64"(%c, %w) : (i64, i64) -> i64
-  return %r : i64
-}}
 "#
     )
 }
 
-/// The NEON instructions: clmul2 on one register, clmul and crc32.
-const NEON: &str = r#"
+/// The NEON carry-less multiplies: clmul2 on one register, and clmul.
+const NEON_CLMUL: &str = r#"
 // clmul_reg is clmul2 on one register: PMULL multiplies the low words, PMULL2 the high words.
 func.func private @clmul_reg(%x: vector<2xi64>, %k: vector<2xi64>) -> vector<2xi64> {
   %x0 = vector.extract %x[0] : i64 from vector<2xi64>
@@ -408,11 +494,71 @@ func.func private @clmul(%a: i64, %b: i64) -> vector<2xi64> {
   %r = vector.bitcast %p : vector<16xi8> to vector<2xi64>
   return %r : vector<2xi64>
 }
+"#;
 
+/// The x86-64 CRC32 instructions.
+const X86_CRC32: &str = r#"
+// crc32 returns the CRC state c after the word w: CRC32 with a 64-bit operand.
+func.func private @crc32(%c: i64, %w: i64) -> i64 {
+  %r = llvm.call_intrinsic "llvm.x86.sse42.crc32.64.64"(%c, %w) : (i64, i64) -> i64
+  return %r : i64
+}
+
+// crc32w, crc32h and crc32b return the CRC state c, low 32 bits, after v: CRC32 with a 32-bit,
+// 16-bit or 8-bit operand.
+func.func private @crc32w(%c: i64, %v: i32) -> i64 {
+  %c32 = arith.trunci %c : i64 to i32
+  %r32 = llvm.call_intrinsic "llvm.x86.sse42.crc32.32.32"(%c32, %v) : (i32, i32) -> i32
+  %r = arith.extui %r32 : i32 to i64
+  return %r : i64
+}
+
+func.func private @crc32h(%c: i64, %v: i16) -> i64 {
+  %c32 = arith.trunci %c : i64 to i32
+  %r32 = llvm.call_intrinsic "llvm.x86.sse42.crc32.32.16"(%c32, %v) : (i32, i16) -> i32
+  %r = arith.extui %r32 : i32 to i64
+  return %r : i64
+}
+
+func.func private @crc32b(%c: i64, %v: i8) -> i64 {
+  %c32 = arith.trunci %c : i64 to i32
+  %r32 = llvm.call_intrinsic "llvm.x86.sse42.crc32.32.8"(%c32, %v) : (i32, i8) -> i32
+  %r = arith.extui %r32 : i32 to i64
+  return %r : i64
+}
+"#;
+
+/// The aarch64 CRC32 instructions.
+const ARM_CRC32: &str = r#"
 // crc32 returns the CRC state c, low 32 bits, after the word w: CRC32CX.
 func.func private @crc32(%c: i64, %w: i64) -> i64 {
   %c32 = arith.trunci %c : i64 to i32
   %r32 = llvm.call_intrinsic "llvm.aarch64.crc32cx"(%c32, %w) : (i32, i64) -> i32
+  %r = arith.extui %r32 : i32 to i64
+  return %r : i64
+}
+
+// crc32w, crc32h and crc32b return the CRC state c, low 32 bits, after v: CRC32CW, CRC32CH and
+// CRC32CB.
+func.func private @crc32w(%c: i64, %v: i32) -> i64 {
+  %c32 = arith.trunci %c : i64 to i32
+  %r32 = llvm.call_intrinsic "llvm.aarch64.crc32cw"(%c32, %v) : (i32, i32) -> i32
+  %r = arith.extui %r32 : i32 to i64
+  return %r : i64
+}
+
+func.func private @crc32h(%c: i64, %v: i16) -> i64 {
+  %c32 = arith.trunci %c : i64 to i32
+  %v32 = arith.extui %v : i16 to i32
+  %r32 = llvm.call_intrinsic "llvm.aarch64.crc32ch"(%c32, %v32) : (i32, i32) -> i32
+  %r = arith.extui %r32 : i32 to i64
+  return %r : i64
+}
+
+func.func private @crc32b(%c: i64, %v: i8) -> i64 {
+  %c32 = arith.trunci %c : i64 to i32
+  %v32 = arith.extui %v : i8 to i32
+  %r32 = llvm.call_intrinsic "llvm.aarch64.crc32cb"(%c32, %v32) : (i32, i32) -> i32
   %r = arith.extui %r32 : i32 to i64
   return %r : i64
 }
@@ -445,10 +591,12 @@ mod tests {
         assert_eq!(pmod(clmul(xpow(1000), xpow(-1000))), 1);
     }
 
-    /// The reduction in crc32c.mlir multiplies by x^96 and x^64 with the keys of this generator.
+    /// The reduction in crc32c_fold.mlir multiplies by x^96 and x^64 with the keys of this
+    /// generator.
     #[test]
     fn reduction_keys_are_keys() {
-        let mlir = std::fs::read_to_string(crate::mlir_dir().join("crc32c.mlir")).expect("kernel");
+        let mlir =
+            std::fs::read_to_string(crate::mlir_dir().join("crc32c_fold.mlir")).expect("kernel");
         for (name, d) in [("%k96", 96), ("%k64", 64)] {
             let line = mlir
                 .lines()
@@ -456,7 +604,7 @@ mod tests {
                     l.trim_start()
                         .starts_with(&format!("{name} = arith.constant "))
                 })
-                .expect("the constant is in crc32c.mlir");
+                .expect("the constant is in crc32c_fold.mlir");
             assert!(line.contains(&format!(" {} : i64", key(d))), "{line}");
         }
     }

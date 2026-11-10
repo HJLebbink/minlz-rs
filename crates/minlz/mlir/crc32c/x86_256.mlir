@@ -1,9 +1,10 @@
-// Target file of crc32c.mlir for x86-64 with VPCLMULQDQ on 256-bit vectors: 8 lanes of 128 bits in
-// ymm registers, 128 bytes a fold, and k = 4 words of each CRC32 chain per fold, in blocks of I = 8
-// folds: 1024 vector bytes and three scalar regions of 256 bytes. The keys multiply by x^d for
-// d = 1024 + 64 and 1024 in fold_keys; 8·3·256 + 64 and 8·3·256 in block_keys; 128·(7 - j) + 64 and
-// 128·(7 - j) for lane j in lane_keys; and 8·2·256 - 64, 8·256 - 64 and -64, each minus 896 for
-// lane 0, in chain_keys. cargo xtask mlir writes this file.
+// Target file of crc32c_fold.mlir for x86-64 with VPCLMULQDQ on 256-bit vectors: 8 lanes of 128
+// bits in ymm registers, 128 bytes a fold, and k = 4 words of each CRC32 chain per fold, in blocks
+// of I = 8 folds: 1024 vector bytes and three scalar regions of 256 bytes. Inputs below 1024 bytes
+// take one CRC32 chain. The keys multiply by x^d for d = 1024 + 64 and 1024 in fold_keys;
+// 8·3·256 + 64 and 8·3·256 in block_keys; 128·(7 - j) + 64 and 128·(7 - j) for lane j in lane_keys;
+// and 8·2·256 - 64, 8·256 - 64 and -64, each minus 896 for lane 0, in chain_keys. cargo xtask mlir
+// writes this file.
 
 !st = vector<16xi64>
 !w = vector<8x2xi64>
@@ -20,6 +21,11 @@ func.func private @words() -> index {
 
 func.func private @iters() -> index {
   %r = arith.constant 8 : index
+  return %r : index
+}
+
+func.func private @min_len() -> index {
+  %r = arith.constant 1024 : index
   return %r : index
 }
 
@@ -123,5 +129,28 @@ func.func private @clmul(%a: i64, %b: i64) -> vector<2xi64> {
 // crc32 returns the CRC state c after the word w: CRC32 with a 64-bit operand.
 func.func private @crc32(%c: i64, %w: i64) -> i64 {
   %r = llvm.call_intrinsic "llvm.x86.sse42.crc32.64.64"(%c, %w) : (i64, i64) -> i64
+  return %r : i64
+}
+
+// crc32w, crc32h and crc32b return the CRC state c, low 32 bits, after v: CRC32 with a 32-bit,
+// 16-bit or 8-bit operand.
+func.func private @crc32w(%c: i64, %v: i32) -> i64 {
+  %c32 = arith.trunci %c : i64 to i32
+  %r32 = llvm.call_intrinsic "llvm.x86.sse42.crc32.32.32"(%c32, %v) : (i32, i32) -> i32
+  %r = arith.extui %r32 : i32 to i64
+  return %r : i64
+}
+
+func.func private @crc32h(%c: i64, %v: i16) -> i64 {
+  %c32 = arith.trunci %c : i64 to i32
+  %r32 = llvm.call_intrinsic "llvm.x86.sse42.crc32.32.16"(%c32, %v) : (i32, i16) -> i32
+  %r = arith.extui %r32 : i32 to i64
+  return %r : i64
+}
+
+func.func private @crc32b(%c: i64, %v: i8) -> i64 {
+  %c32 = arith.trunci %c : i64 to i32
+  %r32 = llvm.call_intrinsic "llvm.x86.sse42.crc32.32.8"(%c32, %v) : (i32, i8) -> i32
+  %r = arith.extui %r32 : i32 to i64
   return %r : i64
 }

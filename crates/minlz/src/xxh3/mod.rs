@@ -17,8 +17,9 @@
 //! Implements XXH3 as defined by the xxHash specification by Yann Collet
 //! (<https://github.com/Cyan4973/xxHash/blob/dev/doc/xxhash_spec.md>), bit-exact with
 //! `github.com/zeebo/xxh3`, which MinLZ Go uses. The stripe loop of inputs over 240 bytes runs on
-//! the best vector unit of the CPU, picked once: AVX-512, AVX2 or SSE2 on x86-64, SVE or NEON on
-//! aarch64, portable code elsewhere. As in zeebo/xxh3, AVX-512 only takes inputs of at least 1 KiB.
+//! the best vector unit of the CPU, picked once, in MLIR kernels: AVX-512, AVX2 or
+//! SSE2 on x86-64, NEON on aarch64, and portable code elsewhere. As in zeebo/xxh3, AVX-512 only
+//! takes inputs of at least 1 KiB.
 
 use std::sync::OnceLock;
 
@@ -30,17 +31,12 @@ use std::sync::OnceLock;
     not(miri)
 ))]
 mod mlir;
-#[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
-mod neon;
 #[cfg(test)]
 mod tests;
-#[cfg(all(target_arch = "x86_64", not(miri)))]
-mod x86;
 
 const STRIPE: usize = 64;
 const BLOCK: usize = 1024;
-/// Inputs of at least this size take AVX-512 instead of AVX2, and SVE instead of NEON: bigger
-/// inputs benefit more.
+/// Inputs of at least this size take AVX-512 instead of AVX2: bigger inputs benefit more.
 const AVX512_SWITCH: usize = 1 << 10;
 
 const PRIME32_1: u64 = 0x9E37_79B1;
@@ -241,14 +237,6 @@ impl Hasher {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Tier {
     Scalar,
-    #[cfg(all(target_arch = "x86_64", not(miri)))]
-    Sse2,
-    #[cfg(all(target_arch = "x86_64", not(miri)))]
-    Avx2,
-    #[cfg(all(target_arch = "x86_64", not(miri)))]
-    Avx512,
-    #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
-    Neon,
     #[cfg(all(
         any(
             target_arch = "x86_64",
@@ -263,23 +251,14 @@ enum Tier {
 fn tiers() -> Vec<Tier> {
     #[allow(unused_mut)]
     let mut t = vec![Tier::Scalar];
-    #[cfg(all(target_arch = "x86_64", not(miri)))]
-    {
-        t.push(Tier::Sse2);
-        if std::is_x86_feature_detected!("avx2") {
-            t.extend([Tier::Mlir(mlir::Isa::Avx2), Tier::Avx2]);
-            if std::is_x86_feature_detected!("avx512f") {
-                t.extend([Tier::Mlir(mlir::Isa::Avx512), Tier::Avx512]);
-            }
-        }
-    }
-    #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
-    {
-        t.extend([Tier::Mlir(mlir::Isa::Neon), Tier::Neon]);
-        if mlir::sve_available() {
-            t.push(Tier::Mlir(mlir::Isa::Sve));
-        }
-    }
+    #[cfg(all(
+        any(
+            target_arch = "x86_64",
+            all(target_arch = "aarch64", target_endian = "little")
+        ),
+        not(miri)
+    ))]
+    t.extend(mlir::Isa::available().into_iter().map(Tier::Mlir));
     t
 }
 
@@ -293,101 +272,45 @@ impl Tier {
     fn small(self) -> Tier {
         match self {
             #[cfg(all(target_arch = "x86_64", not(miri)))]
-            Tier::Avx512 => Tier::Avx2,
-            #[cfg(all(target_arch = "x86_64", not(miri)))]
             Tier::Mlir(mlir::Isa::Avx512) => Tier::Mlir(mlir::Isa::Avx2),
-            #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
-            Tier::Mlir(mlir::Isa::Sve) => Tier::Neon,
             t => t,
         }
     }
 
     /// Accumulates p, which is at least a stripe long, as the end of the input.
     fn accum(self, a: &mut [u64; 8], p: &[u8]) {
-        // SAFETY: tiers() made self once the CPU had its features; Scalar needs none.
-        unsafe {
-            match self {
-                Tier::Scalar => accum::<Scalar>(a, p),
-                #[cfg(all(target_arch = "x86_64", not(miri)))]
-                Tier::Sse2 => x86::accum_sse2(a, p),
-                #[cfg(all(target_arch = "x86_64", not(miri)))]
-                Tier::Avx2 => x86::accum_avx2(a, p),
-                #[cfg(all(target_arch = "x86_64", not(miri)))]
-                Tier::Avx512 => x86::accum_avx512(a, p),
-                #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
-                Tier::Neon => neon::accum_neon(a, p),
-                #[cfg(all(
-                    any(
-                        target_arch = "x86_64",
-                        all(target_arch = "aarch64", target_endian = "little")
-                    ),
-                    not(miri)
-                ))]
-                Tier::Mlir(isa) => mlir::accum(isa, a, p),
+        match self {
+            Tier::Scalar => accum_scalar(a, p),
+            #[cfg(all(
+                any(
+                    target_arch = "x86_64",
+                    all(target_arch = "aarch64", target_endian = "little")
+                ),
+                not(miri)
+            ))]
+            Tier::Mlir(isa) => {
+                // SAFETY: tiers() made self once the CPU had isa's features.
+                unsafe { mlir::accum(isa, a, p) }
             }
         }
     }
 
     /// Accumulates the first n blocks of p, which input follows.
     fn blocks(self, a: &mut [u64; 8], p: &[u8], n: usize) {
-        // SAFETY: tiers() made self once the CPU had its features; Scalar needs none.
-        unsafe {
-            match self {
-                Tier::Scalar => blocks::<Scalar>(a, p, n),
-                #[cfg(all(target_arch = "x86_64", not(miri)))]
-                Tier::Sse2 => x86::blocks_sse2(a, p, n),
-                #[cfg(all(target_arch = "x86_64", not(miri)))]
-                Tier::Avx2 => x86::blocks_avx2(a, p, n),
-                #[cfg(all(target_arch = "x86_64", not(miri)))]
-                Tier::Avx512 => x86::blocks_avx512(a, p, n),
-                #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
-                Tier::Neon => neon::blocks_neon(a, p, n),
-                #[cfg(all(
-                    any(
-                        target_arch = "x86_64",
-                        all(target_arch = "aarch64", target_endian = "little")
-                    ),
-                    not(miri)
-                ))]
-                Tier::Mlir(isa) => mlir::blocks(isa, a, p, n),
+        match self {
+            Tier::Scalar => blocks_scalar(a, p, n),
+            #[cfg(all(
+                any(
+                    target_arch = "x86_64",
+                    all(target_arch = "aarch64", target_endian = "little")
+                ),
+                not(miri)
+            ))]
+            Tier::Mlir(isa) => {
+                // SAFETY: tiers() made self once the CPU had isa's features.
+                unsafe { mlir::blocks(isa, a, p, n) }
             }
         }
-    }
-}
-
-/// The spec's accumulate_512 and scramble on one vector unit, holding the 8 lanes in `Acc`.
-///
-/// # Safety
-///
-/// The methods use the unit's CPU features: callers must have checked them.
-trait Kernel {
-    type Acc: Copy;
-    /// Whether [`blocks_acc`] adds the stripes to four sums, which takes four times the registers.
-    const SPLIT: bool = true;
-    /// Whether [`blocks_acc`] unrolls a block, with the keys in registers and sums that start at
-    /// zero. AVX2 has too few registers: unrolled, its sums spilled, and rolled, adding stripes to
-    /// zero sums cost 3%.
-    const UNROLL: bool = false;
-    unsafe fn load(a: &[u64; 8]) -> Self::Acc;
-    unsafe fn store(acc: Self::Acc, a: &mut [u64; 8]);
-    unsafe fn zero() -> Self::Acc;
-    /// Adds the lanes of a and b.
-    unsafe fn add(a: Self::Acc, b: Self::Acc) -> Self::Acc;
-    unsafe fn stripe(acc: &mut Self::Acc, p: &[u8; STRIPE], k: &[u8; STRIPE]);
-    /// [`Kernel::stripe`] past the last block, where the adds to acc are the only chain.
-    #[inline(always)]
-    unsafe fn tail(acc: &mut Self::Acc, p: &[u8; STRIPE], k: &[u8; STRIPE]) {
-        // SAFETY: the caller checked the unit's features.
-        unsafe { Self::stripe(acc, p, k) }
-    }
-    unsafe fn scramble(acc: &mut Self::Acc);
-    #[inline(always)]
-    unsafe fn prefetch(_p: *const u8) {}
-    /// Returns x, which LLVM cannot see through. LLVM gives the first add of a sum to the
-    /// loop-carried term, which chains that term through every add.
-    #[inline(always)]
-    unsafe fn opaque(x: Self::Acc) -> Self::Acc {
-        x
     }
 }
 
@@ -421,155 +344,54 @@ static KEYS: Keys = {
     Keys(k)
 };
 
-/// Accumulates the stripes of n blocks of p, scrambling after each.
-/// With [`Kernel::SPLIT`], the stripes of a block go round-robin to four sums, as in zeebo/xxh3:
-/// one sum chains two vector adds per stripe, and Zen 5 takes 2 cycles for each, which halved
-/// the speed. With [`Kernel::UNROLL`], the sums start at zero in each block and acc takes them
-/// in one add, so the next block's stripes overlap this block's scramble.
-///
-/// # Safety
-///
-/// The CPU has K's features.
-#[inline(always)]
-unsafe fn blocks_acc<K: Kernel>(acc: &mut K::Acc, p: &[u8], n: usize) {
+/// Accumulates the stripes of the first n blocks of p in portable code, scrambling after each.
+fn blocks_scalar(a: &mut [u64; 8], p: &[u8], n: usize) {
     for b in p[..n * BLOCK].as_chunks::<BLOCK>().0 {
-        // SAFETY: the caller checked K's features; prefetching never faults.
-        unsafe {
-            if !K::SPLIT {
-                for (s, st) in b.as_chunks::<STRIPE>().0.iter().enumerate() {
-                    K::prefetch(st.as_ptr().wrapping_add(BLOCK));
-                    K::stripe(acc, st, key(8 * s));
-                }
-                K::scramble(acc);
-                continue;
-            }
-            let st4 = b.as_chunks::<{ 4 * STRIPE }>().0;
-            if K::UNROLL {
-                let mut t = [K::zero(); 4];
-                quad::<K>(&mut t, &st4[0], 0);
-                quad::<K>(&mut t, &st4[1], 1);
-                quad::<K>(&mut t, &st4[2], 2);
-                quad::<K>(&mut t, &st4[3], 3);
-                let sum = K::add(K::add(t[0], t[1]), K::add(t[2], t[3]));
-                *acc = K::add(*acc, K::opaque(sum));
-            } else {
-                let mut t = [*acc, K::zero(), K::zero(), K::zero()];
-                for (q, st4) in st4.iter().enumerate() {
-                    quad::<K>(&mut t, st4, q);
-                }
-                *acc = K::add(K::add(t[0], t[1]), K::add(t[2], t[3]));
-            }
-            K::scramble(acc);
+        for (s, st) in b.as_chunks::<STRIPE>().0.iter().enumerate() {
+            stripe(a, st, key(8 * s));
         }
+        scramble(a);
     }
 }
 
-/// Adds stripes 4·q to 4·q+3 of a block, in st, to the sums t. With a constant q the keys are
-/// constants, which AVX-512 keeps in registers.
-///
-/// # Safety
-///
-/// The CPU has K's features.
-#[inline(always)]
-unsafe fn quad<K: Kernel>(t: &mut [K::Acc; 4], st: &[u8; 4 * STRIPE], q: usize) {
-    for (j, (t, st)) in t.iter_mut().zip(st.as_chunks::<STRIPE>().0).enumerate() {
-        // SAFETY: the caller checked K's features; prefetching never faults.
-        unsafe {
-            K::prefetch(st.as_ptr().wrapping_add(BLOCK));
-            K::stripe(t, st, key(8 * (4 * q + j)));
-        }
-    }
-}
-
-/// Accumulates the first n blocks of p.
-///
-/// # Safety
-///
-/// The CPU has K's features.
-#[inline(always)]
-unsafe fn blocks<K: Kernel>(a: &mut [u64; 8], p: &[u8], n: usize) {
-    // SAFETY: the caller checked K's features.
-    unsafe {
-        let mut acc = K::load(a);
-        blocks_acc::<K>(&mut acc, p, n);
-        K::store(acc, a);
-    }
-}
-
-/// Accumulates p, at least a stripe long, as the end of the input: the blocks that more input
-/// follows, the remaining whole stripes but the last, then the last 64 bytes.
-///
-/// # Safety
-///
-/// The CPU has K's features.
-#[inline(always)]
-unsafe fn accum<K: Kernel>(a: &mut [u64; 8], p: &[u8]) {
+/// Accumulates p, at least a stripe long, as the end of the input in portable code: the blocks
+/// that more input follows, the remaining whole stripes but the last, then the last 64 bytes.
+fn accum_scalar(a: &mut [u64; 8], p: &[u8]) {
     let n = (p.len() - 1) / BLOCK;
+    blocks_scalar(a, p, n);
     let rest = &p[n * BLOCK..];
-    // SAFETY: the caller checked K's features.
-    unsafe {
-        let mut acc = K::load(a);
-        blocks_acc::<K>(&mut acc, p, n);
-        for (s, st) in rest[..rest.len() - 1]
-            .as_chunks::<STRIPE>()
-            .0
-            .iter()
-            .enumerate()
-        {
-            K::tail(&mut acc, st, key(8 * s));
-        }
-        K::tail(
-            &mut acc,
-            p[p.len() - STRIPE..].try_into().unwrap(),
-            key(KEY.len() - STRIPE - 7),
-        );
-        K::store(acc, a);
+    for (s, st) in rest[..rest.len() - 1]
+        .as_chunks::<STRIPE>()
+        .0
+        .iter()
+        .enumerate()
+    {
+        stripe(a, st, key(8 * s));
+    }
+    stripe(
+        a,
+        p[p.len() - STRIPE..].try_into().unwrap(),
+        key(KEY.len() - STRIPE - 7),
+    );
+}
+
+/// The spec's accumulate_512 for one stripe p with the key stripe k.
+#[inline(always)]
+fn stripe(a: &mut [u64; 8], p: &[u8; STRIPE], k: &[u8; STRIPE]) {
+    for i in 0..8 {
+        let v = r64(p, 8 * i);
+        let dk = v ^ r64(k, 8 * i);
+        a[i ^ 1] = a[i ^ 1].wrapping_add(v);
+        a[i] = a[i].wrapping_add((dk & 0xFFFF_FFFF) * (dk >> 32));
     }
 }
 
-struct Scalar;
-
-impl Kernel for Scalar {
-    type Acc = [u64; 8];
-    // Four sums would spill: the eight lanes already make independent chains.
-    const SPLIT: bool = false;
-
-    #[inline(always)]
-    unsafe fn load(a: &[u64; 8]) -> [u64; 8] {
-        *a
-    }
-
-    #[inline(always)]
-    unsafe fn store(acc: [u64; 8], a: &mut [u64; 8]) {
-        *a = acc;
-    }
-
-    #[inline(always)]
-    unsafe fn zero() -> [u64; 8] {
-        [0; 8]
-    }
-
-    #[inline(always)]
-    unsafe fn add(a: [u64; 8], b: [u64; 8]) -> [u64; 8] {
-        core::array::from_fn(|i| a[i].wrapping_add(b[i]))
-    }
-
-    #[inline(always)]
-    unsafe fn stripe(acc: &mut [u64; 8], p: &[u8; STRIPE], k: &[u8; STRIPE]) {
-        for i in 0..8 {
-            let v = r64(p, 8 * i);
-            let dk = v ^ r64(k, 8 * i);
-            acc[i ^ 1] = acc[i ^ 1].wrapping_add(v);
-            acc[i] = acc[i].wrapping_add((dk & 0xFFFF_FFFF) * (dk >> 32));
-        }
-    }
-
-    #[inline(always)]
-    unsafe fn scramble(acc: &mut [u64; 8]) {
-        let k = key(KEY.len() - STRIPE);
-        for (i, a) in acc.iter_mut().enumerate() {
-            *a = (*a ^ *a >> 47 ^ r64(k, 8 * i)).wrapping_mul(PRIME32_1);
-        }
+/// The spec's scramble.
+#[inline(always)]
+fn scramble(a: &mut [u64; 8]) {
+    let k = key(KEY.len() - STRIPE);
+    for (i, a) in a.iter_mut().enumerate() {
+        *a = (*a ^ *a >> 47 ^ r64(k, 8 * i)).wrapping_mul(PRIME32_1);
     }
 }
 

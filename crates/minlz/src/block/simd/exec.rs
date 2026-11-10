@@ -59,10 +59,7 @@
 
 use super::decode::Chunk;
 #[cfg(all(target_arch = "x86_64", not(miri)))]
-use super::exec_avx2::{
-    exec_avx2, exec_delta_avx2, exec_flat_avx2, exec_flat_delta_avx2, ll_stats_avx2,
-    off_stats_avx2, tok_stats_avx2,
-};
+use super::exec_avx2::{exec_avx2, exec_delta_avx2, exec_flat_avx2, exec_flat_delta_avx2};
 use super::{MAX_LEN, OFF_TAB};
 #[cfg(any(test, fuzzing))]
 use crate::pivco::kernel::Tier as PivcoTier;
@@ -234,39 +231,6 @@ pub(super) type ExecFlatRawFn = unsafe fn(
     st: &mut [usize; 4],
 );
 
-/// The token stats of a vector tier over all of `b` (Go `simdTokStatsAVX2` and friends):
-/// the summed match length codes, the operations with literals, the repeats and the escaped
-/// matches, and whether every token is at most 135. Go's AVX2 and AVX-512 loops count literals
-/// twice and escapes four times, which [`Tier::tok_stats_asm`] undoes.
-///
-/// # Safety
-///
-/// The CPU has the features of the tier. AVX2 takes a multiple of 32 bytes, NEON a multiple of
-/// 16 bytes, AVX-512 any length above 0.
-#[allow(dead_code, reason = "the signature of the vector tiers")]
-pub(super) type TokStatsFn = unsafe fn(b: &[u8]) -> (usize, usize, usize, usize, bool);
-
-/// The literal length stats of a vector tier over all of `b` (Go `simdLLStatsAVX2`): the sum of
-/// the bytes, how many are 33, and whether every byte is 1 to 33. The sum must be exact for
-/// any bytes, as escapes are summed with it. Lengths as for [`TokStatsFn`].
-///
-/// # Safety
-///
-/// As for [`TokStatsFn`].
-#[allow(dead_code, reason = "the signature of the vector tiers")]
-pub(super) type LLStatsFn = unsafe fn(b: &[u8]) -> (usize, usize, bool);
-
-/// The offset symbol stats of a vector tier over all of `b`, and whether every byte is 1 to 175.
-/// Go's AVX2 and AVX-512 loops return the sum of `b >> 3` and how often it is 0, which
-/// [`Tier::off_stats_asm`] turns into raw bits; NEON returns the raw bits and 0. Lengths as for
-/// [`TokStatsFn`].
-///
-/// # Safety
-///
-/// As for [`TokStatsFn`].
-#[allow(dead_code, reason = "the signature of the vector tiers")]
-pub(super) type OffStatsFn = unsafe fn(b: &[u8]) -> (usize, usize, bool);
-
 impl Tier {
     /// Every usable tier, the Go loops first, as Go's `simdTiers` runs them.
     #[cfg_attr(not(test), allow(dead_code, reason = "for tests"))]
@@ -431,117 +395,77 @@ impl Tier {
         }
     }
 
+    /// Returns the target of the MLIR stream checks for the tier, if it has one.
+    #[cfg(all(
+        any(
+            target_arch = "x86_64",
+            all(target_arch = "aarch64", target_endian = "little")
+        ),
+        not(miri)
+    ))]
+    fn stats_isa(self) -> Option<super::mlir::Isa> {
+        match self {
+            #[cfg(target_arch = "x86_64")]
+            Tier::Avx512 => Some(super::mlir::Isa::Avx512),
+            #[cfg(target_arch = "x86_64")]
+            Tier::Avx2 => Some(super::mlir::Isa::Avx2),
+            #[cfg(target_arch = "aarch64")]
+            Tier::NeonBatch | Tier::Neon => Some(super::mlir::Isa::Neon),
+            _ => None,
+        }
+    }
+
     /// Returns the statistics of a prefix of tok and its length (Go `simdTokStatsAsm`):
     /// the summed match length codes, the operations with literals, the repeats and the escaped
     /// matches. ok is false if the prefix has a token above 135. See `tok_stats`.
     pub(super) fn tok_stats_asm(self, _tok: &[u8]) -> (usize, usize, usize, usize, usize, bool) {
-        match self {
-            #[cfg(all(target_arch = "x86_64", not(miri)))]
-            Tier::Avx512 if !_tok.is_empty() => {
-                // SAFETY: the tier comes from Tier::best or Tier::tiers, which checked the CPU.
-                let (out, lit, rep, esc, ok) =
-                    unsafe { super::exec_avx512::tok_stats_avx512(_tok) };
-                (out, lit >> 1, rep, esc >> 2, _tok.len(), ok)
-            }
-            #[cfg(all(target_arch = "x86_64", not(miri)))]
-            Tier::Avx2 => {
-                let n = _tok.len() & !31;
-                if n == 0 {
-                    return (0, 0, 0, 0, 0, true);
-                }
-                // SAFETY: the tier is usable, so the CPU has AVX2 and BMI2.
-                let (out, lit, rep, esc, ok) = unsafe { tok_stats_avx2(&_tok[..n]) };
-                (out, lit >> 1, rep, esc >> 2, n, ok)
-            }
-            #[cfg(not(all(target_arch = "x86_64", not(miri))))]
-            Tier::Avx2 => (0, 0, 0, 0, 0, true),
-            Tier::Avx512 => (0, 0, 0, 0, 0, true),
-            #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
-            Tier::NeonBatch | Tier::Neon => {
-                let n = _tok.len() & !15;
-                // SAFETY: the tier is usable.
-                let (out, lit, rep, esc, ok) =
-                    unsafe { super::exec_neon::tok_stats_neon(&_tok[..n]) };
-                (out, lit, rep, esc, n, ok)
-            }
-            #[cfg(not(all(target_arch = "aarch64", target_endian = "little", not(miri))))]
-            Tier::NeonBatch | Tier::Neon => (0, 0, 0, 0, 0, true),
-            Tier::Go => (0, 0, 0, 0, 0, true),
+        #[cfg(all(
+            any(
+                target_arch = "x86_64",
+                all(target_arch = "aarch64", target_endian = "little")
+            ),
+            not(miri)
+        ))]
+        if let Some(isa) = self.stats_isa() {
+            // SAFETY: the tier comes from Tier::best or Tier::tiers, which checked the CPU.
+            return unsafe { super::mlir::tok(isa, _tok) };
         }
+        (0, 0, 0, 0, 0, true)
     }
 
     /// Returns the sum and escapes of a prefix of ll and its length (Go `simdLLStatsAsm`).
     /// ok is false if the prefix has a length outside 1-33; the sum is exact regardless.
     /// See `ll_stats`.
     pub(super) fn ll_stats_asm(self, _ll: &[u8]) -> (usize, usize, usize, bool) {
-        match self {
-            #[cfg(all(target_arch = "x86_64", not(miri)))]
-            Tier::Avx512 if !_ll.is_empty() => {
-                // SAFETY: as in tok_stats_asm.
-                let (sum, n_esc, ok) = unsafe { super::exec_avx512::ll_stats_avx512(_ll) };
-                (sum, n_esc, _ll.len(), ok)
-            }
-            #[cfg(all(target_arch = "x86_64", not(miri)))]
-            Tier::Avx2 => {
-                let n = _ll.len() & !31;
-                if n == 0 {
-                    return (0, 0, 0, true);
-                }
-                // SAFETY: the tier is usable, so the CPU has AVX2 and BMI2.
-                let (sum, n_esc, ok) = unsafe { ll_stats_avx2(&_ll[..n]) };
-                (sum, n_esc, n, ok)
-            }
-            #[cfg(not(all(target_arch = "x86_64", not(miri))))]
-            Tier::Avx2 => (0, 0, 0, true),
-            Tier::Avx512 => (0, 0, 0, true),
-            #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
-            Tier::NeonBatch | Tier::Neon => {
-                let n = _ll.len() & !15;
-                // SAFETY: the tier is usable.
-                let (sum, esc, ok) = unsafe { super::exec_neon::ll_stats_neon(&_ll[..n]) };
-                (sum, esc, n, ok)
-            }
-            #[cfg(not(all(target_arch = "aarch64", target_endian = "little", not(miri))))]
-            Tier::NeonBatch | Tier::Neon => (0, 0, 0, true),
-            Tier::Go => (0, 0, 0, true),
+        #[cfg(all(
+            any(
+                target_arch = "x86_64",
+                all(target_arch = "aarch64", target_endian = "little")
+            ),
+            not(miri)
+        ))]
+        if let Some(isa) = self.stats_isa() {
+            // SAFETY: as in tok_stats_asm.
+            return unsafe { super::mlir::ll(isa, _ll) };
         }
+        (0, 0, 0, true)
     }
 
     /// Returns the raw bits of a prefix of offc and its length (Go `simdOffStatsAsm`).
     /// ok is false if the prefix has a symbol outside 1-175. See `off_stats`.
     pub(super) fn off_stats_asm(self, _offc: &[u8]) -> (usize, usize, bool) {
-        match self {
-            #[cfg(all(target_arch = "x86_64", not(miri)))]
-            Tier::Avx512 if !_offc.is_empty() => {
-                // SAFETY: as in tok_stats_asm.
-                let (sum, zeros, ok) = unsafe { super::exec_avx512::off_stats_avx512(_offc) };
-                (sum + zeros - _offc.len(), _offc.len(), ok)
-            }
-            #[cfg(all(target_arch = "x86_64", not(miri)))]
-            Tier::Avx2 => {
-                let n = _offc.len() & !31;
-                if n == 0 {
-                    return (0, 0, true);
-                }
-                // SAFETY: the tier is usable, so the CPU has AVX2 and BMI2.
-                let (sum, zeros, ok) = unsafe { off_stats_avx2(&_offc[..n]) };
-                // Go's sum - n + zeros, ordered so it can't underflow: each byte adds to one.
-                (sum + zeros - n, n, ok)
-            }
-            #[cfg(not(all(target_arch = "x86_64", not(miri))))]
-            Tier::Avx2 => (0, 0, true),
-            Tier::Avx512 => (0, 0, true),
-            #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
-            Tier::NeonBatch | Tier::Neon => {
-                let n = _offc.len() & !15;
-                // SAFETY: the tier is usable.
-                let (bits, _, ok) = unsafe { super::exec_neon::off_stats_neon(&_offc[..n]) };
-                (bits, n, ok)
-            }
-            #[cfg(not(all(target_arch = "aarch64", target_endian = "little", not(miri))))]
-            Tier::NeonBatch | Tier::Neon => (0, 0, true),
-            Tier::Go => (0, 0, true),
+        #[cfg(all(
+            any(
+                target_arch = "x86_64",
+                all(target_arch = "aarch64", target_endian = "little")
+            ),
+            not(miri)
+        ))]
+        if let Some(isa) = self.stats_isa() {
+            // SAFETY: as in tok_stats_asm.
+            return unsafe { super::mlir::off(isa, _offc) };
         }
+        (0, 0, true)
     }
 }
 

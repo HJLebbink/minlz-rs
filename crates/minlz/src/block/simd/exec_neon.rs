@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The NEON operation loops and stream stats of SIMD blocks: Go's `decode-simd_arm64.s` (the
-//! per-operation loops and the stats) and `decode-simd-batch_arm64.s` (the batched loops,
+//! The NEON operation loops of SIMD blocks: Go's `decode-simd_arm64.s` (the per-operation
+//! loops) and `decode-simd-batch_arm64.s` (the batched loops,
 //! written by `_generate/simdneon`), dispatched by [`Tier`](super::exec::Tier) as
 //! `decode_arm64.go` does. ASIMD is part of ARMv8; little-endian only, as lanes and integer
 //! loads share one byte order.
@@ -32,13 +32,11 @@
 //!
 //! Other differences: the batched loops take Go's ADDS and CSEL from an `asm!` block, as LLVM
 //! adds and compares with 0; the flat loops' `raise` clamps to d itself instead of going to
-//! `clampcheck`; the stats sum with UADALP (see [`sums`]) and test the largest byte with UMAXV,
-//! which Go's assembler lacks.
+//! `clampcheck`.
 
 use core::arch::aarch64::*;
 
 use super::OFF_TAB;
-use super::exec::{LLStatsFn, OffStatsFn, TokStatsFn};
 
 /// [`OFF_TAB`] laid out for the loops (Go `simdOffTabNEON`): the mask of the raw bits in the
 /// low 32 bits, the number of raw bits in bits 32-39 and the base offset in the top 24 bits.
@@ -604,103 +602,9 @@ exec_flat_fn!(
     exec_batch_flat_delta_neon = batch::<true>
 );
 
-// The stream checks of chunks take 16 bytes at a time. They keep the largest byte, or
-// byte - 1, in a vector, and sum bytes into u16 lanes with UADALP. Go sums each vector with
-// UADDLV into a D lane, which LLVM moves to a general register and back.
-
-const _: (TokStatsFn, LLStatsFn, OffStatsFn) = (tok_stats_neon, ll_stats_neon, off_stats_neon);
-
-/// Returns the largest byte of the first vector f makes of each 16 bytes of b, and the sums of
-/// the others. b.len() is a multiple of 16.
-#[inline(always)]
-unsafe fn sums<const N: usize>(
-    b: &[u8],
-    f: impl Fn(uint8x16_t) -> (uint8x16_t, [uint8x16_t; N]),
-) -> (u8, [usize; N]) {
-    // SAFETY: the CPU has NEON; the loads read b.
-    unsafe {
-        let mut mx = vdupq_n_u8(0);
-        let mut tot = [vdupq_n_u32(0); N];
-        // A u16 lane takes 128 pair sums up to 510.
-        for run in b.chunks(16 * 128) {
-            let mut acc = [vdupq_n_u16(0); N];
-            for c in run.as_chunks::<16>().0 {
-                let (m, v) = f(vld1q_u8(c.as_ptr()));
-                mx = vmaxq_u8(m, mx);
-                for (a, v) in acc.iter_mut().zip(v) {
-                    *a = vpadalq_u8(*a, v);
-                }
-            }
-            for (t, a) in tot.iter_mut().zip(acc) {
-                *t = vpadalq_u16(*t, a);
-            }
-        }
-        (vmaxvq_u8(mx), tot.map(|t| vaddlvq_u32(t) as usize))
-    }
-}
-
-/// Returns the token stats of b, whose length is a multiple of 16 (Go
-/// `simdTokStatsNEON`): the summed match length codes, the operations with literals, the
-/// repeats and the escaped matches, and whether every token is at most 135.
-///
-/// # Safety
-///
-/// The CPU has NEON.
-#[target_feature(enable = "neon")]
-pub(super) unsafe fn tok_stats_neon(b: &[u8]) -> (usize, usize, usize, usize, bool) {
-    // SAFETY: the CPU has NEON.
-    unsafe {
-        let (c1, c2, c4) = (vdupq_n_u8(1), vdupq_n_u8(2), vdupq_n_u8(4));
-        let (mx, [out, lit, rep, esc]) = sums(b, |v| {
-            // Match length code 33 has bits 7 and 2.
-            let e = vandq_u8(vandq_u8(v, vshrq_n_u8::<5>(v)), c4);
-            let (l, r) = (vandq_u8(v, c2), vandq_u8(v, c1));
-            (v, [vshrq_n_u8::<2>(v), l, r, e])
-        });
-        (out, lit >> 1, rep, esc >> 2, mx <= 135)
-    }
-}
-
-/// Returns the sum of the bytes of b, whose length is a multiple of 16, and how many
-/// are 33 (Go `simdLLStatsNEON`). ok is false if a byte is outside 1-33.
-///
-/// # Safety
-///
-/// The CPU has NEON.
-#[target_feature(enable = "neon")]
-pub(super) unsafe fn ll_stats_neon(b: &[u8]) -> (usize, usize, bool) {
-    // SAFETY: the CPU has NEON.
-    unsafe {
-        let (c1, c33) = (vdupq_n_u8(1), vdupq_n_u8(33));
-        // 0 wraps to 255, so 1-33 is at most 32.
-        let (mx, [sum, esc]) = sums(b, |v| {
-            (vsubq_u8(v, c1), [v, vandq_u8(vceqq_u8(v, c33), c1)])
-        });
-        (sum, esc, mx <= 32)
-    }
-}
-
-/// Returns the raw bits of the offset symbols of b, whose length is a multiple of 16
-/// (Go `simdOffStatsNEON`), and 0, as [`OffStatsFn`](super::exec::OffStatsFn) has it.
-/// ok is false if a byte is outside 1-175.
-///
-/// # Safety
-///
-/// The CPU has NEON.
-#[target_feature(enable = "neon")]
-pub(super) unsafe fn off_stats_neon(b: &[u8]) -> (usize, usize, bool) {
-    // SAFETY: the CPU has NEON.
-    unsafe {
-        let c1 = vdupq_n_u8(1);
-        // The raw bits of symbol s are max(s>>3, 1) - 1.
-        let (mx, [sum]) = sums(b, |v| (vsubq_u8(v, c1), [vmaxq_u8(vshrq_n_u8::<3>(v), c1)]));
-        (sum - b.len(), 0, mx <= 174)
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::super::decode::{Chunk, ll_stats, off_stats, tok_stats};
+    use super::super::decode::Chunk;
     use super::super::decode_tests::Rng;
     use super::super::exec::{Tier, exec_go};
     use super::super::{MAX_LEN, SLACK};
@@ -743,53 +647,6 @@ mod tests {
         let s = g.slice(n, at_end);
         s.copy_from_slice(&b[..n]);
         s
-    }
-
-    /// The sums are exact over many runs of 128 vectors, at the largest bytes. The lengths
-    /// are multiples of 16.
-    #[test]
-    fn simd_stats_neon_long() {
-        let mut rng = Rng(10);
-        for n in [2032, 2048, 2064, 4112, 1 << 16, 70000, 1 << 17] {
-            for fill in [0xff, 135, 33, 175, 1, 0] {
-                let mut b = vec![fill; n];
-                if fill == 0 {
-                    rng.read(&mut b);
-                }
-                // SAFETY: the module is only built for aarch64, where ASIMD is baseline.
-                let (t, l, o) =
-                    unsafe { (tok_stats_neon(&b), ll_stats_neon(&b), off_stats_neon(&b)) };
-                let b = &b[..];
-                let g = (
-                    tok_stats(Tier::Go, b),
-                    ll_stats(Tier::Go, b),
-                    off_stats(Tier::Go, b),
-                );
-                let (sum, codes) = (
-                    b.iter().map(|&v| usize::from(v)).sum(),
-                    b.iter().map(|&v| usize::from(v >> 2)).sum(),
-                );
-                assert_eq!((l.0, t.0), (sum, codes), "length {n} fill {fill}");
-                assert_eq!(
-                    (t.4, l.2, o.2),
-                    (g.0.4, g.1.2, g.2.1),
-                    "length {n} fill {fill}"
-                );
-                if g.0.4 {
-                    assert_eq!(
-                        (t.1, b.len() - t.2, t.3),
-                        (g.0.1, g.0.2, g.0.3),
-                        "length {n}"
-                    );
-                }
-                if g.1.2 {
-                    assert_eq!(l.1, g.1.1, "length {n}");
-                }
-                if g.2.1 {
-                    assert_eq!(o.0, g.2.0, "length {n}");
-                }
-            }
-        }
     }
 
     /// The loops keep to the memory rules for any stream bytes, read as exec_go reads them

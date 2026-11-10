@@ -77,6 +77,13 @@ pub fn extract(asm: &str, name: &str) -> Result<String, String> {
     if !found {
         return Err(format!("no function {name}"));
     }
+    // The body is the whole kernel: a call would name a function outside it.
+    if let Some(call) = lines.iter().find(|l| {
+        let mnemonic = l.split_whitespace().next().unwrap_or("");
+        matches!(mnemonic, "call" | "bl" | "blr")
+    }) {
+        return Err(format!("{name} calls out of its body: {}", call.trim()));
+    }
 
     let mut out = String::new();
     let mut used = Vec::new();

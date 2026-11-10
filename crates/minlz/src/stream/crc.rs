@@ -14,10 +14,9 @@
 
 //! CRC32C (Castagnoli) with the MinLZ/S2/Snappy mask.
 //!
-//! Stage C bundles a small table-based CRC32C and, when the target CPU
-//! supports it at runtime, dispatches to the hardware `CRC32C` instruction
-//! (SSE 4.2 on x86_64, the `crc` ISA extension on aarch64).  The fallback
-//! is identical to the original table-driven implementation.
+//! On a CPU with the CRC32 instruction (SSE 4.2 on x86-64, the CRC extension
+//! on aarch64) the MLIR kernels of [`mlir`] compute the CRC, picked once at
+//! runtime. Everywhere else a table-based CRC32C does.
 //!
 //! The `mask_crc32c` wrapper is the bit that differs from upstream Snappy: it
 //! rotates the raw CRC right by 15 and adds the Snappy mask constant.  Go's
@@ -77,20 +76,6 @@ fn select_impl() -> CrcFn {
     ))]
     if let Some(f) = mlir::best() {
         return f;
-    }
-    #[cfg(target_arch = "x86_64")]
-    {
-        if std::is_x86_feature_detected!("sse4.2") {
-            return crc32c_hw_x86_64_safe;
-        }
-    }
-    // Little-endian only: the 3-way loop feeds native-endian words to
-    // `__crc32cd`, which takes the low byte first.
-    #[cfg(all(target_arch = "aarch64", target_endian = "little"))]
-    {
-        if std::arch::is_aarch64_feature_detected!("crc") {
-            return crc32c_hw_aarch64_safe;
-        }
     }
     crc32c_update_table
 }
@@ -158,157 +143,6 @@ const fn build_slice_table() -> [[u32; 256]; 8] {
         k += 1;
     }
     table
-}
-
-// -------------------- x86_64 hardware path --------------------
-
-#[cfg(target_arch = "x86_64")]
-fn crc32c_hw_x86_64_safe(crc: u32, data: &[u8]) -> u32 {
-    // SAFETY: only stored in CRC_IMPL after `is_x86_feature_detected!("sse4.2")`
-    // returned true in `select_impl`.
-    unsafe { crc32c_hw_x86_64(crc, data) }
-}
-
-/// Bytes per parallel stream in the 3-way pipelined inner loop.  Chunk
-/// size = `3 * STRIDE_BYTES`.  Chosen so the three accumulators live in
-/// registers and the 4×256×u32 shift table (4 KiB) stays in L1.
-const STRIDE_BYTES: usize = 1024;
-
-/// Precomputed `x^(8 * STRIDE_BYTES) mod G(x)` byte-multiplication table
-/// for CRC32C.  Used to combine three independent CRC streams into one.
-const SHIFT_TABLE: [[u32; 256]; 4] = build_shift_table::<{ STRIDE_BYTES }>();
-
-const fn build_shift_table<const ZB: usize>() -> [[u32; 256]; 4] {
-    let mut table = [[0u32; 256]; 4];
-    let mut k = 0;
-    while k < 4 {
-        let mut b = 0;
-        while b < 256 {
-            // Start the CRC register with byte `b` at slot `k`, zero elsewhere.
-            let mut c = (b as u32) << (k * 8);
-            // Run `ZB` zero bytes through the standard byte-table CRC32C step.
-            let mut j = 0;
-            while j < ZB {
-                c = TABLE[(c & 0xff) as usize] ^ (c >> 8);
-                j += 1;
-            }
-            table[k][b] = c;
-            b += 1;
-        }
-        k += 1;
-    }
-    table
-}
-
-/// `shift_crc(c) = c * x^(8 * STRIDE_BYTES) mod G(x)`.  Equivalent to
-/// advancing the CRC by `STRIDE_BYTES` zero bytes.
-#[inline(always)]
-fn shift_crc(crc: u32) -> u32 {
-    SHIFT_TABLE[0][(crc & 0xff) as usize]
-        ^ SHIFT_TABLE[1][((crc >> 8) & 0xff) as usize]
-        ^ SHIFT_TABLE[2][((crc >> 16) & 0xff) as usize]
-        ^ SHIFT_TABLE[3][((crc >> 24) & 0xff) as usize]
-}
-
-#[cfg(target_arch = "x86_64")]
-#[target_feature(enable = "sse4.2")]
-unsafe fn crc32c_hw_x86_64(crc: u32, data: &[u8]) -> u32 {
-    use core::arch::x86_64::*;
-    // SAFETY: `target_feature(enable = "sse4.2")` + CPUID-guarded dispatch
-    // in `select_impl` make the intrinsic calls below sound.
-    //
-    // For inputs ≥ 3 × STRIDE_BYTES, run three parallel `_mm_crc32_u64`
-    // chains so the CPU can keep the 3-cycle-latency / 1-cycle-throughput
-    // crc32q pipeline saturated.  At chunk boundaries, combine via
-    // `shift_crc`.  Algorithm matches Go's `crc32_amd64.s::castagnoliSSE42Triple`.
-    let mut c = !crc;
-    let mut data = data;
-    while data.len() >= 3 * STRIDE_BYTES {
-        let s0 = data.as_ptr();
-        let s1 = unsafe { s0.add(STRIDE_BYTES) };
-        let s2 = unsafe { s0.add(2 * STRIDE_BYTES) };
-        let mut c0 = u64::from(c);
-        let mut c1 = 0u64;
-        let mut c2 = 0u64;
-        let mut i = 0;
-        while i < STRIDE_BYTES {
-            // SAFETY: stream pointers each cover STRIDE_BYTES contiguous
-            // bytes of `data`; `i` runs in 8-byte steps to `STRIDE_BYTES`.
-            let v0 = unsafe { (s0.add(i) as *const u64).read_unaligned() };
-            let v1 = unsafe { (s1.add(i) as *const u64).read_unaligned() };
-            let v2 = unsafe { (s2.add(i) as *const u64).read_unaligned() };
-            c0 = _mm_crc32_u64(c0, v0);
-            c1 = _mm_crc32_u64(c1, v1);
-            c2 = _mm_crc32_u64(c2, v2);
-            i += 8;
-        }
-        // Fold: c_AB = shift(c0, STRIDE) XOR c1; c_ABC = shift(c_AB, STRIDE) XOR c2.
-        let c_ab = shift_crc(c0 as u32) ^ (c1 as u32);
-        c = shift_crc(c_ab) ^ (c2 as u32);
-        data = &data[3 * STRIDE_BYTES..];
-    }
-    // Tail: single-stream, 8 bytes at a time, then byte-at-a-time remainder.
-    let mut c64 = u64::from(c);
-    let (chunks, rest) = data.as_chunks::<8>();
-    for chunk in chunks {
-        c64 = _mm_crc32_u64(c64, u64::from_le_bytes(*chunk));
-    }
-    let mut c = c64 as u32;
-    for &b in rest {
-        c = _mm_crc32_u8(c, b);
-    }
-    !c
-}
-
-// -------------------- aarch64 hardware path --------------------
-
-#[cfg(all(target_arch = "aarch64", target_endian = "little"))]
-fn crc32c_hw_aarch64_safe(crc: u32, data: &[u8]) -> u32 {
-    // SAFETY: only stored after `is_aarch64_feature_detected!("crc")` matched.
-    unsafe { crc32c_hw_aarch64(crc, data) }
-}
-
-#[cfg(all(target_arch = "aarch64", target_endian = "little"))]
-#[target_feature(enable = "crc")]
-unsafe fn crc32c_hw_aarch64(crc: u32, data: &[u8]) -> u32 {
-    use core::arch::aarch64::*;
-    // SAFETY: `target_feature(enable = "crc")` plus the CPUID-style runtime
-    // check in `select_impl` make the intrinsics below sound.
-    //
-    // Three-way pipelined inner loop mirrors the x86_64 path.  Each
-    // `__crc32cd` instruction has ~3-cycle latency / 1-cycle throughput
-    // on production aarch64 cores (Apple, Graviton, …), so three
-    // independent accumulators saturate the pipeline.
-    let mut c = !crc;
-    let mut data = data;
-    while data.len() >= 3 * STRIDE_BYTES {
-        let s0 = data.as_ptr();
-        let s1 = unsafe { s0.add(STRIDE_BYTES) };
-        let s2 = unsafe { s0.add(2 * STRIDE_BYTES) };
-        let mut c0 = c;
-        let mut c1 = 0u32;
-        let mut c2 = 0u32;
-        let mut i = 0;
-        while i < STRIDE_BYTES {
-            let v0 = unsafe { (s0.add(i) as *const u64).read_unaligned() };
-            let v1 = unsafe { (s1.add(i) as *const u64).read_unaligned() };
-            let v2 = unsafe { (s2.add(i) as *const u64).read_unaligned() };
-            c0 = __crc32cd(c0, v0);
-            c1 = __crc32cd(c1, v1);
-            c2 = __crc32cd(c2, v2);
-            i += 8;
-        }
-        c = shift_crc(shift_crc(c0) ^ c1) ^ c2;
-        data = &data[3 * STRIDE_BYTES..];
-    }
-    let (chunks, rest) = data.as_chunks::<8>();
-    for chunk in chunks {
-        c = __crc32cd(c, u64::from_le_bytes(*chunk));
-    }
-    for &b in rest {
-        c = __crc32cb(c, b);
-    }
-    !c
 }
 
 /// Apply the MinLZ/S2/Snappy mask to a raw CRC32C value.
@@ -413,9 +247,10 @@ mod tests {
         }
     }
 
-    /// Every folding kernel the CPU has agrees with the table at every length up to a few
-    /// strides and at longer ones, from unaligned starts and a nonzero CRC: the kernels' keys,
-    /// the lane combination and the reduction, and the split between kernel and tail.
+    /// Every kernel the CPU has agrees with the table at every length up to past 1 KiB and at
+    /// longer ones, from unaligned starts and a nonzero CRC. The lengths reach the folding
+    /// kernels' blocks, strides and tails, and the chains kernels' runs of three 1 KiB regions
+    /// (`crc32c_chains.mlir`) and the bytes after them.
     #[cfg(all(
         any(
             target_arch = "x86_64",
@@ -424,11 +259,20 @@ mod tests {
         not(miri)
     ))]
     #[test]
-    fn fold_kernels_match_table() {
+    fn kernels_match_table() {
         let data = lcg_bytes(0x0123_4567_89ab_cdef, 70_000);
         let isas = mlir::Isa::available();
         assert!(!isas.is_empty() || cfg!(not(target_arch = "x86_64")));
-        let long = [1_536, 3 * 1_024 + 17, 4_096 + 5, 10_000, 65_536 + 31];
+        let long = [
+            1_536,
+            3 * 1_024 - 1,
+            3 * 1_024,
+            3 * 1_024 + 17,
+            4_096 + 5,
+            6 * 1_024 + 31,
+            10_000,
+            65_536 + 31,
+        ];
         for &isa in &isas {
             for (i, len) in (0..=1_100).chain(long).enumerate() {
                 let start = i % 16;
@@ -438,43 +282,6 @@ mod tests {
                 let got = unsafe { mlir::update(isa, crc, slice) };
                 assert_eq!(got, crc32c_update_table(crc, slice), "{isa:?} len {len}");
             }
-        }
-    }
-
-    /// Cover the 3-way pipelined path (input ≥ 3 × STRIDE_BYTES).  Tests
-    /// many lengths around the 3-stride boundary so the combine math is
-    /// exercised at every tail.
-    #[test]
-    fn hw_matches_table_in_3way_range() {
-        let n = 7 * super::STRIDE_BYTES + 257;
-        let data = lcg_bytes(0xdead_beef_cafe_babe, n);
-        // Check at every length crossing the 3-way boundary.
-        for end in [
-            super::STRIDE_BYTES * 3 - 1,
-            super::STRIDE_BYTES * 3,
-            super::STRIDE_BYTES * 3 + 1,
-            super::STRIDE_BYTES * 3 + 7,
-            super::STRIDE_BYTES * 3 + 8,
-            super::STRIDE_BYTES * 3 + 17,
-            super::STRIDE_BYTES * 6,
-            super::STRIDE_BYTES * 6 + 31,
-            n - 1,
-            n,
-        ] {
-            assert_eq!(
-                crc32c(&data[..end]),
-                crc32c_update_table(0, &data[..end]),
-                "len {end}"
-            );
-        }
-        // Also sweep length 0..STRIDE_BYTES*3+50 to catch any off-by-one
-        // around the boundary.
-        for end in (super::STRIDE_BYTES * 3 - 50..=super::STRIDE_BYTES * 3 + 50).step_by(7) {
-            assert_eq!(
-                crc32c(&data[..end]),
-                crc32c_update_table(0, &data[..end]),
-                "sweep len {end}"
-            );
         }
     }
 }

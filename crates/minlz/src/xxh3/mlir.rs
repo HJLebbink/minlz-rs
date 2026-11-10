@@ -14,10 +14,10 @@
 
 //! The stripe loop written once in MLIR (`crates/minlz/mlir/xxh3.mlir`) and lowered by
 //! `cargo xtask mlir` for each target into the assembly in `mlir/`, which the naked functions
-//! below hold: SVE at 128 and 256 bits and NEON on aarch64, AVX2 and AVX-512 on x86-64.
+//! below hold: NEON, and SVE at 128 and 256 bits, on aarch64; SSE2, AVX2 and AVX-512 on x86-64.
 //!
-//! A kernel takes `(acc, p, len, keys)` for [`super::accum`] or `(acc, p, n, keys)` for
-//! [`super::blocks`] and works on the 8 lanes at acc, with keys pointing at [`KEYS`]. An SVE kernel
+//! A kernel takes `(acc, p, len, keys)` for [`accum`] or `(acc, p, n, keys)` for [`blocks`] and
+//! works on the 8 lanes at acc, with keys pointing at [`KEYS`]. An SVE kernel
 //! is only correct, and only stays inside its arguments, at its own vector length. [`accum`] and
 //! [`blocks`] read the vector length on every call and run the NEON kernel at any other length,
 //! so a thread that changes its vector length still hashes correctly.
@@ -32,6 +32,8 @@ pub(super) enum Isa {
     /// SVE with 128-bit or 256-bit vectors.
     #[cfg(target_arch = "aarch64")]
     Sve,
+    #[cfg(target_arch = "x86_64")]
+    Sse2,
     #[cfg(target_arch = "x86_64")]
     Avx2,
     #[cfg(target_arch = "x86_64")]
@@ -65,11 +67,39 @@ kernels!(".arch_extension sve", accum_sve128, blocks_sve128, "sve128");
 #[cfg(target_arch = "aarch64")]
 kernels!(".arch_extension sve", accum_sve256, blocks_sve256, "sve256");
 #[cfg(target_arch = "x86_64")]
+kernels!(accum_sse2, blocks_sse2, "sse2");
+#[cfg(target_arch = "x86_64")]
 kernels!(accum_avx2, blocks_avx2, "avx2");
 #[cfg(target_arch = "x86_64")]
 kernels!(accum_avx512, blocks_avx512, "avx512");
 
 impl Isa {
+    /// Returns the targets the CPU has, slowest first. SVE ranks below NEON: base SVE multiplies
+    /// only 64-bit lanes, while NEON's `umlal` multiplies 32-bit halves into 64 bits, and the SVE
+    /// kernels took about twice the cycles of NEON on every core measured or modeled. The tests
+    /// still run them.
+    pub(super) fn available() -> Vec<Isa> {
+        let mut v = Vec::new();
+        #[cfg(target_arch = "x86_64")]
+        {
+            v.push(Isa::Sse2);
+            if std::is_x86_feature_detected!("avx2") {
+                v.push(Isa::Avx2);
+                if std::is_x86_feature_detected!("avx512f") {
+                    v.push(Isa::Avx512);
+                }
+            }
+        }
+        #[cfg(target_arch = "aarch64")]
+        {
+            if sve_available() {
+                v.push(Isa::Sve);
+            }
+            v.push(Isa::Neon);
+        }
+        v
+    }
+
     /// Returns the (accum, blocks) kernels to run now.
     ///
     /// # Safety
@@ -85,6 +115,8 @@ impl Isa {
                 sve_kernels(unsafe { vl_bytes() }).unwrap_or((accum_neon, blocks_neon))
             }
             #[cfg(target_arch = "x86_64")]
+            Isa::Sse2 => (accum_sse2, blocks_sse2),
+            #[cfg(target_arch = "x86_64")]
             Isa::Avx2 => (accum_avx2, blocks_avx2),
             #[cfg(target_arch = "x86_64")]
             Isa::Avx512 => (accum_avx512, blocks_avx512),
@@ -92,11 +124,12 @@ impl Isa {
     }
 }
 
-/// [`super::accum`] on the kernels of isa.
+/// Accumulates p, which is at least a stripe long, as the end of the input, on the kernels of isa.
 ///
 /// # Safety
 ///
 /// The CPU has the features of isa.
+#[inline(never)]
 pub(super) unsafe fn accum(isa: Isa, a: &mut [u64; 8], p: &[u8]) {
     debug_assert!(p.len() >= STRIPE);
     // SAFETY: the caller checked isa's features, and kernels() picked the SVE kernel of the
@@ -108,11 +141,12 @@ pub(super) unsafe fn accum(isa: Isa, a: &mut [u64; 8], p: &[u8]) {
     }
 }
 
-/// [`super::blocks`] on the kernels of isa.
+/// Accumulates the first n blocks of p, which input follows, on the kernels of isa.
 ///
 /// # Safety
 ///
 /// The CPU has the features of isa.
+#[inline(never)]
 pub(super) unsafe fn blocks(isa: Isa, a: &mut [u64; 8], p: &[u8], n: usize) {
     let p = &p[..n * BLOCK];
     // SAFETY: as in accum; the kernel reads the n blocks of p.
@@ -124,7 +158,7 @@ pub(super) unsafe fn blocks(isa: Isa, a: &mut [u64; 8], p: &[u8], n: usize) {
 
 /// Reports whether the CPU has SVE with a vector length that has kernels.
 #[cfg(target_arch = "aarch64")]
-pub(super) fn sve_available() -> bool {
+fn sve_available() -> bool {
     // SAFETY: vl_bytes runs only once SVE is detected.
     std::arch::is_aarch64_feature_detected!("sve") && sve_kernels(unsafe { vl_bytes() }).is_some()
 }

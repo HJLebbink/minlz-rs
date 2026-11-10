@@ -12,22 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! CRC32C by folding with carry-less multiplies beside three CRC32-instruction chains, written
-//! once in MLIR (`crates/minlz/mlir/crc32c.mlir`) and lowered by `cargo xtask mlir` for each
-//! target into the assembly in `mlir/`, which the naked functions below hold: PCLMULQDQ, and
-//! VPCLMULQDQ on 256 and 512 bits, on x86-64, and PMULL on aarch64.
+//! CRC32C written once in MLIR and lowered by `cargo xtask mlir` for each target into the assembly
+//! in `mlir/`, which the naked functions below hold. Targets with a carry-less multiply fold with
+//! it beside three CRC32-instruction chains (`crates/minlz/mlir/crc32c_fold.mlir`): PCLMULQDQ, and
+//! VPCLMULQDQ on 256 and 512 bits, on x86-64, and PMULL on aarch64. Targets with the CRC32
+//! instruction alone run three chains (`crates/minlz/mlir/crc32c_chains.mlir`): SSE 4.2 on x86-64
+//! and the CRC extension on aarch64.
 //!
-//! A kernel takes `(state, p, n)` and returns the CRC state after the n bytes at p, the state
-//! being the CRC without its final inversion. n is a whole number of [`Isa::stride`] bytes, at
-//! least one. [`update`] runs the kernel on the whole strides of its input and the CRC32
-//! instruction on the rest.
+//! A kernel takes `(state, p, n)` for any n and returns the CRC state after the n bytes at p, the
+//! state being the CRC without its final inversion.
 
 use super::CrcFn;
 
-/// The targets with a folding kernel.
+/// The targets with a kernel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum Isa {
-    /// PCLMULQDQ on 128-bit vectors, with SSE 4.2 for the tail.
+    /// SSE 4.2's CRC32 alone.
+    #[cfg(target_arch = "x86_64")]
+    Sse42,
+    /// PCLMULQDQ on 128-bit vectors.
     #[cfg(target_arch = "x86_64")]
     Pclmul,
     /// VPCLMULQDQ on 256-bit vectors.
@@ -36,7 +39,10 @@ pub(super) enum Isa {
     /// VPCLMULQDQ on 512-bit vectors.
     #[cfg(target_arch = "x86_64")]
     Avx512,
-    /// PMULL, with the CRC extension for the tail.
+    /// The CRC extension alone.
+    #[cfg(target_arch = "aarch64")]
+    Crc,
+    /// PMULL from the AES extension.
     #[cfg(target_arch = "aarch64")]
     Neon,
 }
@@ -51,21 +57,25 @@ macro_rules! kernel {
     ($($pre:literal,)? $name:ident, $dir:literal) => {
         mlir_kernel!(
             $($pre,)? $name(state: u32, p: *const u8, n: usize) -> u32,
-            concat!("mlir/", $dir, "/fold.s")
+            concat!("mlir/", $dir, "/update.s")
         );
     };
 }
 
 #[cfg(target_arch = "x86_64")]
-kernel!(fold_pclmul, "pclmul");
+kernel!(update_sse42, "sse42");
 #[cfg(target_arch = "x86_64")]
-kernel!(fold_avx2, "avx2");
+kernel!(update_pclmul, "pclmul");
 #[cfg(target_arch = "x86_64")]
-kernel!(fold_avx512, "avx512");
+kernel!(update_avx2, "avx2");
+#[cfg(target_arch = "x86_64")]
+kernel!(update_avx512, "avx512");
+#[cfg(target_arch = "aarch64")]
+kernel!(".arch_extension crc", update_crc, "crc");
 #[cfg(target_arch = "aarch64")]
 kernel!(
     ".arch_extension aes\n.arch_extension crc",
-    fold_neon,
+    update_neon,
     "neon"
 );
 
@@ -76,72 +86,66 @@ impl Isa {
         #[cfg(target_arch = "x86_64")]
         {
             use std::arch::is_x86_feature_detected as has;
-            if has!("sse4.2") && has!("pclmulqdq") {
-                v.push(Isa::Pclmul);
-                if has!("vpclmulqdq") && has!("avx2") {
-                    v.push(Isa::Avx2);
-                }
-                if has!("vpclmulqdq") && has!("avx512f") {
-                    v.push(Isa::Avx512);
+            if has!("sse4.2") {
+                v.push(Isa::Sse42);
+                if has!("pclmulqdq") {
+                    v.push(Isa::Pclmul);
+                    if has!("vpclmulqdq") && has!("avx2") {
+                        v.push(Isa::Avx2);
+                    }
+                    if has!("vpclmulqdq") && has!("avx512f") {
+                        v.push(Isa::Avx512);
+                    }
                 }
             }
         }
         #[cfg(target_arch = "aarch64")]
         {
             use std::arch::is_aarch64_feature_detected as has;
-            if has!("crc") && has!("aes") {
-                v.push(Isa::Neon);
+            if has!("crc") {
+                v.push(Isa::Crc);
+                if has!("aes") {
+                    v.push(Isa::Neon);
+                }
             }
         }
         v
     }
 
-    /// Returns the bytes that one fold of the kernel takes.
-    fn stride(self) -> usize {
-        match self {
-            #[cfg(target_arch = "x86_64")]
-            Isa::Avx512 => 256,
-            _ => 128,
-        }
-    }
-
-    /// Returns the shortest input that [`update`] gives the kernel; the CRC32 instruction alone
-    /// takes shorter ones. Below it, combining the lanes and reducing them costs more than folding
-    /// saves. With PMULL it is also a whole block: Neoverse N-class cores multiply on one pipe,
-    /// so folding alone is no faster there than CRC32, and only the block's CRC32 chains gain.
-    fn min_len(self) -> usize {
-        match self {
-            #[cfg(target_arch = "x86_64")]
-            Isa::Avx2 | Isa::Avx512 => 1024,
-            _ => 2048,
-        }
-    }
-
     fn kernel(self) -> Kernel {
         match self {
             #[cfg(target_arch = "x86_64")]
-            Isa::Pclmul => fold_pclmul,
+            Isa::Sse42 => update_sse42,
             #[cfg(target_arch = "x86_64")]
-            Isa::Avx2 => fold_avx2,
+            Isa::Pclmul => update_pclmul,
             #[cfg(target_arch = "x86_64")]
-            Isa::Avx512 => fold_avx512,
+            Isa::Avx2 => update_avx2,
+            #[cfg(target_arch = "x86_64")]
+            Isa::Avx512 => update_avx512,
             #[cfg(target_arch = "aarch64")]
-            Isa::Neon => fold_neon,
+            Isa::Crc => update_crc,
+            #[cfg(target_arch = "aarch64")]
+            Isa::Neon => update_neon,
         }
     }
 }
 
-/// Returns the update of the fastest target the CPU has, if it has one.
+/// Returns the update of the fastest target the CPU has, if it has one. Each update is a function
+/// of its own that only calls a kernel: the boundary that [`mlir_kernel`] asks for.
 pub(super) fn best() -> Option<CrcFn> {
     let isa = *Isa::available().last()?;
     // SAFETY (every arm): Isa::available checked isa's features.
     let f: CrcFn = match isa {
+        #[cfg(target_arch = "x86_64")]
+        Isa::Sse42 => |c, d| unsafe { update(Isa::Sse42, c, d) },
         #[cfg(target_arch = "x86_64")]
         Isa::Pclmul => |c, d| unsafe { update(Isa::Pclmul, c, d) },
         #[cfg(target_arch = "x86_64")]
         Isa::Avx2 => |c, d| unsafe { update(Isa::Avx2, c, d) },
         #[cfg(target_arch = "x86_64")]
         Isa::Avx512 => |c, d| unsafe { update(Isa::Avx512, c, d) },
+        #[cfg(target_arch = "aarch64")]
+        Isa::Crc => |c, d| unsafe { update(Isa::Crc, c, d) },
         #[cfg(target_arch = "aarch64")]
         Isa::Neon => |c, d| unsafe { update(Isa::Neon, c, d) },
     };
@@ -153,30 +157,8 @@ pub(super) fn best() -> Option<CrcFn> {
 /// # Safety
 ///
 /// The CPU has the features of isa.
-pub(super) unsafe fn update(isa: Isa, crc: u32, data: &[u8]) -> u32 {
-    let stride = isa.stride();
-    if data.len() < isa.min_len() {
-        // SAFETY: the caller checked isa's features, which include the CRC32 instruction.
-        return unsafe { tail(crc, data) };
-    }
-    let n = data.len() - data.len() % stride;
-    // SAFETY: the caller checked isa's features; the kernel reads the n bytes of data.
-    let state = unsafe { isa.kernel()(!crc, data.as_ptr(), n) };
-    // SAFETY: as above.
-    unsafe { tail(!state, &data[n..]) }
-}
-
-/// The CRC32 instruction's update.
-///
-/// # Safety
-///
-/// The CPU has the CRC32 instruction.
 #[inline]
-unsafe fn tail(crc: u32, data: &[u8]) -> u32 {
-    // SAFETY: the caller checked the CRC32 instruction.
-    #[cfg(target_arch = "x86_64")]
-    return unsafe { super::crc32c_hw_x86_64(crc, data) };
-    // SAFETY: the caller checked the CRC32 instruction.
-    #[cfg(target_arch = "aarch64")]
-    return unsafe { super::crc32c_hw_aarch64(crc, data) };
+pub(super) unsafe fn update(isa: Isa, crc: u32, data: &[u8]) -> u32 {
+    // SAFETY: the caller checked isa's features; the kernel reads the bytes of data.
+    !unsafe { isa.kernel()(!crc, data.as_ptr(), data.len()) }
 }

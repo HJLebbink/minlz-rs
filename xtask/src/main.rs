@@ -15,8 +15,8 @@
 //! Developer tasks for this workspace, run as `cargo xtask <task>`.
 //!
 //! `cargo xtask mlir` lowers the MLIR kernels in `crates/minlz/mlir/` once per target, and writes
-//! the assembly that the naked functions of `crates/minlz/src/xxh3/mlir.rs` and
-//! `crates/minlz/src/stream/crc/mlir.rs` include. It also writes the CRC32C target files,
+//! the assembly that the naked functions of the `mlir.rs` modules in `crates/minlz/src/xxh3/`,
+//! `crates/minlz/src/stream/crc/` and `crates/minlz/src/block/simd/` include. It also writes the CRC32C target files,
 //! `crates/minlz/mlir/crc32c/*.mlir`. Run it after changing an MLIR file or a target table, and
 //! commit its output: building the crate never runs LLVM.
 //!
@@ -89,10 +89,11 @@ const WHOLE: &str = "xxh3_whole.mlir";
 /// architecture and the features. aarch64 code uses base SVE only: Graviton 3 has 256-bit SVE but
 /// no SVE2. AVX-512 code takes no feature beyond AVX-512F, which is all that `xxh3::tiers`
 /// checks, and keeps 512-bit vectors whole.
-const XXH3: [(&str, &str, &str, Arch, &str); 5] = [
+const XXH3: [(&str, &str, &str, Arch, &str); 6] = [
     ("sve128", "sve128", SPLIT, Arch::Arm, "-mattr=+v8.2a,+sve"),
     ("sve256", "sve256", SPLIT, Arch::Arm, "-mattr=+v8.2a,+sve"),
     ("neon", "neon", WHOLE, Arch::Arm, "-mattr=+v8a,+neon"),
+    ("sse2", "x86", WHOLE, Arch::X86, "-mattr=+sse2"),
     ("avx2", "x86", WHOLE, Arch::X86, "-mattr=+avx2"),
     (
         "avx512",
@@ -101,6 +102,19 @@ const XXH3: [(&str, &str, &str, Arch, &str); 5] = [
         Arch::X86,
         "-mattr=+avx512f,-prefer-256-bit",
     ),
+];
+
+/// The targets of the block statistics: the output folder, the target file in `mlir/stats/`, the
+/// architecture and the features, each among those that `block::simd` checks for its tier.
+const STATS: [(&str, &str, Arch, &str); 3] = [
+    ("avx2", "x86_256", Arch::X86, "-mattr=+avx2"),
+    (
+        "avx512",
+        "x86_512",
+        Arch::X86,
+        "-mattr=+avx512f,+avx512bw,+avx512vl,-prefer-256-bit",
+    ),
+    ("neon", "neon", Arch::Arm, "-mattr=+v8a,+neon"),
 ];
 
 /// The passes that take the kernels from the dialects they are written in to the LLVM dialect.
@@ -132,8 +146,10 @@ fn mlir_dir() -> PathBuf {
 
 /// One kernel lowered for one target.
 struct Lowering {
-    /// The kernel: its file in `mlir/` and the prefix `minlz_<kernel>_` of its functions.
+    /// The kernel, which names its functions `minlz_<kernel>_<function>`.
     kernel: &'static str,
+    /// The kernel's own file in `mlir/`, which the output names.
+    source: &'static str,
     /// The target, which names the output folder.
     target: &'static str,
     /// The output folder.
@@ -160,6 +176,7 @@ fn mlir() -> Result<(), String> {
         let file = read(&format!("target/{file}.mlir"))?;
         lowerings.push(Lowering {
             kernel: "xxh3",
+            source: "xxh3.mlir",
             target,
             out: src.join("xxh3/mlir").join(target),
             arch,
@@ -175,12 +192,28 @@ fn mlir() -> Result<(), String> {
         write(&dir.join("crc32c").join(format!("{}.mlir", t.file)), &file)?;
         lowerings.push(Lowering {
             kernel: "crc32c",
+            source: t.kernel(),
             target: t.dir,
             out: src.join("stream/crc/mlir").join(t.dir),
-            arch: t.arch(),
+            arch: t.arch,
             mattr: t.mattr,
-            functions: &["fold"],
-            mlir: [common.as_str(), &file, &crc32c].concat(),
+            functions: &["update"],
+            mlir: [common.as_str(), &file, &crc32c, &read(t.kernel())?].concat(),
+        });
+    }
+
+    let stats = read("stats.mlir")?;
+    for (target, file, arch, mattr) in STATS {
+        let file = read(&format!("stats/{file}.mlir"))?;
+        lowerings.push(Lowering {
+            kernel: "stats",
+            source: "stats.mlir",
+            target,
+            out: src.join("block/simd/mlir").join(target),
+            arch,
+            mattr,
+            functions: &["tok", "ll", "off"],
+            mlir: [common.as_str(), &file, &stats].concat(),
         });
     }
 
@@ -213,17 +246,20 @@ impl Lowering {
             &[&["--mlir-to-llvmir"][..], &IO].concat(),
             &llvm,
         )?;
-        let bc = tool("opt", &[&["-O3"][..], &flags, &IO].concat(), &ir)?;
+        // A kernel's body must be whole: MLIR's inliner leaves some calls, and the functions it
+        // writes have external linkage, so LLVM's inliner needs a high threshold to take them all.
+        let opt = [&["-O3", "-inline-threshold=100000"][..], &flags, &IO].concat();
+        let bc = tool("opt", &opt, &ir)?;
         let llc = [&["-O3", "-asm-verbose=false"][..], &flags, &IO].concat();
         let asm = tool("llc", &llc, &bc)?;
         let asm = String::from_utf8(asm).map_err(|e| format!("llc wrote no text: {e}"))?;
         fs::create_dir_all(&self.out).map_err(|e| format!("{}: {e}", self.out.display()))?;
-        let (kernel, target, c) = (self.kernel, self.target, self.arch.comment());
+        let (source, target, c) = (self.source, self.target, self.arch.comment());
         for f in self.functions {
-            let name = format!("minlz_{kernel}_{f}");
+            let name = format!("minlz_{}_{f}", self.kernel);
             let body = body::extract(&asm, &name)?;
             let text = format!(
-                "{c} {name} of crates/minlz/mlir/{kernel}.mlir for {target}, written by\n\
+                "{c} {name} of crates/minlz/mlir/{source} for {target}, written by\n\
                  {c} cargo xtask mlir. Do not edit.\n{body}"
             );
             write(&self.out.join(format!("{f}.s")), &text)?;

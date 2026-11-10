@@ -27,6 +27,14 @@ mod exec_avx2;
 mod exec_avx512;
 #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
 mod exec_neon;
+#[cfg(all(
+    any(
+        target_arch = "x86_64",
+        all(target_arch = "aarch64", target_endian = "little")
+    ),
+    not(miri)
+))]
+mod mlir;
 
 pub(crate) use decode::{decode_simd, decode_simd_hash};
 #[cfg(fuzzing)]

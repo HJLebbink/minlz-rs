@@ -63,6 +63,11 @@
 /// body is the assembly in the file `$file`, a path relative to the calling file, with the
 /// assembler directives `$pre` in front. The xtask writes x86-64 kernels for the System V calling
 /// convention on every system, and aarch64 kernels for the C one.
+///
+/// Call a kernel from a function marked `#[inline(never)]`. On Windows, a System V function may
+/// change xmm6 to xmm15, which a Windows function must keep, so the function that calls a kernel
+/// saves and restores all ten. Inlined into a caller, that cost hits every call of the caller,
+/// even the ones that run no kernel.
 #[cfg(all(
     any(
         target_arch = "x86_64",
