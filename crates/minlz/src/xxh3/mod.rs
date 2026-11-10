@@ -17,11 +17,19 @@
 //! Implements XXH3 as defined by the xxHash specification by Yann Collet
 //! (<https://github.com/Cyan4973/xxHash/blob/dev/doc/xxhash_spec.md>), bit-exact with
 //! `github.com/zeebo/xxh3`, which MinLZ Go uses. The stripe loop of inputs over 240 bytes runs on
-//! the best vector unit of the CPU, picked once: AVX-512, AVX2 or SSE2 on x86-64, NEON on aarch64,
-//! portable code elsewhere. As in zeebo/xxh3, AVX-512 only takes inputs of at least 1 KiB.
+//! the best vector unit of the CPU, picked once: AVX-512, AVX2 or SSE2 on x86-64, SVE or NEON on
+//! aarch64, portable code elsewhere. As in zeebo/xxh3, AVX-512 only takes inputs of at least 1 KiB.
 
 use std::sync::OnceLock;
 
+#[cfg(all(
+    any(
+        target_arch = "x86_64",
+        all(target_arch = "aarch64", target_endian = "little")
+    ),
+    not(miri)
+))]
+mod mlir;
 #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
 mod neon;
 #[cfg(test)]
@@ -31,7 +39,8 @@ mod x86;
 
 const STRIPE: usize = 64;
 const BLOCK: usize = 1024;
-/// Inputs of at least this size take AVX-512 instead of AVX2: bigger inputs benefit more.
+/// Inputs of at least this size take AVX-512 instead of AVX2, and SVE instead of NEON: bigger
+/// inputs benefit more.
 const AVX512_SWITCH: usize = 1 << 10;
 
 const PRIME32_1: u64 = 0x9E37_79B1;
@@ -227,7 +236,8 @@ impl Hasher {
 }
 
 /// A unit that runs the stripe loop. A variant other than Scalar is only made by [`tiers`], once the
-/// CPU is known to have its features: the unsafe kernels rely on it.
+/// CPU is known to have its features: the unsafe kernels rely on it. `Mlir` runs the kernels of
+/// [`mlir`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Tier {
     Scalar,
@@ -239,6 +249,14 @@ enum Tier {
     Avx512,
     #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
     Neon,
+    #[cfg(all(
+        any(
+            target_arch = "x86_64",
+            all(target_arch = "aarch64", target_endian = "little")
+        ),
+        not(miri)
+    ))]
+    Mlir(mlir::Isa),
 }
 
 /// Returns the tiers this CPU runs, slowest first.
@@ -249,14 +267,19 @@ fn tiers() -> Vec<Tier> {
     {
         t.push(Tier::Sse2);
         if std::is_x86_feature_detected!("avx2") {
-            t.push(Tier::Avx2);
+            t.extend([Tier::Mlir(mlir::Isa::Avx2), Tier::Avx2]);
             if std::is_x86_feature_detected!("avx512f") {
-                t.push(Tier::Avx512);
+                t.extend([Tier::Mlir(mlir::Isa::Avx512), Tier::Avx512]);
             }
         }
     }
     #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
-    t.push(Tier::Neon);
+    {
+        t.extend([Tier::Mlir(mlir::Isa::Neon), Tier::Neon]);
+        if mlir::sve_available() {
+            t.push(Tier::Mlir(mlir::Isa::Sve));
+        }
+    }
     t
 }
 
@@ -268,11 +291,15 @@ impl Tier {
 
     /// Returns the tier for inputs below [`AVX512_SWITCH`].
     fn small(self) -> Tier {
-        #[cfg(all(target_arch = "x86_64", not(miri)))]
-        if self == Tier::Avx512 {
-            return Tier::Avx2;
+        match self {
+            #[cfg(all(target_arch = "x86_64", not(miri)))]
+            Tier::Avx512 => Tier::Avx2,
+            #[cfg(all(target_arch = "x86_64", not(miri)))]
+            Tier::Mlir(mlir::Isa::Avx512) => Tier::Mlir(mlir::Isa::Avx2),
+            #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
+            Tier::Mlir(mlir::Isa::Sve) => Tier::Neon,
+            t => t,
         }
-        self
     }
 
     /// Accumulates p, which is at least a stripe long, as the end of the input.
@@ -289,6 +316,14 @@ impl Tier {
                 Tier::Avx512 => x86::accum_avx512(a, p),
                 #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
                 Tier::Neon => neon::accum_neon(a, p),
+                #[cfg(all(
+                    any(
+                        target_arch = "x86_64",
+                        all(target_arch = "aarch64", target_endian = "little")
+                    ),
+                    not(miri)
+                ))]
+                Tier::Mlir(isa) => mlir::accum(isa, a, p),
             }
         }
     }
@@ -307,6 +342,14 @@ impl Tier {
                 Tier::Avx512 => x86::blocks_avx512(a, p, n),
                 #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
                 Tier::Neon => neon::blocks_neon(a, p, n),
+                #[cfg(all(
+                    any(
+                        target_arch = "x86_64",
+                        all(target_arch = "aarch64", target_endian = "little")
+                    ),
+                    not(miri)
+                ))]
+                Tier::Mlir(isa) => mlir::blocks(isa, a, p, n),
             }
         }
     }
