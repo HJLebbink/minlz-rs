@@ -104,17 +104,24 @@ const XXH3: [(&str, &str, &str, Arch, &str); 6] = [
     ),
 ];
 
-/// The targets of the block statistics: the output folder, the target file in `mlir/stats/`, the
+/// The structure of the operation loops in batches of 64, for x86-64.
+const EXEC64: &str = "exec64.mlir";
+/// The structure of the operation loops in batches of 8, for aarch64.
+const EXEC8: &str = "exec8.mlir";
+
+/// The targets of the block kernels, the statistics and the operation loops: the output folder,
+/// the target file in `mlir/stats/` and in `mlir/exec/`, the structure of the operation loops, the
 /// architecture and the features, each among those that `block::simd` checks for its tier.
-const STATS: [(&str, &str, Arch, &str); 3] = [
-    ("avx2", "x86_256", Arch::X86, "-mattr=+avx2"),
+const BLOCK: [(&str, &str, &str, Arch, &str); 3] = [
+    ("avx2", "x86_256", EXEC64, Arch::X86, "-mattr=+avx2,+bmi2"),
     (
         "avx512",
         "x86_512",
+        EXEC64,
         Arch::X86,
-        "-mattr=+avx512f,+avx512bw,+avx512vl,-prefer-256-bit",
+        "-mattr=+avx512f,+avx512bw,+avx512vl,+avx512vbmi,+avx512vbmi2,+bmi2,+popcnt,-prefer-256-bit",
     ),
-    ("neon", "neon", Arch::Arm, "-mattr=+v8a,+neon"),
+    ("neon", "neon", EXEC8, Arch::Arm, "-mattr=+v8a,+neon"),
 ];
 
 /// The passes that take the kernels from the dialects they are written in to the LLVM dialect.
@@ -203,17 +210,39 @@ fn mlir() -> Result<(), String> {
     }
 
     let stats = read("stats.mlir")?;
-    for (target, file, arch, mattr) in STATS {
-        let file = read(&format!("stats/{file}.mlir"))?;
+    let exec = read("exec.mlir")?;
+    for (target, file, structure, arch, mattr) in BLOCK {
+        let out = src.join("block/simd/mlir").join(target);
         lowerings.push(Lowering {
             kernel: "stats",
             source: "stats.mlir",
             target,
-            out: src.join("block/simd/mlir").join(target),
+            out: out.clone(),
             arch,
             mattr,
             functions: &["tok", "ll", "off"],
-            mlir: [common.as_str(), &file, &stats].concat(),
+            mlir: [
+                common.as_str(),
+                &read(&format!("stats/{file}.mlir"))?,
+                &stats,
+            ]
+            .concat(),
+        });
+        lowerings.push(Lowering {
+            kernel: "exec",
+            source: structure,
+            target,
+            out: out.join("exec"),
+            arch,
+            mattr,
+            functions: &["plain", "delta", "flat", "flat_delta"],
+            mlir: [
+                common.as_str(),
+                &read(&format!("exec/{file}.mlir"))?,
+                &exec,
+                &read(structure)?,
+            ]
+            .concat(),
         });
     }
 

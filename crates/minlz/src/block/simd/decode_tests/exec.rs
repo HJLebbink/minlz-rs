@@ -484,3 +484,141 @@ fn simd_stats_tail() {
         }
     }
 }
+
+/// The tests run the AVX2 tier when the CPU has it, and the dispatch picks it below AVX-512, as
+/// Go's `simdTiers` forces it with the cpu flags.
+#[cfg(all(target_arch = "x86_64", not(miri)))]
+#[test]
+fn simd_tiers_x86() {
+    use crate::block::simd::exec::simd_tiers;
+    use crate::cpu;
+    let _g = cpu::Disabled::new(cpu::AVX512);
+    let has = cpu::has(cpu::AVX2);
+    let mut seen = false;
+    simd_tiers(|t, _| seen |= t == Tier::Avx2);
+    assert!(seen == has && (Tier::best() == Tier::Avx2) == has);
+    cpu::disable(cpu::AVX2);
+    assert!(!Tier::Avx2.usable() && Tier::best() == Tier::Go);
+}
+
+/// The tiers Go's `simdTiers` runs on arm64, and NEON by default.
+#[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
+#[test]
+fn simd_tiers_neon() {
+    use crate::cpu;
+    let _d = cpu::Disabled::new(0);
+    assert_eq!(Tier::tiers(), [Tier::Go, Tier::Neon]);
+    assert_eq!(Tier::best(), Tier::Neon);
+    drop(_d);
+    let _d = cpu::Disabled::new(cpu::NEON);
+    assert_eq!((Tier::tiers(), Tier::best()), (vec![Tier::Go], Tier::Go));
+}
+
+/// Returns n bytes of g against a guard page, at its end or its start, starting with b.
+fn guarded<'g>(g: &'g mut Buffer, b: &[u8], n: usize, at_end: bool) -> &'g mut [u8] {
+    let s = g.slice(n, at_end);
+    s.copy_from_slice(&b[..n]);
+    s
+}
+
+/// The vector loops keep to the memory rules for any stream bytes, which they read as exec_go
+/// reads them, except that a literal length or a match length code from 33 on is 33 plus an
+/// escape: each operation then uses the escapes exec_go uses, and ends no later than there. The
+/// buffers end at guard pages where exec_go's reads and writes end, and dst starts at one every
+/// other run.
+#[test]
+fn simd_exec_any_bytes() {
+    let mut rng = Rng(9);
+    let mut g: [Buffer; 7] = core::array::from_fn(|_| Buffer::new(1 << 20).unwrap());
+    let [g0, g1, g2, g3, g4, g5, g6] = &mut g;
+    let tiers: Vec<Tier> = Tier::tiers()
+        .into_iter()
+        .filter(|&t| t != Tier::Go)
+        .collect();
+    let runs = if cfg!(miri) { 0 } else { 20000 };
+    for tier in tiers {
+        for i in 0..runs {
+            let (delta, flat) = (i & 1 != 0, i & 2 != 0);
+            let n = rng.intn(40);
+            let mut v = [
+                vec![0u8; n + 7],
+                vec![0; 1000],
+                vec![0; 1000],
+                vec![0; 1000],
+            ];
+            for s in &mut v {
+                rng.read(s);
+            }
+            // Mostly valid tokens, so operations run past the first escapes.
+            if i & 8 != 0 {
+                v[0].iter_mut().for_each(|t| *t %= 136);
+                v[1].iter_mut().for_each(|l| *l %= 40);
+            }
+            let [tok, ll, offc, esc] = &v;
+            let (d0, l0) = (
+                rng.intn(100) + if flat { MAX_LEN } else { 0 },
+                rng.intn(100),
+            );
+            let (mut d, mut l, mut li, mut oi, mut gi, mut bits) = (d0, l0, 0, 0, 0, 0);
+            for &t in &tok[..n] {
+                let t = usize::from(t);
+                if t & 2 != 0 {
+                    let mut n = usize::from(ll[li]);
+                    li += 1;
+                    if n > MAX_LEN {
+                        n += usize::from(esc[gi]);
+                        gi += 1;
+                    }
+                    (d, l) = (d + n, l + n);
+                }
+                if t & 1 == 0 {
+                    bits += (OFF_TAB[usize::from(offc[oi])] >> 24) as usize;
+                    oi += 1;
+                }
+                let mut ml = t >> 2;
+                if ml > MAX_LEN {
+                    ml += usize::from(esc[gi]);
+                    gi += 1;
+                }
+                d += ml;
+            }
+            let mut raw = vec![0; bits / 8 + 8];
+            rng.read(&mut raw);
+            let (mut lv, mut dv) = (vec![0; l + SLACK], vec![0; d + SLACK]);
+            rng.read(&mut lv);
+            rng.read(&mut dv);
+            let c = Chunk {
+                tok: guarded(g0, tok, n + 7, true),
+                ll: guarded(g1, ll, li + 8, true),
+                offc: guarded(g2, offc, oi + 8, true),
+                esc: guarded(g3, esc, gi, true),
+                raw: guarded(g4, &raw, raw.len(), true),
+                n_tok: n,
+                n_ll: li,
+                n_off: oi,
+                n_esc: gi,
+                bits,
+                delta,
+                flat,
+            };
+            let (dst, lits) = (
+                guarded(g5, &dv, dv.len(), i & 16 != 0),
+                guarded(g6, &lv, lv.len(), true),
+            );
+            let before = dst[..d0].to_vec();
+            let mut st = [d0, l0, 1 + rng.intn(1 << 20), 0];
+            if flat {
+                // SAFETY: the tier comes from Tier::tiers, the counts above are what the tokens
+                // read, and dst and lits end SLACK bytes past what exec_go uses.
+                unsafe { tier.exec_flat(dst, lits, &c, 0, n, [0; 4], &mut st) };
+            } else {
+                // SAFETY: as above.
+                unsafe { tier.exec(dst, lits, &c, n, &mut st) };
+            }
+            assert!(
+                st[0] <= d && st[1] <= l && dst[..d0] == before[..],
+                "{tier:?} case {i} (delta {delta}, flat {flat}): state {st:?}, exec_go ends at {d}, {l}"
+            );
+        }
+    }
+}

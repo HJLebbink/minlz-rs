@@ -12,13 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The stream checks of chunks, written once in MLIR (`crates/minlz/mlir/stats.mlir`) and lowered
-//! by `cargo xtask mlir` for each target into the assembly in `mlir/`, which the naked functions
-//! below hold: AVX2 and AVX-512 on x86-64, NEON on aarch64.
+//! The stream checks and the operation loops of chunks, written once in MLIR
+//! (`crates/minlz/mlir/stats.mlir` and `exec.mlir`) and lowered by `cargo xtask mlir` for each
+//! target into the assembly in `mlir/`, which the naked functions below hold: AVX2 and AVX-512 on
+//! x86-64, NEON on aarch64.
 //!
-//! A kernel takes `(p, n, r)`: n bytes at p, a multiple of 64, and r, where it writes its sums.
-//! It returns 0 if every byte is in range. [`tok`], [`ll`] and [`off`] give it the whole 64-byte
-//! chunks of a stream; `tok_stats`, `ll_stats` and `off_stats` of the decoder take the rest.
+//! A stream check takes `(p, n, r)`: n bytes at p, a multiple of 64, and r, where it writes its
+//! sums. It returns 0 if every byte is in range. [`tok`], [`ll`] and [`off`] give it the whole
+//! 64-byte chunks of a stream; `tok_stats`, `ll_stats` and `off_stats` of the decoder take the
+//! rest.
+//!
+//! An operation loop takes an [`Exec`], runs its operations and writes the state back. [`exec`]
+//! picks the loop for chunks with delta literals or the no-overlap flag.
+
+use super::{MAX_LEN, OFF_TAB};
 
 /// The targets with kernels.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -128,11 +135,217 @@ pub(super) unsafe fn off(isa: Isa, offc: &[u8]) -> (usize, usize, bool) {
     (bits, n, ok)
 }
 
+/// The tables of the operation loops (see `crates/minlz/mlir/exec.mlir`).
+#[repr(C, align(64))]
+struct Tables {
+    /// Per offset symbol: the mask of its raw bits in bits 0 to 31, their number in bits 32 to
+    /// 39 and the base offset in bits 40 to 63. Symbol 0 is all zero.
+    off: [u64; 256],
+    /// Byte i of row r is i % r for r from 2 to 31, 0 for rows 0 and 1, and i for rows 32 and up:
+    /// the indexes that repeat the bytes before an offset r. A delta reference at position 0
+    /// repeats `dst[0]`.
+    rows: [[u8; 32]; 64],
+}
+
+static TABLES: Tables = {
+    let mut off = [0u64; 256];
+    let mut s = 1;
+    while s < 256 {
+        let (v, nb) = (OFF_TAB[s] as u64, OFF_TAB[s] as u64 >> 24);
+        off[s] = ((1 << nb) - 1) | nb << 32 | (v & 0xffffff) << 40;
+        s += 1;
+    }
+    let mut rows = [[0u8; 32]; 64];
+    let mut r = 2;
+    while r < 64 {
+        let mut i = 0;
+        while i < 32 {
+            rows[r][i] = if r < MAX_LEN { i % r } else { i } as u8;
+            i += 1;
+        }
+        r += 1;
+    }
+    Tables { off, rows }
+};
+
+/// The arguments of an operation loop: n operations from the streams tok, ll, offc and esc, and
+/// from bit pos of raw, as [`exec_go`](super::exec::exec_go) and
+/// [`exec_flat_go`](super::exec::exec_flat_go) run them. st holds the output position, the
+/// literal position, the repeat offset and an error flag, which the loop writes back. raw is
+/// readable for nraw bytes. The loop keeps its stream positions and a batch of operations in the
+/// rest.
+#[repr(C, align(64))]
+pub(super) struct Exec {
+    dst: *mut u8,
+    lits: *const u8,
+    tok: *const u8,
+    ll: *const u8,
+    offc: *const u8,
+    raw: *const u8,
+    esc: *const u8,
+    tab: *const Tables,
+    n: usize,
+    pos: usize,
+    pub(super) st: [usize; 4],
+    nraw: usize,
+    escapes: usize,
+    cursors: [usize; 8],
+    batch: [u64; 56],
+}
+
+impl Exec {
+    /// Returns the arguments of n operations from the streams, from bit pos of raw, which is
+    /// readable for nraw bytes.
+    pub(super) fn new(
+        dst: *mut u8,
+        lits: *const u8,
+        [tok, ll, offc, raw, esc]: [*const u8; 5],
+        nraw: usize,
+        n: usize,
+        pos: usize,
+        st: [usize; 4],
+    ) -> Exec {
+        Exec {
+            dst,
+            lits,
+            tok,
+            ll,
+            offc,
+            raw,
+            esc,
+            tab: &TABLES,
+            n,
+            pos,
+            st,
+            nraw,
+            escapes: 0,
+            cursors: [0; 8],
+            batch: [0; 56],
+        }
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+type ExecKernel = unsafe extern "sysv64" fn(*mut Exec);
+#[cfg(target_arch = "aarch64")]
+type ExecKernel = unsafe extern "C" fn(*mut Exec);
+
+/// Declares the operation loops in `mlir/$dir/exec/`: plain, with delta literals, with the
+/// no-overlap flag, and with both.
+macro_rules! exec_kernels {
+    ($plain:ident, $delta:ident, $flat:ident, $flat_delta:ident, $dir:literal) => {
+        mlir_kernel!(
+            $plain(a: *mut Exec),
+            concat!("mlir/", $dir, "/exec/plain.s")
+        );
+        mlir_kernel!(
+            $delta(a: *mut Exec),
+            concat!("mlir/", $dir, "/exec/delta.s")
+        );
+        mlir_kernel!($flat(a: *mut Exec), concat!("mlir/", $dir, "/exec/flat.s"));
+        mlir_kernel!(
+            $flat_delta(a: *mut Exec),
+            concat!("mlir/", $dir, "/exec/flat_delta.s")
+        );
+    };
+}
+
+#[cfg(target_arch = "x86_64")]
+exec_kernels!(
+    exec_avx2,
+    exec_delta_avx2,
+    exec_flat_avx2,
+    exec_flat_delta_avx2,
+    "avx2"
+);
+#[cfg(target_arch = "x86_64")]
+exec_kernels!(
+    exec_avx512,
+    exec_delta_avx512,
+    exec_flat_avx512,
+    exec_flat_delta_avx512,
+    "avx512"
+);
+#[cfg(target_arch = "aarch64")]
+exec_kernels!(
+    exec_neon,
+    exec_delta_neon,
+    exec_flat_neon,
+    exec_flat_delta_neon,
+    "neon"
+);
+
+impl Isa {
+    /// Returns the operation loops: plain, with delta literals, with the no-overlap flag, and
+    /// with both.
+    fn exec_kernels(self) -> [ExecKernel; 4] {
+        match self {
+            #[cfg(target_arch = "x86_64")]
+            Isa::Avx2 => [
+                exec_avx2,
+                exec_delta_avx2,
+                exec_flat_avx2,
+                exec_flat_delta_avx2,
+            ],
+            #[cfg(target_arch = "x86_64")]
+            Isa::Avx512 => [
+                exec_avx512,
+                exec_delta_avx512,
+                exec_flat_avx512,
+                exec_flat_delta_avx512,
+            ],
+            #[cfg(target_arch = "aarch64")]
+            Isa::Neon => [
+                exec_neon,
+                exec_delta_neon,
+                exec_flat_neon,
+                exec_flat_delta_neon,
+            ],
+        }
+    }
+}
+
+/// Runs the operations of a with the loop of isa for chunks with delta literals and with the
+/// no-overlap flag, as delta and flat say.
+///
+/// # Safety
+///
+/// The CPU has the features of isa, and a's pointers and counts keep the
+/// [memory rules](super::exec) for its operations.
+#[inline(never)]
+pub(super) unsafe fn exec(isa: Isa, delta: bool, flat: bool, a: &mut Exec) {
+    let kernel = isa.exec_kernels()[2 * usize::from(flat) + usize::from(delta)];
+    // SAFETY: the caller's.
+    unsafe { kernel(a) }
+}
+
 #[cfg(test)]
 mod tests {
     use super::super::decode::{ll_stats, off_stats, tok_stats};
     use super::super::decode_tests::Rng;
     use super::super::exec::Tier;
+    use super::{MAX_LEN, OFF_TAB, TABLES};
+
+    /// The offset table decodes each symbol as OFF_TAB does, symbol 0 to offset 0, and row r
+    /// repeats the bytes before an offset r, row 0 as row 1.
+    #[test]
+    fn exec_tables() {
+        assert_eq!(TABLES.off[0], 0);
+        for (s, &e) in TABLES.off.iter().enumerate().skip(1) {
+            let nb = OFF_TAB[s] >> 24;
+            assert_eq!(
+                (e >> 40, (e >> 32) as u8 as u32, e as u32),
+                (u64::from(OFF_TAB[s] & 0xffffff), nb, (1 << nb) - 1),
+                "symbol {s}"
+            );
+        }
+        for (r, row) in TABLES.rows.iter().enumerate() {
+            for (i, &v) in row.iter().enumerate() {
+                let want = if r < MAX_LEN { i % r.max(1) } else { i };
+                assert_eq!(usize::from(v), want, "row {r} byte {i}");
+            }
+        }
+    }
 
     /// Every tier with kernels agrees with the portable stats of the Go tier, which also finish
     /// each stream, at every length near a multiple of 64 and over long streams, with the range

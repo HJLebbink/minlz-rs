@@ -114,6 +114,13 @@ pub fn extract(asm: &str, name: &str) -> Result<String, String> {
     }
     for label in used {
         let pool = &pools[label];
+        // A pool without data has data directives this file does not know; the body would read
+        // whatever follows it.
+        if pool.data.is_empty() {
+            return Err(format!(
+                "{name}: constant pool {label} has no data this tool knows"
+            ));
+        }
         if !pool.align.is_empty() {
             out += pool.align;
             out.push('\n');
@@ -153,13 +160,16 @@ fn reference(s: &str) -> Option<(usize, usize)> {
     })
 }
 
-/// Reports whether a line, without its indentation, holds constant pool data.
+/// Reports whether a line, without its indentation, holds constant pool data: the x86-64 and the
+/// AArch64 names of 8, 4, 2 and 1 bytes, and zero fill.
 fn is_data(directive: &str) -> bool {
-    [".quad", ".long", ".short", ".byte", ".zero", ".space"]
-        .iter()
-        .any(|d| {
-            directive
-                .strip_prefix(d)
-                .is_some_and(|rest| rest.starts_with([' ', '\t']))
-        })
+    [
+        ".quad", ".xword", ".long", ".word", ".short", ".hword", ".byte", ".zero", ".space",
+    ]
+    .iter()
+    .any(|d| {
+        directive
+            .strip_prefix(d)
+            .is_some_and(|rest| rest.starts_with([' ', '\t']))
+    })
 }
