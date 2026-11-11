@@ -2,9 +2,9 @@
 // general registers, as aarch64 has, as Go's arm64 loops run them. See exec.mlir, which comes
 // before this file.
 //
-// The literal lengths and offset symbols of a batch are expanded into a word each, and @op decodes
-// each offset with a table lookup. The 8 operations of a batch are unrolled, and each batch
-// expands the next before it runs.
+// The literal lengths and offset symbols of a batch are expanded into a word each, and @op8
+// decodes each offset with a table lookup. The 8 operations of a batch are unrolled, and each
+// batch expands the next before it runs.
 
 // expand2 returns the literal lengths and the offset symbols of the 8 operations at tok + k, a byte
 // each, and the offsets li and oi in ll and offc after them. Operations without literals get
@@ -34,19 +34,47 @@ func.func private @lane8(%w: i64, %k: i64) -> index {
 }
 
 // op8 runs operation k of a batch of 8: byte k of the token word tw, the literal length word lw
-// and the offset symbol word sw. See @op.
+// and the offset symbol word sw, whose raw bits are at bit p of raw. It returns d, l, the offset
+// and p after it. See @op.
 func.func private @op8(%a: !p, %dst: !p, %lits: !p, %raw: !p, %tab: !p, %k: i64, %tw: i64,
     %lw: i64, %sw: i64, %delta: i1, %flat: i1, %d: index, %l: index, %x: index, %p: index)
     -> (index, index, index, index) {
-  %true = arith.constant true
+  %c0 = arith.constant 0 : index
+  %c3 = arith.constant 3 : index
+  %c7 = arith.constant 7 : index
+  %c8 = arith.constant 8 : index
+  %k32 = arith.constant 32 : i64
+  %k40 = arith.constant 40 : i64
+  %k255 = arith.constant 255 : i64
   %t = func.call @lane8(%tw, %k) : (i64, i64) -> index
   %len = func.call @lane8(%lw, %k) : (i64, i64) -> index
   %sym = func.call @lane8(%sw, %k) : (i64, i64) -> index
-  %s:4 = func.call @op(%a, %dst, %lits, %raw, %tab, %t, %len, %sym, %delta, %flat, %true, %flat,
-      %d, %l, %x, %p)
-      : (!p, !p, !p, !p, !p, index, index, index, i1, i1, i1, i1, index, index, index, index)
-      -> (index, index, index, index)
-  return %s#0, %s#1, %s#2, %s#3 : index, index, index, index
+  // The offset: the base of the symbol plus its raw bits at p; only symbol 0 decodes to 0, which
+  // keeps the last offset.
+  %eo = arith.muli %sym, %c8 : index
+  %eq = func.call @at(%tab, %eo) : (!p, index) -> !p
+  %e = ptr.load %eq alignment = 8 : !p -> i64
+  %wo = arith.shrui %p, %c3 : index
+  %w = func.call @word(%raw, %wo) : (!p, index) -> i64
+  %sh = arith.andi %p, %c7 : index
+  %sh64 = arith.index_castui %sh : index to i64
+  %w2 = arith.shrui %w, %sh64 : i64
+  %w32 = arith.trunci %w2 : i64 to i32
+  %m32 = arith.trunci %e : i64 to i32
+  %bits32 = arith.andi %w32, %m32 : i32
+  %bits = arith.index_castui %bits32 : i32 to index
+  %nb64 = arith.shrui %e, %k32 : i64
+  %nb8 = arith.andi %nb64, %k255 : i64
+  %nb = arith.index_castui %nb8 : i64 to index
+  %p2 = arith.addi %p, %nb : index
+  %base64 = arith.shrui %e, %k40 : i64
+  %base = arith.index_castui %base64 : i64 to index
+  %on = arith.addi %base, %bits : index
+  %new = arith.cmpi ne, %on, %c0 : index
+  %o = arith.select %new, %on, %x : index
+  %s:2 = func.call @op(%a, %dst, %lits, %t, %len, %o, %delta, %flat, %flat, %d, %l, %x)
+      : (!p, !p, !p, index, index, index, i1, i1, i1, index, index, index) -> (index, index)
+  return %s#0, %s#1, %o, %p2 : index, index, index, index
 }
 
 // run runs the operations of the kernel arguments a in batches of 8. Each batch takes the words
@@ -95,16 +123,16 @@ func.func private @run(%a: !p, %delta: i1, %flat: i1) {
     %lw0, %sw0, %li0, %oi0 = func.call @expand2(%tok, %c0, %ll, %c0, %offc, %c0, %ones)
         : (!p, index, !p, index, !p, index, i64) -> (i64, i64, index, index)
     // Whole batches. k is the index of the next token, left the operations from it on.
-    %b:11 = scf.while (%k = %c0, %left = %n, %lw = %lw0, %sw = %sw0, %li = %li0, %oi = %oi0,
-        %d0 = %d, %l0 = %l, %x0 = %last, %p0 = %pos, %u = %c0)
-        : (index, index, i64, i64, index, index, index, index, index, index, index)
-        -> (index, index, i64, i64, index, index, index, index, index, index, index) {
+    %b:10 = scf.while (%k = %c0, %left = %n, %lw = %lw0, %sw = %sw0, %li = %li0, %oi = %oi0,
+        %d0 = %d, %l0 = %l, %x0 = %last, %p0 = %pos)
+        : (index, index, i64, i64, index, index, index, index, index, index)
+        -> (index, index, i64, i64, index, index, index, index, index, index) {
       %more = arith.cmpi uge, %left, %c8 : index
-      scf.condition(%more) %k, %left, %lw, %sw, %li, %oi, %d0, %l0, %x0, %p0, %u
-          : index, index, i64, i64, index, index, index, index, index, index, index
+      scf.condition(%more) %k, %left, %lw, %sw, %li, %oi, %d0, %l0, %x0, %p0
+          : index, index, i64, i64, index, index, index, index, index, index
     } do {
     ^bb0(%k: index, %left: index, %lw: i64, %sw: i64, %li: index, %oi: index, %d0: index,
-        %l0: index, %x0: index, %p0: index, %u: index):
+        %l0: index, %x0: index, %p0: index):
       %tw = func.call @word(%tok, %k) : (!p, index) -> i64
       %k2 = arith.addi %k, %c8 : index
       %left2 = arith.subi %left, %c8 : index
@@ -148,8 +176,8 @@ func.func private @run(%a: !p, %delta: i1, %flat: i1) {
           %s6#0, %s6#1, %s6#2, %s6#3)
           : (!p, !p, !p, !p, !p, i64, i64, i64, i64, i1, i1, index, index, index, index)
           -> (index, index, index, index)
-      scf.yield %k2, %left2, %e#0, %e#1, %e#2, %e#3, %s7#0, %s7#1, %s7#2, %s7#3, %u
-          : index, index, i64, i64, index, index, index, index, index, index, index
+      scf.yield %k2, %left2, %e#0, %e#1, %e#2, %e#3, %s7#0, %s7#1, %s7#2, %s7#3
+          : index, index, i64, i64, index, index, index, index, index, index
     }
     // The partial last batch takes byte 0 of each word and shifts the words down.
     %rest = arith.cmpi ne, %b#1, %c0 : index

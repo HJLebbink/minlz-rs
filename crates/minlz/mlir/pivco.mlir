@@ -19,8 +19,6 @@
 //   of v above d are clear, or may hold any value if @clean_codes is false.
 // - @nat_codes(p: !p, d: index) -> !b: the 64 codes of depth d (2 to 8) in the natural layout at
 //   p, one in each byte, with the bits above d clear. It may read 64 bytes at p.
-// - @tbl16(v: vector<16xi8>, idx: vector<16xi8>) -> vector<16xi8>, whose byte i is byte idx[i]
-//   of v, for indexes below 16.
 // - @spread(t: i64) -> !b, whose byte i is 255 if bit i of t is set and 0 if not.
 // - @load_n(p: !p, n: index) -> !b: the n bytes at p (n up to 64), zero after them. It reads only
 //   those bytes.
@@ -52,12 +50,27 @@ func.func private @ld16(%p: !p, %o: index) -> vector<16xi8> {
   return %r : vector<16xi8>
 }
 
-// u8 returns the byte at p + o.
-func.func private @u8(%p: !p, %o: index) -> index {
-  %q = func.call @at(%p, %o) : (!p, index) -> !p
-  %b = ptr.load %q : !p -> i8
-  %r = arith.index_castui %b : i8 to index
-  return %r : index
+// index16 returns the merge index of the 16 bitmap bits at bit s of m, from the merge table:
+// row m0 of its first half plus row m1 of its second, m0 and m1 being the two bytes. Right lanes
+// hold their place among the right values, left lanes 255 less their place among the left ones.
+func.func private @index16(%m: i64, %s: i64, %tab: !p) -> vector<16xi8> {
+  %c4 = arith.constant 4 : index
+  %c4096 = arith.constant 4096 : index
+  %e8 = arith.constant 8 : i64
+  %ff = arith.constant 255 : i64
+  %x = arith.shrui %m, %s : i64
+  %a = arith.andi %x, %ff : i64
+  %xb = arith.shrui %x, %e8 : i64
+  %b = arith.andi %xb, %ff : i64
+  %ai = arith.index_castui %a : i64 to index
+  %bi = arith.index_castui %b : i64 to index
+  %ao = arith.shli %ai, %c4 : index
+  %bo0 = arith.shli %bi, %c4 : index
+  %bo = arith.addi %bo0, %c4096 : index
+  %ta = func.call @ld16(%tab, %ao) : (!p, index) -> vector<16xi8>
+  %tb = func.call @ld16(%tab, %bo) : (!p, index) -> vector<16xi8>
+  %r = arith.addi %ta, %tb : vector<16xi8>
+  return %r : vector<16xi8>
 }
 
 // u32 returns the 32-bit word at p + o.
@@ -66,31 +79,6 @@ func.func private @u32(%p: !p, %o: index) -> index {
   %w = ptr.load %q alignment = 4 : !p -> i32
   %r = arith.index_castui %w : i32 to index
   return %r : index
-}
-
-// u64 returns the 64-bit word at p + o.
-func.func private @u64(%p: !p, %o: index) -> i64 {
-  %q = func.call @at(%p, %o) : (!p, index) -> !p
-  %r = ptr.load %q alignment = 1 : !p -> i64
-  return %r : i64
-}
-
-// arg and argp return word i of the arguments a.
-func.func private @arg(%a: !p, %i: index) -> index {
-  %c8 = arith.constant 8 : index
-  %o = arith.muli %i, %c8 : index
-  %q = func.call @at(%a, %o) : (!p, index) -> !p
-  %w = ptr.load %q alignment = 8 : !p -> i64
-  %r = arith.index_castui %w : i64 to index
-  return %r : index
-}
-
-func.func private @argp(%a: !p, %i: index) -> !p {
-  %c8 = arith.constant 8 : index
-  %o = arith.muli %i, %c8 : index
-  %q = func.call @at(%a, %o) : (!p, index) -> !p
-  %r = ptr.load %q alignment = 8 : !p -> !p
-  return %r : !p
 }
 
 // low returns the mask of the n low bits, for n from 0 to 64.
@@ -214,7 +202,7 @@ func.func private @load_pieces(%p: !p, %n: index) -> !b {
   %h8 = arith.cmpi ne, %b8, %c0 : index
   %e1, %v1 = scf.if %h8 -> (index, !b) {
     %e = arith.subi %e0, %c8 : index
-    %x = func.call @u64(%p, %e) : (!p, index) -> i64
+    %x = func.call @word(%p, %e) : (!p, index) -> i64
     %s = vector.extract_strided_slice %v0 {offsets = [0], sizes = [56], strides = [1]}
         : !b to vector<56xi8>
     %up = vector.insert_strided_slice %s, %z {offsets = [8], strides = [1]}
@@ -378,7 +366,7 @@ func.func private @merge(%o: !p, %k: index, %bm: !p, %l: !p, %r: !p, %c: index, 
       -> (index, index) {
     %bo = arith.muli %i, %c64 : index
     %to = arith.shrui %bo, %c3 : index
-    %t = func.call @u64(%bm, %to) : (!p, index) -> i64
+    %t = func.call @word(%bm, %to) : (!p, index) -> i64
     %lp = func.call @at(%l, %sl) : (!p, index) -> !p
     %rp = func.call @at(%r, %sr) : (!p, index) -> !p
     %v = func.call @merge64(%lp, %rp, %t, %cv, %vv, %tab) : (!p, !p, i64, !b, i1, !p) -> !b
@@ -417,7 +405,7 @@ func.func private @merge(%o: !p, %k: index, %bm: !p, %l: !p, %r: !p, %c: index, 
 // merge_vv and merge_cv are merge for VV and CV ops.
 func.func private @merge_vv(%o: !p, %k: index, %bm: !p, %l: !p, %r: !p, %tab: !p) -> index
     attributes {llvm.linkage = #llvm.linkage<internal>,
-    llvm.passthrough = ["noinline", "noredzone", ["no-jump-tables", "true"]]} {
+    llvm.passthrough = ["noinline"]} {
   %c0 = arith.constant 0 : index
   %true = arith.constant true
   %nr = func.call @merge(%o, %k, %bm, %l, %r, %c0, %true, %tab)
@@ -427,7 +415,7 @@ func.func private @merge_vv(%o: !p, %k: index, %bm: !p, %l: !p, %r: !p, %tab: !p
 
 func.func private @merge_cv(%o: !p, %k: index, %bm: !p, %r: !p, %c: index, %tab: !p) -> index
     attributes {llvm.linkage = #llvm.linkage<internal>,
-    llvm.passthrough = ["noinline", "noredzone", ["no-jump-tables", "true"]]} {
+    llvm.passthrough = ["noinline"]} {
   %false = arith.constant false
   %nr = func.call @merge(%o, %k, %bm, %r, %r, %c, %false, %tab)
       : (!p, index, !p, !p, !p, index, i1, !p) -> index
@@ -446,7 +434,7 @@ func.func private @pick(%t: i64, %p: !b, %diff: !b) -> !b {
 // cc writes byte j = bit j of the bitmap at bm ? q : p for the k outputs at o.
 func.func private @cc(%o: !p, %k: index, %bm: !p, %p: index, %q: index)
     attributes {llvm.linkage = #llvm.linkage<internal>,
-    llvm.passthrough = ["noinline", "noredzone", ["no-jump-tables", "true"]]} {
+    llvm.passthrough = ["noinline"]} {
   %c0 = arith.constant 0 : index
   %c1 = arith.constant 1 : index
   %c3 = arith.constant 3 : index
@@ -461,7 +449,7 @@ func.func private @cc(%o: !p, %k: index, %bm: !p, %p: index, %q: index)
   scf.for %i = %c0 to %steps step %c1 {
     %bo = arith.muli %i, %c64 : index
     %to = arith.shrui %bo, %c3 : index
-    %t = func.call @u64(%bm, %to) : (!p, index) -> i64
+    %t = func.call @word(%bm, %to) : (!p, index) -> i64
     %v = func.call @pick(%t, %pv, %diff) : (i64, !b, !b) -> !b
     func.call @st(%o, %bo, %v) : (!p, index, !b) -> ()
   }
@@ -826,7 +814,7 @@ func.func private @vert(%o: !p, %src: !p, %blocks: index, %t: !p, %d: index, %n:
 // constants too.
 func.func private @vert_d(%o: !p, %src: !p, %blocks: index, %t: !p, %d: index, %n: index)
     attributes {llvm.linkage = #llvm.linkage<internal>,
-    llvm.passthrough = ["noinline", "noredzone", ["no-jump-tables", "true"]]} {
+    llvm.passthrough = ["noinline"]} {
   %c16 = arith.constant 16 : index
   %narrow = arith.cmpi eq, %n, %c16 : index
   scf.if %narrow {
@@ -874,96 +862,6 @@ func.func private @vert_n(%o: !p, %src: !p, %blocks: index, %t: !p, %d: index, %
     scf.yield
   }
   return
-}
-
-// nat16 returns the 16 codes of depth d (2 to 7) in the natural layout at p, one in each byte with
-// the bits above d clear. Code e is bits e*d to e*d+d-1 of the 2*d bytes at p: tbl16 puts its two
-// bytes in a 16-bit lane, which a shift moves down. It reads 16 bytes at p. The indexes and the
-// shifts are constants for a constant d.
-func.func private @nat16(%p: !p, %d: index) -> vector<16xi8> {
-  %c0 = arith.constant 0 : index
-  %w = func.call @ld16(%p, %c0) : (!p, index) -> vector<16xi8>
-  %d8 = arith.index_cast %d : index to i8
-  %dv = vector.broadcast %d8 : i8 to vector<16xi8>
-  %one = arith.constant dense<1> : vector<16xi8>
-  %three = arith.constant dense<3> : vector<16xi8>
-  %eight = arith.constant dense<8> : vector<16xi8>
-  %io = vector.step : vector<16xindex>
-  %iota = arith.index_cast %io : vector<16xindex> to vector<16xi8>
-  // Byte 2e+h of the pairs of codes 0 to 7 is byte (e*d >> 3) + h, and of codes 8 to 15 byte
-  // ((e+8)*d >> 3) + h.
-  %e = arith.shrui %iota, %one : vector<16xi8>
-  %h = arith.andi %iota, %one : vector<16xi8>
-  %e8 = arith.addi %e, %eight : vector<16xi8>
-  %ba = arith.muli %e, %dv : vector<16xi8>
-  %bb = arith.muli %e8, %dv : vector<16xi8>
-  %ia0 = arith.shrui %ba, %three : vector<16xi8>
-  %ib0 = arith.shrui %bb, %three : vector<16xi8>
-  %ia = arith.addi %ia0, %h : vector<16xi8>
-  %ib = arith.addi %ib0, %h : vector<16xi8>
-  %pa = func.call @tbl16(%w, %ia) : (vector<16xi8>, vector<16xi8>) -> vector<16xi8>
-  %pb = func.call @tbl16(%w, %ib) : (vector<16xi8>, vector<16xi8>) -> vector<16xi8>
-  %ua = vector.bitcast %pa : vector<16xi8> to vector<8xi16>
-  %ub = vector.bitcast %pb : vector<16xi8> to vector<8xi16>
-  // Lane e of the pairs moves down by e*d & 7.
-  %io8 = vector.step : vector<8xindex>
-  %l8 = arith.index_cast %io8 : vector<8xindex> to vector<8xi16>
-  %d16 = arith.index_cast %d : index to i16
-  %dw = vector.broadcast %d16 : i16 to vector<8xi16>
-  %seven = arith.constant dense<7> : vector<8xi16>
-  %eightw = arith.constant dense<8> : vector<8xi16>
-  %l8b = arith.addi %l8, %eightw : vector<8xi16>
-  %pa16 = arith.muli %l8, %dw : vector<8xi16>
-  %pb16 = arith.muli %l8b, %dw : vector<8xi16>
-  %sa = arith.andi %pa16, %seven : vector<8xi16>
-  %sb = arith.andi %pb16, %seven : vector<8xi16>
-  %ca = arith.shrui %ua, %sa : vector<8xi16>
-  %cb = arith.shrui %ub, %sb : vector<8xi16>
-  %ta = arith.trunci %ca : vector<8xi16> to vector<8xi8>
-  %tb = arith.trunci %cb : vector<8xi16> to vector<8xi8>
-  %c = vector.shuffle %ta, %tb [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
-      : vector<8xi8>, vector<8xi8>
-  %ones = arith.constant 1 : i8
-  %sh = arith.shli %ones, %d8 : i8
-  %mk = arith.subi %sh, %ones : i8
-  %mv = vector.broadcast %mk : i8 to vector<16xi8>
-  %r = arith.andi %c, %mv : vector<16xi8>
-  return %r : vector<16xi8>
-}
-
-// nat64 returns the 64 codes of depth d (2 to 8) in the natural layout at p as four nat16 groups,
-// 2*d bytes apart. It reads 64 bytes at p.
-func.func private @nat64(%p: !p, %d: index) -> !b {
-  %c0 = arith.constant 0 : index
-  %c2 = arith.constant 2 : index
-  %c8 = arith.constant 8 : index
-  %full = arith.cmpi eq, %d, %c8 : index
-  %r = scf.if %full -> !b {
-    %x = func.call @ld(%p, %c0) : (!p, index) -> !b
-    scf.yield %x : !b
-  } else {
-    %g = arith.muli %d, %c2 : index
-    %g2 = arith.addi %g, %g : index
-    %g3 = arith.addi %g2, %g : index
-    %q1 = func.call @at(%p, %g) : (!p, index) -> !p
-    %q2 = func.call @at(%p, %g2) : (!p, index) -> !p
-    %q3 = func.call @at(%p, %g3) : (!p, index) -> !p
-    %a = func.call @nat16(%p, %d) : (!p, index) -> vector<16xi8>
-    %b = func.call @nat16(%q1, %d) : (!p, index) -> vector<16xi8>
-    %c = func.call @nat16(%q2, %d) : (!p, index) -> vector<16xi8>
-    %e = func.call @nat16(%q3, %d) : (!p, index) -> vector<16xi8>
-    %z = arith.constant dense<0> : !b
-    %x0 = vector.insert_strided_slice %a, %z {offsets = [0], strides = [1]}
-        : vector<16xi8> into !b
-    %x1 = vector.insert_strided_slice %b, %x0 {offsets = [16], strides = [1]}
-        : vector<16xi8> into !b
-    %x2 = vector.insert_strided_slice %c, %x1 {offsets = [32], strides = [1]}
-        : vector<16xi8> into !b
-    %x3 = vector.insert_strided_slice %e, %x2 {offsets = [48], strides = [1]}
-        : vector<16xi8> into !b
-    scf.yield %x3 : !b
-  }
-  return %r : !b
 }
 
 // nat decodes k codes of depth d (2 to 8) in the natural layout from src to o, and maps them
@@ -1022,7 +920,7 @@ func.func private @nat(%o: !p, %src: !p, %k: index, %d: index, %left: index, %t:
 // nat_d runs nat with d as a constant.
 func.func private @nat_d(%o: !p, %src: !p, %k: index, %d: index, %left: index, %t: !p,
     %scratch: !p) attributes {llvm.linkage = #llvm.linkage<internal>,
-    llvm.passthrough = ["noinline", "noredzone", ["no-jump-tables", "true"]]} {
+    llvm.passthrough = ["noinline"]} {
   scf.index_switch %d
   case 2 {
     %c = arith.constant 2 : index
@@ -1074,7 +972,7 @@ func.func private @nat_d(%o: !p, %src: !p, %k: index, %d: index, %left: index, %
 
 // copy copies the k bytes at src to o, which do not overlap.
 func.func private @copy(%o: !p, %src: !p, %k: index) attributes {llvm.linkage = #llvm.linkage<internal>,
-    llvm.passthrough = ["noinline", "noredzone", ["no-jump-tables", "true"]]} {
+    llvm.passthrough = ["noinline"]} {
   %c0 = arith.constant 0 : index
   %c1 = arith.constant 1 : index
   %c6 = arith.constant 6 : index
@@ -1118,11 +1016,11 @@ func.func private @op(%op: !p, %in: !p, %ilen: index, %arena: !p, %alim: index, 
   %c128 = arith.constant 128 : index
   %false = arith.constant false
   %true = arith.constant true
-  %kind = func.call @u8(%op, %c0) : (!p, index) -> index
-  %flags = func.call @u8(%op, %c1) : (!p, index) -> index
-  %d = func.call @u8(%op, %c2) : (!p, index) -> index
-  %p = func.call @u8(%op, %c3) : (!p, index) -> index
-  %q = func.call @u8(%op, %c4) : (!p, index) -> index
+  %kind = func.call @byte(%op, %c0) : (!p, index) -> index
+  %flags = func.call @byte(%op, %c1) : (!p, index) -> index
+  %d = func.call @byte(%op, %c2) : (!p, index) -> index
+  %p = func.call @byte(%op, %c3) : (!p, index) -> index
+  %q = func.call @byte(%op, %c4) : (!p, index) -> index
   %k = func.call @u32(%op, %c8) : (!p, index) -> index
   %kr = func.call @u32(%op, %c12) : (!p, index) -> index
   %bm = func.call @u32(%op, %c16) : (!p, index) -> index
@@ -1137,12 +1035,12 @@ func.func private @op(%op: !p, %in: !p, %ilen: index, %arena: !p, %alim: index, 
   %oend = arith.addi %out, %k : index
   %fits = arith.cmpi ule, %oend, %olim : index
   %o = func.call @at(%base, %out) : (!p, index) -> !p
-  // The bitmap of a merge: ceil(k/8) bytes at bm in the input.
+  // The bitmap of a merge: ceil(k/8) bytes at bm in the input. A flat or a copy reads from bm too.
   %k7 = arith.addi %k, %c7 : index
   %nb = arith.shrui %k7, %c3 : index
   %bmend = arith.addi %bm, %nb : index
   %bmok = arith.cmpi ule, %bmend, %ilen : index
-  %bmp = func.call @at(%in, %bm) : (!p, index) -> !p
+  %inp = func.call @at(%in, %bm) : (!p, index) -> !p
   // The children: k bytes at l and r in the arena less its slack.
   %lend = arith.addi %l, %k : index
   %lok = arith.cmpi ule, %lend, %alim : index
@@ -1159,14 +1057,13 @@ func.func private @op(%op: !p, %in: !p, %ilen: index, %arena: !p, %alim: index, 
   %tok = arith.andi %tok0, %dlo : i1
   %tp = func.call @at(%r2s, %p) : (!p, index) -> !p
   %kd = arith.muli %k, %d : index
-  %src = func.call @at(%in, %bm) : (!p, index) -> !p
   %ok = scf.if %fits -> i1 {
     %res = scf.index_switch %kind -> i1
     case 0 {
       %c = arith.andi %bmok, %lok : i1
       %c2b = arith.andi %c, %rok : i1
       %x = scf.if %c2b -> i1 {
-        %nr = func.call @merge_vv(%o, %k, %bmp, %lp, %rp, %tab) {no_inline}
+        %nr = func.call @merge_vv(%o, %k, %inp, %lp, %rp, %tab) {no_inline}
             : (!p, index, !p, !p, !p, !p) -> index
         %e = arith.cmpi eq, %nr, %kr : index
         scf.yield %e : i1
@@ -1178,7 +1075,7 @@ func.func private @op(%op: !p, %in: !p, %ilen: index, %arena: !p, %alim: index, 
     case 1 {
       %c = arith.andi %bmok, %rok : i1
       %x = scf.if %c -> i1 {
-        %nr = func.call @merge_cv(%o, %k, %bmp, %rp, %p, %tab) {no_inline}
+        %nr = func.call @merge_cv(%o, %k, %inp, %rp, %p, %tab) {no_inline}
             : (!p, index, !p, !p, index, !p) -> index
         %e = arith.cmpi eq, %nr, %kr : index
         scf.yield %e : i1
@@ -1189,17 +1086,17 @@ func.func private @op(%op: !p, %in: !p, %ilen: index, %arena: !p, %alim: index, 
     }
     case 2 {
       scf.if %bmok {
-        func.call @cc(%o, %k, %bmp, %p, %q) {no_inline} : (!p, index, !p, index, index) -> ()
+        func.call @cc(%o, %k, %inp, %p, %q) {no_inline} : (!p, index, !p, index, index) -> ()
       }
       scf.yield %bmok : i1
     }
     case 3 {
-      %x = func.call @vflat(%o, %k, %d, %c64, %kd, %bm, %ilen, %tok, %src, %tp)
+      %x = func.call @vflat(%o, %k, %d, %c64, %kd, %bm, %ilen, %tok, %inp, %tp)
           : (!p, index, index, index, index, index, index, i1, !p, !p) -> i1
       scf.yield %x : i1
     }
     case 4 {
-      %x = func.call @vflat(%o, %k, %d, %c16, %kd, %bm, %ilen, %tok, %src, %tp)
+      %x = func.call @vflat(%o, %k, %d, %c16, %kd, %bm, %ilen, %tok, %inp, %tp)
           : (!p, index, index, index, index, index, index, i1, !p, !p) -> i1
       scf.yield %x : i1
     }
@@ -1214,7 +1111,7 @@ func.func private @op(%op: !p, %in: !p, %ilen: index, %arena: !p, %alim: index, 
       %c2b = arith.andi %c, %inok : i1
       scf.if %c2b {
         %left = arith.subi %ilen, %bm : index
-        func.call @nat_d(%o, %src, %k, %d, %left, %tp, %scratch) {no_inline}
+        func.call @nat_d(%o, %inp, %k, %d, %left, %tp, %scratch) {no_inline}
             : (!p, !p, index, index, index, !p, !p) -> ()
       }
       scf.yield %c2b : i1
@@ -1226,7 +1123,7 @@ func.func private @op(%op: !p, %in: !p, %ilen: index, %arena: !p, %alim: index, 
       %inok = arith.cmpi ule, %end, %ilen : index
       %c = arith.andi %d8, %inok : i1
       scf.if %c {
-        func.call @copy(%o, %src, %k) {no_inline} : (!p, !p, index) -> ()
+        func.call @copy(%o, %inp, %k) {no_inline} : (!p, !p, index) -> ()
       }
       scf.yield %c : i1
     }
@@ -1271,12 +1168,8 @@ func.func private @vflat(%o: !p, %k: index, %d: index, %n: index, %kd: index, %b
 // order, each after the checks of exec_generic, and returns the index of the first op that fails
 // them, or the number of ops. a points to its arguments: the words ops, nops, input, ilen, arena,
 // alim (the arena's length less ARENA_SLACK), dst, dlen, r2s, r2s_len (0 without R2S) and tab,
-// then 64 bytes of scratch from byte 128. The kernel keeps its stack frame above the stack pointer
-// (noredzone): it also runs on Windows, which does not reserve the area below. It has no jump
-// tables, whose absolute addresses a position-independent program cannot hold; the switches on
-// the op kind and the depth become compares.
-func.func @minlz_pivco_exec(%a: !p) -> i64
-    attributes {llvm.passthrough = ["noredzone", ["no-jump-tables", "true"]]} {
+// then 64 bytes of scratch from byte 128.
+func.func @minlz_pivco_exec(%a: !p) -> i64 {
   %c0 = arith.constant 0 : index
   %c1 = arith.constant 1 : index
   %c2 = arith.constant 2 : index

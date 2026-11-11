@@ -33,29 +33,6 @@ func.func private @pair(%p: !p, %q: !p) -> !y {
   return %r : !y
 }
 
-// index16 returns the merge index of the 16 bitmap bits at bit s of m, from the merge table:
-// row m0 of its first half plus row m1 of its second, m0 and m1 being the two bytes. Right lanes
-// hold their place among the right values, left lanes 255 less their place among the left ones.
-func.func private @index16(%m: i64, %s: i64, %tab: !p) -> vector<16xi8> {
-  %c4 = arith.constant 4 : index
-  %c4096 = arith.constant 4096 : index
-  %e8 = arith.constant 8 : i64
-  %ff = arith.constant 255 : i64
-  %x = arith.shrui %m, %s : i64
-  %a = arith.andi %x, %ff : i64
-  %xb = arith.shrui %x, %e8 : i64
-  %b = arith.andi %xb, %ff : i64
-  %ai = arith.index_castui %a : i64 to index
-  %bi = arith.index_castui %b : i64 to index
-  %ao = arith.shli %ai, %c4 : index
-  %bo0 = arith.shli %bi, %c4 : index
-  %bo = arith.addi %bo0, %c4096 : index
-  %ta = func.call @ld16(%tab, %ao) : (!p, index) -> vector<16xi8>
-  %tb = func.call @ld16(%tab, %bo) : (!p, index) -> vector<16xi8>
-  %r = arith.addi %ta, %tb : vector<16xi8>
-  return %r : vector<16xi8>
-}
-
 // half merges 32 outputs whose bitmap bits are the low 32 of m: the low lane takes its values at
 // l and r, the high lane after the 16 outputs of the low one.
 func.func private @half(%l: !p, %r: !p, %m: i64, %c: !y, %vv: i1, %tab: !p) -> !y {
@@ -339,13 +316,6 @@ func.func private @nat_codes(%p: !p, %d: index) -> !b {
     scf.yield %x1 : !b
   }
   return %r : !b
-}
-
-// tbl16 returns byte idx[i] of v in byte i: PSHUFB.
-func.func private @tbl16(%v: vector<16xi8>, %idx: vector<16xi8>) -> vector<16xi8> {
-  %r = llvm.call_intrinsic "llvm.x86.ssse3.pshuf.b.128"(%v, %idx)
-      : (vector<16xi8>, vector<16xi8>) -> vector<16xi8>
-  return %r : vector<16xi8>
 }
 
 func.func private @load_n(%p: !p, %n: index) -> !b {

@@ -103,12 +103,11 @@
 	cmp	x27, #33
 	b.hs	192f
 32:
-	and	x30, x7, #0xff
 	add	x22, x27, x24
-	lsr	x24, x30, #2
+	ubfx	x24, x7, #2, #6
+	tst	x5, x7, lsr #2
+	csel	x28, x24, x5, eq
 	add	x29, x9, x22
-	cmp	x24, #32
-	csel	x28, x24, x5, lo
 	cmp	x25, x28
 	csel	x28, x25, x28, hi
 	subs	x28, x22, x28
@@ -116,25 +115,25 @@
 	add	x28, x9, x28
 	ldp	q0, q1, [x28]
 	stp	q0, q1, [x29]
-	cmp	x30, #132
+	cmp	x24, #33
 	b.hs	202f
 42:
 	lsr	x26, x26, #32
 	add	x21, x27, x21
 	add	x27, x24, x22
 	lsr	x22, x19, #5
+	ubfx	x24, x20, #8, #8
 	add	x23, x23, w26, uxtb
 	and	x22, x22, #0x7f8
-	ubfx	x26, x20, #8, #8
-	ldr	x24, [x12, x22]
+	ldr	x26, [x12, x22]
 	lsr	x22, x23, #3
 	and	x28, x23, #0x7
 	ldr	x22, [x11, x22]
 	lsr	x22, x22, x28
 	add	x28, x10, x21
-	and	w22, w24, w22
+	and	w22, w26, w22
 	ldp	q1, q0, [x28]
-	adds	x22, x22, x24, lsr #40
+	adds	x22, x22, x26, lsr #40
 	csel	x22, x25, x22, eq
 	cmp	x25, #32
 	csel	x25, x25, x5, hi
@@ -146,41 +145,40 @@
 	add	v0.16b, v2.16b, v0.16b
 	add	v1.16b, v3.16b, v1.16b
 	stp	q1, q0, [x25]
-	cmp	x26, #33
+	cmp	x24, #33
 	b.hs	212f
 52:
-	ubfx	x30, x7, #8, #8
-	add	x25, x26, x27
-	lsr	x27, x30, #2
-	add	x29, x9, x25
-	cmp	x27, #32
-	csel	x28, x27, x5, lo
-	cmp	x22, x28
-	csel	x28, x22, x28, hi
-	subs	x28, x25, x28
-	csel	x28, xzr, x28, lo
-	add	x28, x9, x28
-	ldp	q0, q1, [x28]
+	ubfx	x28, x7, #10, #6
+	tst	x5, x7, lsr #10
+	add	x27, x24, x27
+	csel	x25, x28, x5, eq
+	add	x29, x9, x27
+	cmp	x22, x25
+	csel	x25, x22, x25, hi
+	subs	x25, x27, x25
+	csel	x25, xzr, x25, lo
+	add	x25, x9, x25
+	ldp	q0, q1, [x25]
 	stp	q0, q1, [x29]
-	cmp	x30, #132
+	cmp	x28, #33
 	b.hs	222f
 62:
-	lsr	x24, x24, #32
-	add	x27, x27, x25
-	add	x23, x23, w24, uxtb
-	add	x24, x26, x21
+	add	x24, x24, x21
+	lsr	x21, x26, #32
+	add	x27, x28, x27
+	add	x25, x23, w21, uxtb
 	lsr	x21, x19, #13
-	ubfx	x26, x20, #16, #8
+	ubfx	x23, x20, #16, #8
 	and	x21, x21, #0x7f8
-	ldr	x25, [x12, x21]
-	lsr	x21, x23, #3
-	and	x28, x23, #0x7
+	ldr	x26, [x12, x21]
+	lsr	x21, x25, #3
+	and	x28, x25, #0x7
 	ldr	x21, [x11, x21]
 	lsr	x21, x21, x28
 	add	x28, x10, x24
-	and	w21, w25, w21
+	and	w21, w26, w21
 	ldp	q1, q0, [x28]
-	adds	x21, x21, x25, lsr #40
+	adds	x21, x21, x26, lsr #40
 	csel	x21, x22, x21, eq
 	cmp	x22, #32
 	csel	x22, x22, x5, hi
@@ -192,15 +190,14 @@
 	add	v0.16b, v2.16b, v0.16b
 	add	v1.16b, v3.16b, v1.16b
 	stp	q1, q0, [x22]
-	cmp	x26, #33
+	cmp	x23, #33
 	b.hs	232f
 72:
-	ubfx	x30, x7, #16, #8
-	add	x22, x26, x27
-	lsr	x27, x30, #2
+	add	x22, x23, x27
+	ubfx	x27, x7, #18, #6
+	tst	x5, x7, lsr #18
+	csel	x28, x27, x5, eq
 	add	x29, x9, x22
-	cmp	x27, #32
-	csel	x28, x27, x5, lo
 	cmp	x21, x28
 	csel	x28, x21, x28, hi
 	subs	x28, x22, x28
@@ -208,22 +205,22 @@
 	add	x28, x9, x28
 	ldp	q0, q1, [x28]
 	stp	q0, q1, [x29]
-	cmp	x30, #132
+	cmp	x27, #33
 	b.hs	242f
 82:
-	lsr	x25, x25, #32
+	add	x23, x23, x24
+	lsr	x24, x26, #32
 	add	x27, x27, x22
 	lsr	x22, x19, #21
-	add	x24, x26, x24
 	lsr	w26, w20, #24
-	add	x23, x23, w25, uxtb
+	add	x24, x25, w24, uxtb
 	and	x22, x22, #0x7f8
 	ldr	x25, [x12, x22]
-	lsr	x22, x23, #3
-	and	x28, x23, #0x7
+	lsr	x22, x24, #3
+	and	x28, x24, #0x7
 	ldr	x22, [x11, x22]
 	lsr	x22, x22, x28
-	add	x28, x10, x24
+	add	x28, x10, x23
 	and	w22, w25, w22
 	ldp	q1, q0, [x28]
 	adds	x22, x22, x25, lsr #40
@@ -241,12 +238,11 @@
 	cmp	x26, #33
 	b.hs	252f
 92:
-	lsr	w30, w7, #24
 	add	x21, x26, x27
-	lsr	x27, x30, #2
+	lsr	w27, w7, #26
+	tst	x5, x7, lsr #26
+	csel	x28, x27, x5, eq
 	add	x29, x9, x21
-	cmp	x27, #32
-	csel	x28, x27, x5, lo
 	cmp	x22, x28
 	csel	x28, x22, x28, hi
 	subs	x28, x21, x28
@@ -254,22 +250,22 @@
 	add	x28, x9, x28
 	ldp	q0, q1, [x28]
 	stp	q0, q1, [x29]
-	cmp	x30, #132
+	cmp	x27, #33
 	b.hs	262f
 102:
 	lsr	x25, x25, #32
 	add	x27, x27, x21
 	lsr	x21, x19, #29
-	add	x24, x26, x24
+	add	x23, x26, x23
 	ubfx	x26, x20, #32, #8
-	add	x23, x23, w25, uxtb
+	add	x24, x24, w25, uxtb
 	and	x21, x21, #0x7f8
 	ldr	x25, [x12, x21]
-	lsr	x21, x23, #3
-	and	x28, x23, #0x7
+	lsr	x21, x24, #3
+	and	x28, x24, #0x7
 	ldr	x21, [x11, x21]
 	lsr	x21, x21, x28
-	add	x28, x10, x24
+	add	x28, x10, x23
 	and	w21, w25, w21
 	ldp	q1, q0, [x28]
 	adds	x21, x21, x25, lsr #40
@@ -287,12 +283,11 @@
 	cmp	x26, #33
 	b.hs	272f
 112:
-	ubfx	x30, x7, #32, #8
 	add	x22, x26, x27
-	lsr	x27, x30, #2
+	ubfx	x27, x7, #34, #6
+	tst	x5, x7, lsr #34
+	csel	x28, x27, x5, eq
 	add	x29, x9, x22
-	cmp	x27, #32
-	csel	x28, x27, x5, lo
 	cmp	x21, x28
 	csel	x28, x21, x28, hi
 	subs	x28, x22, x28
@@ -300,22 +295,22 @@
 	add	x28, x9, x28
 	ldp	q0, q1, [x28]
 	stp	q0, q1, [x29]
-	cmp	x30, #132
+	cmp	x27, #33
 	b.hs	282f
 122:
 	lsr	x25, x25, #32
 	add	x27, x27, x22
 	lsr	x22, x19, #37
-	add	x24, x26, x24
+	add	x23, x26, x23
 	ubfx	x26, x20, #40, #8
-	add	x23, x23, w25, uxtb
+	add	x24, x24, w25, uxtb
 	and	x22, x22, #0x7f8
 	ldr	x25, [x12, x22]
-	lsr	x22, x23, #3
-	and	x28, x23, #0x7
+	lsr	x22, x24, #3
+	and	x28, x24, #0x7
 	ldr	x22, [x11, x22]
 	lsr	x22, x22, x28
-	add	x28, x10, x24
+	add	x28, x10, x23
 	and	w22, w25, w22
 	ldp	q1, q0, [x28]
 	adds	x22, x22, x25, lsr #40
@@ -333,12 +328,11 @@
 	cmp	x26, #33
 	b.hs	292f
 132:
-	ubfx	x30, x7, #40, #8
 	add	x21, x26, x27
-	lsr	x27, x30, #2
+	ubfx	x27, x7, #42, #6
+	tst	x5, x7, lsr #42
+	csel	x28, x27, x5, eq
 	add	x29, x9, x21
-	cmp	x27, #32
-	csel	x28, x27, x5, lo
 	cmp	x22, x28
 	csel	x28, x22, x28, hi
 	subs	x28, x21, x28
@@ -346,25 +340,25 @@
 	add	x28, x9, x28
 	ldp	q0, q1, [x28]
 	stp	q0, q1, [x29]
-	cmp	x30, #132
+	cmp	x27, #33
 	b.hs	302f
 142:
 	lsr	x25, x25, #32
 	add	x27, x27, x21
 	lsr	x21, x19, #45
-	add	x24, x26, x24
-	ubfx	x26, x20, #48, #8
-	add	x23, x23, w25, uxtb
+	add	x23, x26, x23
+	add	x25, x24, w25, uxtb
 	and	x21, x21, #0x7f8
-	ldr	x25, [x12, x21]
-	lsr	x21, x23, #3
-	and	x28, x23, #0x7
+	ubfx	x24, x20, #48, #8
+	ldr	x26, [x12, x21]
+	lsr	x21, x25, #3
+	and	x28, x25, #0x7
 	ldr	x21, [x11, x21]
 	lsr	x21, x21, x28
-	add	x28, x10, x24
-	and	w21, w25, w21
+	add	x28, x10, x23
+	and	w21, w26, w21
 	ldp	q1, q0, [x28]
-	adds	x21, x21, x25, lsr #40
+	adds	x21, x21, x26, lsr #40
 	csel	x21, x22, x21, eq
 	cmp	x22, #32
 	csel	x22, x22, x5, hi
@@ -376,15 +370,14 @@
 	add	v0.16b, v2.16b, v0.16b
 	add	v1.16b, v3.16b, v1.16b
 	stp	q1, q0, [x22]
-	cmp	x26, #33
+	cmp	x24, #33
 	b.hs	312f
 152:
-	ubfx	x30, x7, #48, #8
-	add	x22, x26, x27
-	lsr	x27, x30, #2
+	add	x22, x24, x27
+	ubfx	x27, x7, #50, #6
+	tst	x5, x7, lsr #50
+	csel	x28, x27, x5, eq
 	add	x29, x9, x22
-	cmp	x27, #32
-	csel	x28, x27, x5, lo
 	cmp	x21, x28
 	csel	x28, x21, x28, hi
 	subs	x28, x22, x28
@@ -392,14 +385,14 @@
 	add	x28, x9, x28
 	ldp	q0, q1, [x28]
 	stp	q0, q1, [x29]
-	cmp	x30, #132
+	cmp	x27, #33
 	b.hs	322f
 162:
-	lsr	x25, x25, #32
+	add	x24, x24, x23
+	lsr	x23, x26, #32
 	lsr	x19, x19, #53
-	add	x24, x26, x24
 	lsr	x20, x20, #56
-	add	x23, x23, w25, uxtb
+	add	x23, x25, w23, uxtb
 	add	x25, x27, x22
 	and	x19, x19, #0x7f8
 	ldr	x19, [x12, x19]
@@ -526,13 +519,13 @@
 	stp	q0, q1, [x29, #256]
 	b	42b
 212:
-	ldr	x26, [x0, #48]
+	ldr	x24, [x0, #48]
 	ldr	x30, [x0, #120]
-	ldrb	w29, [x26, x30]
-	add	x26, x30, #1
-	str	x26, [x0, #120]
+	ldrb	w29, [x24, x30]
+	add	x24, x30, #1
+	str	x24, [x0, #120]
 	ldp	q0, q1, [x28, #32]
-	add	x26, x29, #33
+	add	x24, x29, #33
 	stp	q0, q1, [x25, #32]
 	cmp	w29, #32
 	b.lo	52b
@@ -563,52 +556,52 @@
 	stp	q0, q1, [x25, #256]
 	b	52b
 222:
-	ldr	x27, [x0, #48]
+	ldr	x28, [x0, #48]
 	ldr	x30, [x0, #120]
-	ldrb	w27, [x27, x30]
-	str	x27, [sp, #8]
-	add	x27, x30, #1
-	str	x27, [x0, #120]
+	ldrb	w28, [x28, x30]
+	str	x28, [sp, #8]
+	add	x28, x30, #1
+	str	x28, [x0, #120]
 	ldr	x30, [sp, #8]
-	ldp	q0, q1, [x28, #32]
-	add	x27, x30, #33
+	ldp	q0, q1, [x25, #32]
+	add	x28, x30, #33
 	stp	q0, q1, [x29, #32]
 	cmp	w30, #32
 	b.lo	62b
-	ldp	q0, q1, [x28, #64]
+	ldp	q0, q1, [x25, #64]
 	stp	q0, q1, [x29, #64]
 	cmp	w30, #64
 	b.lo	62b
-	ldp	q0, q1, [x28, #96]
+	ldp	q0, q1, [x25, #96]
 	stp	q0, q1, [x29, #96]
 	cmp	w30, #96
 	b.lo	62b
-	ldp	q0, q1, [x28, #128]
+	ldp	q0, q1, [x25, #128]
 	stp	q0, q1, [x29, #128]
 	tbz	w30, #7, 62b
-	ldp	q0, q1, [x28, #160]
+	ldp	q0, q1, [x25, #160]
 	stp	q0, q1, [x29, #160]
 	cmp	w30, #160
 	b.lo	62b
-	ldp	q0, q1, [x28, #192]
+	ldp	q0, q1, [x25, #192]
 	stp	q0, q1, [x29, #192]
 	cmp	w30, #192
 	b.lo	62b
-	ldp	q0, q1, [x28, #224]
+	ldp	q0, q1, [x25, #224]
 	stp	q0, q1, [x29, #224]
 	cmp	w30, #224
 	b.lo	62b
-	ldp	q0, q1, [x28, #256]
+	ldp	q0, q1, [x25, #256]
 	stp	q0, q1, [x29, #256]
 	b	62b
 232:
-	ldr	x26, [x0, #48]
+	ldr	x23, [x0, #48]
 	ldr	x30, [x0, #120]
-	ldrb	w29, [x26, x30]
-	add	x26, x30, #1
-	str	x26, [x0, #120]
+	ldrb	w29, [x23, x30]
+	add	x23, x30, #1
+	str	x23, [x0, #120]
 	ldp	q0, q1, [x28, #32]
-	add	x26, x29, #33
+	add	x23, x29, #33
 	stp	q0, q1, [x22, #32]
 	cmp	w29, #32
 	b.lo	72b
@@ -906,13 +899,13 @@
 	stp	q0, q1, [x29, #256]
 	b	142b
 312:
-	ldr	x26, [x0, #48]
+	ldr	x24, [x0, #48]
 	ldr	x30, [x0, #120]
-	ldrb	w29, [x26, x30]
-	add	x26, x30, #1
-	str	x26, [x0, #120]
+	ldrb	w29, [x24, x30]
+	add	x24, x30, #1
+	str	x24, [x0, #120]
 	ldp	q0, q1, [x28, #32]
-	add	x26, x29, #33
+	add	x24, x29, #33
 	stp	q0, q1, [x22, #32]
 	cmp	w29, #32
 	b.lo	152b
@@ -1092,12 +1085,11 @@
 	cmp	x1, #33
 	b.hs	412f
 392:
-	and	x6, x15, #0xff
+	ubfx	x3, x15, #2, #6
+	tst	x16, x15, lsr #2
 	add	x2, x1, x24
-	lsr	x3, x6, #2
+	csel	x4, x3, x16, eq
 	add	x5, x9, x2
-	cmp	x3, #32
-	csel	x4, x3, x16, lo
 	cmp	x22, x4
 	csel	x4, x22, x4, hi
 	subs	x4, x2, x4
@@ -1105,7 +1097,7 @@
 	add	x4, x9, x4
 	ldp	q0, q1, [x4]
 	stp	q0, q1, [x5]
-	cmp	x6, #132
+	cmp	x3, #33
 	b.hs	422f
 402:
 	lsr	x17, x17, #32

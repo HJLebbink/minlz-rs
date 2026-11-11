@@ -1,5 +1,6 @@
 # minlz_xxh3_accum of crates/minlz/mlir/xxh3.mlir for avx2, written by
 # cargo xtask mlir. Do not edit.
+	sub	rsp, 104
 	lea	rax, [rdx - 1]
 	mov	r8, rax
 	shr	r8, 10
@@ -7,15 +8,15 @@
 	vmovdqu	ymm1, ymmword ptr [rdi + 32]
 	je	22f
 	vmovups	ymm0, ymmword ptr [rcx + 1024]
-	vmovups	ymmword ptr [rsp - 72], ymm0
+	vmovups	ymmword ptr [rsp + 32], ymm0
 	vmovdqu	ymm0, ymmword ptr [rcx + 1056]
-	vmovdqu	ymmword ptr [rsp - 104], ymm0
+	vmovdqu	ymmword ptr [rsp], ymm0
 	lea	r9, [rsi + 192]
 	xor	r10d, r10d
 	vpbroadcastq	ymm4, qword ptr [rip + 82f]
 	.p2align	4
 2:
-	vmovdqu	ymmword ptr [rsp - 40], ymm15
+	vmovdqu	ymmword ptr [rsp + 64], ymm15
 	vpxor	xmm6, xmm6, xmm6
 	mov	r11, -256
 	vpxor	xmm7, xmm7, xmm7
@@ -78,13 +79,13 @@
 	vpshufd	ymm2, ymm7, 78
 	vpaddq	ymm1, ymm6, ymm1
 	vpaddq	ymm0, ymm1, ymm0
-	vpaddq	ymm1, ymm5, ymmword ptr [rsp - 40]
+	vpaddq	ymm1, ymm5, ymmword ptr [rsp + 64]
 	vpaddq	ymm1, ymm1, ymm2
 	vpsrlq	ymm2, ymm0, 47
 	vpsrlq	ymm3, ymm1, 47
-	vpxor	ymm0, ymm0, ymmword ptr [rsp - 104]
+	vpxor	ymm0, ymm0, ymmword ptr [rsp]
 	vpxor	ymm0, ymm0, ymm2
-	vpxor	ymm1, ymm1, ymmword ptr [rsp - 72]
+	vpxor	ymm1, ymm1, ymmword ptr [rsp + 32]
 	vpxor	ymm1, ymm1, ymm3
 	vpmuludq	ymm2, ymm1, ymm4
 	vpsrlq	ymm1, ymm1, 32
@@ -217,6 +218,7 @@
 	vpaddq	ymm1, ymm3, ymm1
 	vmovdqu	ymmword ptr [rdi + 32], ymm1
 	vmovdqu	ymmword ptr [rdi], ymm0
+	add	rsp, 104
 	vzeroupper
 	ret
 	.p2align	3, 0x0

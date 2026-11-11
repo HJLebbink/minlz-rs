@@ -6,6 +6,7 @@
 	push	r14
 	push	r12
 	push	rbx
+	sub	rsp, 40
 	xor	ecx, ecx
 	movabs	rax, 70368744177664
 	vpxor	xmm4, xmm4, xmm4
@@ -47,7 +48,7 @@
 	vpxor	xmm12, xmm12, xmm12
 	.p2align	4
 32:
-	vmovups	ymmword ptr [rsp - 40], ymm15
+	vmovups	ymmword ptr [rsp], ymm15
 	vmovdqu	ymm13, ymmword ptr [rdi + rbx]
 	vmovdqu	ymm14, ymmword ptr [rdi + rbx + 32]
 	vpsrlw	ymm15, ymm14, 2
@@ -78,7 +79,7 @@
 	vpand	ymm1, ymm3, ymm1
 	vpsrlw	ymm3, ymm14, 7
 	vpand	ymm3, ymm15, ymm3
-	vmovdqu	ymm15, ymmword ptr [rsp - 40]
+	vmovdqu	ymm15, ymmword ptr [rsp]
 	vpand	ymm1, ymm1, ymm5
 	vpsadbw	ymm1, ymm1, ymm0
 	vpaddq	ymm15, ymm15, ymm1
@@ -128,6 +129,7 @@
 	xor	eax, eax
 	cmp	sil, 120
 	setb	al
+	add	rsp, 40
 	pop	rbx
 	pop	r12
 	pop	r14

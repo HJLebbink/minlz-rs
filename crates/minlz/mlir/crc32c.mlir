@@ -11,13 +11,6 @@
 // - @crc32w(i64, i32) -> i64, @crc32h(i64, i16) -> i64 and @crc32b(i64, i8) -> i64 for 4, 2 and 1
 //   bytes.
 
-// word returns the 64-bit word at p + o.
-func.func private @word(%p: !p, %o: index) -> i64 {
-  %q = func.call @at(%p, %o) : (!p, index) -> !p
-  %r = ptr.load %q alignment = 1 : !p -> i64
-  return %r : i64
-}
-
 // chain returns the CRC state after the k words at p + o, starting from state x. With a constant k,
 // LLVM unrolls the loop.
 func.func private @chain(%x: i64, %p: !p, %o: index, %k: index) -> i64 {

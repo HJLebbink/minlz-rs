@@ -19,27 +19,11 @@ func.func private @tbx1(%acc: !q, %t: !q, %idx: !q) -> !q {
 }
 
 // quarter16 merges the 16 outputs whose bitmap bits are bits s to s+15 of t, from the values at
-// l and r. The merge table gives right lanes their place among the right values, and left lanes
-// 255 less their place among the left ones: TBX takes the right values, TBL of the complement the
-// left ones.
+// l and r: TBX takes the right values at their index16 places, TBL of the complement the left
+// ones.
 func.func private @quarter16(%l: !p, %r: !p, %t: i64, %s: i64, %c: !q, %vv: i1, %tab: !p) -> !q {
   %c0 = arith.constant 0 : index
-  %c4 = arith.constant 4 : index
-  %c4096 = arith.constant 4096 : index
-  %e8 = arith.constant 8 : i64
-  %ff = arith.constant 255 : i64
-  %x = arith.shrui %t, %s : i64
-  %a = arith.andi %x, %ff : i64
-  %xb = arith.shrui %x, %e8 : i64
-  %b = arith.andi %xb, %ff : i64
-  %ai = arith.index_castui %a : i64 to index
-  %bi = arith.index_castui %b : i64 to index
-  %ao = arith.shli %ai, %c4 : index
-  %bo0 = arith.shli %bi, %c4 : index
-  %bo = arith.addi %bo0, %c4096 : index
-  %ta = func.call @ld16(%tab, %ao) : (!p, index) -> !q
-  %tb = func.call @ld16(%tab, %bo) : (!p, index) -> !q
-  %idx = arith.addi %ta, %tb : !q
+  %idx = func.call @index16(%t, %s, %tab) : (i64, i64, !p) -> !q
   %rv = func.call @ld16(%r, %c0) : (!p, index) -> !q
   %base = scf.if %vv -> !q {
     %lv = func.call @ld16(%l, %c0) : (!p, index) -> !q
@@ -247,14 +231,94 @@ func.func private @lut_map(%v: !b, %t: !lut, %d: index, %w: index) -> !b {
   }
   return %r : !b
 }
-func.func private @nat_codes(%p: !p, %d: index) -> !b {
-  %r = func.call @nat64(%p, %d) : (!p, index) -> !b
-  return %r : !b
+
+// nat16 returns the 16 codes of depth d (2 to 7) in the natural layout at p, one in each byte with
+// the bits above d clear. Code e is bits e*d to e*d+d-1 of the 2*d bytes at p: TBL puts its two
+// bytes in a 16-bit lane, which a shift moves down. It reads 16 bytes at p. The indexes and the
+// shifts are constants for a constant d.
+func.func private @nat16(%p: !p, %d: index) -> vector<16xi8> {
+  %c0 = arith.constant 0 : index
+  %w = func.call @ld16(%p, %c0) : (!p, index) -> vector<16xi8>
+  %d8 = arith.index_cast %d : index to i8
+  %dv = vector.broadcast %d8 : i8 to vector<16xi8>
+  %one = arith.constant dense<1> : vector<16xi8>
+  %three = arith.constant dense<3> : vector<16xi8>
+  %eight = arith.constant dense<8> : vector<16xi8>
+  %io = vector.step : vector<16xindex>
+  %iota = arith.index_cast %io : vector<16xindex> to vector<16xi8>
+  // Byte 2e+h of the pairs of codes 0 to 7 is byte (e*d >> 3) + h, and of codes 8 to 15 byte
+  // ((e+8)*d >> 3) + h.
+  %e = arith.shrui %iota, %one : vector<16xi8>
+  %h = arith.andi %iota, %one : vector<16xi8>
+  %e8 = arith.addi %e, %eight : vector<16xi8>
+  %ba = arith.muli %e, %dv : vector<16xi8>
+  %bb = arith.muli %e8, %dv : vector<16xi8>
+  %ia0 = arith.shrui %ba, %three : vector<16xi8>
+  %ib0 = arith.shrui %bb, %three : vector<16xi8>
+  %ia = arith.addi %ia0, %h : vector<16xi8>
+  %ib = arith.addi %ib0, %h : vector<16xi8>
+  %pa = func.call @tbl1(%w, %ia) : (!q, !q) -> !q
+  %pb = func.call @tbl1(%w, %ib) : (!q, !q) -> !q
+  %ua = vector.bitcast %pa : vector<16xi8> to vector<8xi16>
+  %ub = vector.bitcast %pb : vector<16xi8> to vector<8xi16>
+  // Lane e of the pairs moves down by e*d & 7.
+  %io8 = vector.step : vector<8xindex>
+  %l8 = arith.index_cast %io8 : vector<8xindex> to vector<8xi16>
+  %d16 = arith.index_cast %d : index to i16
+  %dw = vector.broadcast %d16 : i16 to vector<8xi16>
+  %seven = arith.constant dense<7> : vector<8xi16>
+  %eightw = arith.constant dense<8> : vector<8xi16>
+  %l8b = arith.addi %l8, %eightw : vector<8xi16>
+  %pa16 = arith.muli %l8, %dw : vector<8xi16>
+  %pb16 = arith.muli %l8b, %dw : vector<8xi16>
+  %sa = arith.andi %pa16, %seven : vector<8xi16>
+  %sb = arith.andi %pb16, %seven : vector<8xi16>
+  %ca = arith.shrui %ua, %sa : vector<8xi16>
+  %cb = arith.shrui %ub, %sb : vector<8xi16>
+  %ta = arith.trunci %ca : vector<8xi16> to vector<8xi8>
+  %tb = arith.trunci %cb : vector<8xi16> to vector<8xi8>
+  %c = vector.shuffle %ta, %tb [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
+      : vector<8xi8>, vector<8xi8>
+  %ones = arith.constant 1 : i8
+  %sh = arith.shli %ones, %d8 : i8
+  %mk = arith.subi %sh, %ones : i8
+  %mv = vector.broadcast %mk : i8 to vector<16xi8>
+  %r = arith.andi %c, %mv : vector<16xi8>
+  return %r : vector<16xi8>
 }
 
-func.func private @tbl16(%v: !q, %idx: !q) -> !q {
-  %r = func.call @tbl1(%v, %idx) : (!q, !q) -> !q
-  return %r : !q
+// nat_codes takes the 64 codes of depth d below 8 as four nat16 groups, 2*d bytes apart.
+func.func private @nat_codes(%p: !p, %d: index) -> !b {
+  %c0 = arith.constant 0 : index
+  %c2 = arith.constant 2 : index
+  %c8 = arith.constant 8 : index
+  %full = arith.cmpi eq, %d, %c8 : index
+  %r = scf.if %full -> !b {
+    %x = func.call @ld(%p, %c0) : (!p, index) -> !b
+    scf.yield %x : !b
+  } else {
+    %g = arith.muli %d, %c2 : index
+    %g2 = arith.addi %g, %g : index
+    %g3 = arith.addi %g2, %g : index
+    %q1 = func.call @at(%p, %g) : (!p, index) -> !p
+    %q2 = func.call @at(%p, %g2) : (!p, index) -> !p
+    %q3 = func.call @at(%p, %g3) : (!p, index) -> !p
+    %a = func.call @nat16(%p, %d) : (!p, index) -> vector<16xi8>
+    %b = func.call @nat16(%q1, %d) : (!p, index) -> vector<16xi8>
+    %c = func.call @nat16(%q2, %d) : (!p, index) -> vector<16xi8>
+    %e = func.call @nat16(%q3, %d) : (!p, index) -> vector<16xi8>
+    %z = arith.constant dense<0> : !b
+    %x0 = vector.insert_strided_slice %a, %z {offsets = [0], strides = [1]}
+        : vector<16xi8> into !b
+    %x1 = vector.insert_strided_slice %b, %x0 {offsets = [16], strides = [1]}
+        : vector<16xi8> into !b
+    %x2 = vector.insert_strided_slice %c, %x1 {offsets = [32], strides = [1]}
+        : vector<16xi8> into !b
+    %x3 = vector.insert_strided_slice %e, %x2 {offsets = [48], strides = [1]}
+        : vector<16xi8> into !b
+    scf.yield %x3 : !b
+  }
+  return %r : !b
 }
 
 func.func private @load_n(%p: !p, %n: index) -> !b {

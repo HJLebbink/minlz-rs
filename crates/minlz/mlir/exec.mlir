@@ -18,11 +18,11 @@
 // The structure file gives @run(a: !p, delta: i1, flat: i1), which runs the operations in
 // batches and copies each with @op.
 //
-// tab points to two tables. The first has a word per offset symbol, for @op: the mask of its raw bits in
-// bits 0 to 31, their number in bits 32 to 39 and the base offset in bits 40 to 63. Symbol 0 is
-// all zero: the batch gives it to repeats, whose offset is then 0, which keeps the last one. The
-// second, from byte 2048, has 64 rows of 32 bytes for repeats: byte i of row r is i % r for r from
-// 2 to 31, 0 for rows 0 and 1, and i for rows 32 and up.
+// tab points to two tables. The first has a word per offset symbol, for exec8.mlir: the mask of
+// its raw bits in bits 0 to 31, their number in bits 32 to 39 and the base offset in bits 40 to
+// 63. Symbol 0 is all zero: the batch gives it to repeats, whose offset is then 0, which keeps the
+// last one. The second, from byte 2048, has 64 rows of 32 bytes for repeats: byte i of row r is
+// i % r for r from 2 to 31, 0 for rows 0 and 1, and i for rows 32 and up.
 //
 // Every target file gives:
 // - @tbl8(v: i64, idx: i64) -> i64, whose byte i is byte idx[i] of v, or 0 if idx[i] is 0x80;
@@ -31,24 +31,7 @@
 
 !v = vector<32xi8>
 
-// The words of a.
-func.func private @arg(%a: !p, %i: index) -> index {
-  %c8 = arith.constant 8 : index
-  %o = arith.muli %i, %c8 : index
-  %q = func.call @at(%a, %o) : (!p, index) -> !p
-  %w = ptr.load %q alignment = 8 : !p -> i64
-  %r = arith.index_castui %w : i64 to index
-  return %r : index
-}
-
-func.func private @argp(%a: !p, %i: index) -> !p {
-  %c8 = arith.constant 8 : index
-  %o = arith.muli %i, %c8 : index
-  %q = func.call @at(%a, %o) : (!p, index) -> !p
-  %r = ptr.load %q alignment = 8 : !p -> !p
-  return %r : !p
-}
-
+// set writes x to word i of a.
 func.func private @set(%a: !p, %i: index, %x: index) {
   %c8 = arith.constant 8 : index
   %o = arith.muli %i, %c8 : index
@@ -70,21 +53,6 @@ func.func private @st(%p: !p, %o: index, %v: !v) {
   %q = func.call @at(%p, %o) : (!p, index) -> !p
   ptr.store %v, %q alignment = 1 : !v, !p
   return
-}
-
-// word returns the 64-bit word at p + o.
-func.func private @word(%p: !p, %o: index) -> i64 {
-  %q = func.call @at(%p, %o) : (!p, index) -> !p
-  %r = ptr.load %q alignment = 1 : !p -> i64
-  return %r : i64
-}
-
-// byte returns the byte at p + o.
-func.func private @byte(%p: !p, %o: index) -> index {
-  %q = func.call @at(%p, %o) : (!p, index) -> !p
-  %b = ptr.load %q : !p -> i8
-  %r = arith.index_castui %b : i8 to index
-  return %r : index
 }
 
 // unlikely returns c, which LLVM then lays out as rarely true: the paths it guards go after the
@@ -156,56 +124,19 @@ func.func private @expand8(%p: !p, %o: index, %f: i64, %ones: i64) -> (i64, inde
   return %r, %o2 : i64, index
 }
 
-// op runs an operation with token t, literal length len (0 without literals) and offset v, from
-// output position d, literal position l, the offset x before it and the bit position p, and
-// returns them after it. With delta, its first 32 literals are added to their references. With
-// flat, the chunk has the no-overlap flag, and with fd the offset is raised here. With inline, v
-// is the offset symbol (0 for a repeat), which op decodes.
-func.func private @op(%a: !p, %dst: !p, %lits: !p, %raw: !p, %tab: !p, %t: index, %len: index,
-    %v: index, %delta: i1, %flat: i1, %inline: i1, %fd: i1, %d: index, %l: index, %x: index,
-    %p: index) -> (index, index, index, index) {
-  %c0 = arith.constant 0 : index
+// op runs an operation with token t, literal length len (0 without literals) and offset o, from
+// output position d, literal position l and the offset x before it, and returns d and l after it.
+// With delta, its first 32 literals are added to their references. With flat, the chunk has the
+// no-overlap flag, and with fd the offset is raised here.
+func.func private @op(%a: !p, %dst: !p, %lits: !p, %t: index, %len: index, %o: index,
+    %delta: i1, %flat: i1, %fd: i1, %d: index, %l: index, %x: index) -> (index, index) {
   %c1 = arith.constant 1 : index
   %c2 = arith.constant 2 : index
-  %c3 = arith.constant 3 : index
-  %c7 = arith.constant 7 : index
-  %c8 = arith.constant 8 : index
   %c13 = arith.constant 13 : index
   %c32 = arith.constant 32 : index
   %c33 = arith.constant 33 : index
-  %k32 = arith.constant 32 : i64
-  %k40 = arith.constant 40 : i64
-  %k255 = arith.constant 255 : i64
   %true = arith.constant true
   %notflat = arith.xori %flat, %true : i1
-  %o, %pn = scf.if %inline -> (index, index) {
-    // The offset: the base of the symbol plus its raw bits at p; only symbol 0 decodes to 0,
-    // which keeps the last offset.
-    %eo = arith.muli %v, %c8 : index
-    %eq = func.call @at(%tab, %eo) : (!p, index) -> !p
-    %e = ptr.load %eq alignment = 8 : !p -> i64
-    %wo = arith.shrui %p, %c3 : index
-    %w = func.call @word(%raw, %wo) : (!p, index) -> i64
-    %sh = arith.andi %p, %c7 : index
-    %sh64 = arith.index_castui %sh : index to i64
-    %w2 = arith.shrui %w, %sh64 : i64
-    %w32 = arith.trunci %w2 : i64 to i32
-    %m32 = arith.trunci %e : i64 to i32
-    %bits32 = arith.andi %w32, %m32 : i32
-    %bits = arith.index_castui %bits32 : i32 to index
-    %nb64 = arith.shrui %e, %k32 : i64
-    %nb8 = arith.andi %nb64, %k255 : i64
-    %nb = arith.index_castui %nb8 : i64 to index
-    %p2 = arith.addi %p, %nb : index
-    %base64 = arith.shrui %e, %k40 : i64
-    %base = arith.index_castui %base64 : i64 to index
-    %on = arith.addi %base, %bits : index
-    %new = arith.cmpi ne, %on, %c0 : index
-    %o1 = arith.select %new, %on, %x : index
-    scf.yield %o1, %p2 : index, index
-  } else {
-    scf.yield %v, %p : index, index
-  }
 
   // The first 32 literals. Delta references use the offset from before the operation, clamped
   // to the position; flat chunks raise it to 32 first, and start at position 32 or later, so
@@ -298,19 +229,18 @@ func.func private @op(%a: !p, %dst: !p, %lits: !p, %raw: !p, %tab: !p, %t: index
     scf.yield %ml : index
   }
   %d2 = arith.addi %d1, %mn : index
-  return %d2, %l1, %o, %pn : index, index, index, index
+  return %d2, %l1 : index, index
 }
 
-// minlz_exec_plain runs the operations of a chunk. Each kernel keeps its stack frame above the
-// stack pointer (noredzone): it also runs on Windows, which does not reserve the area below.
-func.func @minlz_exec_plain(%a: !p) attributes {llvm.passthrough = ["noredzone"]} {
+// minlz_exec_plain runs the operations of a chunk.
+func.func @minlz_exec_plain(%a: !p) {
   %f = arith.constant false
   func.call @run(%a, %f, %f) : (!p, i1, i1) -> ()
   return
 }
 
 // minlz_exec_delta runs the operations of a chunk with delta literals.
-func.func @minlz_exec_delta(%a: !p) attributes {llvm.passthrough = ["noredzone"]} {
+func.func @minlz_exec_delta(%a: !p) {
   %t = arith.constant true
   %f = arith.constant false
   func.call @run(%a, %t, %f) : (!p, i1, i1) -> ()
@@ -318,7 +248,7 @@ func.func @minlz_exec_delta(%a: !p) attributes {llvm.passthrough = ["noredzone"]
 }
 
 // minlz_exec_flat runs the operations of a chunk with the no-overlap flag.
-func.func @minlz_exec_flat(%a: !p) attributes {llvm.passthrough = ["noredzone"]} {
+func.func @minlz_exec_flat(%a: !p) {
   %t = arith.constant true
   %f = arith.constant false
   func.call @run(%a, %f, %t) : (!p, i1, i1) -> ()
@@ -327,7 +257,7 @@ func.func @minlz_exec_flat(%a: !p) attributes {llvm.passthrough = ["noredzone"]}
 
 // minlz_exec_flat_delta runs the operations of a chunk with the no-overlap flag and delta
 // literals.
-func.func @minlz_exec_flat_delta(%a: !p) attributes {llvm.passthrough = ["noredzone"]} {
+func.func @minlz_exec_flat_delta(%a: !p) {
   %t = arith.constant true
   func.call @run(%a, %t, %t) : (!p, i1, i1) -> ()
   return

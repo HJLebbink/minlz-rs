@@ -210,13 +210,6 @@ func.func private @nat_codes(%p: !p, %d: index) -> !b {
   return %r : !b
 }
 
-// tbl16 returns byte idx[i] of v in byte i: PSHUFB.
-func.func private @tbl16(%v: vector<16xi8>, %idx: vector<16xi8>) -> vector<16xi8> {
-  %r = llvm.call_intrinsic "llvm.x86.ssse3.pshuf.b.128"(%v, %idx)
-      : (vector<16xi8>, vector<16xi8>) -> vector<16xi8>
-  return %r : vector<16xi8>
-}
-
 func.func private @load_n(%p: !p, %n: index) -> !b {
   %lm = func.call @low(%n) : (index) -> i64
   %m = func.call @bits(%lm) : (i64) -> !m

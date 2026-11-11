@@ -4,16 +4,17 @@
 	vmovdqu	ymm4, ymmword ptr [rdi + 32]
 	test	rdx, rdx
 	jle	22f
+	sub	rsp, 104
 	vmovups	ymm0, ymmword ptr [rcx + 1024]
-	vmovups	ymmword ptr [rsp - 72], ymm0
+	vmovups	ymmword ptr [rsp + 32], ymm0
 	vmovdqu	ymm0, ymmword ptr [rcx + 1056]
-	vmovdqu	ymmword ptr [rsp - 104], ymm0
+	vmovdqu	ymmword ptr [rsp], ymm0
 	add	rsi, 192
 	xor	eax, eax
 	vpbroadcastq	ymm3, qword ptr [rip + 32f]
 	.p2align	4
 2:
-	vmovdqu	ymmword ptr [rsp - 40], ymm2
+	vmovdqu	ymmword ptr [rsp + 64], ymm2
 	vpxor	xmm6, xmm6, xmm6
 	mov	r8, -256
 	vpxor	xmm7, xmm7, xmm7
@@ -76,13 +77,13 @@
 	vpshufd	ymm1, ymm7, 78
 	vpaddq	ymm2, ymm6, ymm4
 	vpaddq	ymm0, ymm2, ymm0
-	vpaddq	ymm2, ymm5, ymmword ptr [rsp - 40]
+	vpaddq	ymm2, ymm5, ymmword ptr [rsp + 64]
 	vpaddq	ymm1, ymm2, ymm1
 	vpsrlq	ymm2, ymm0, 47
 	vpsrlq	ymm4, ymm1, 47
-	vpxor	ymm0, ymm0, ymmword ptr [rsp - 104]
+	vpxor	ymm0, ymm0, ymmword ptr [rsp]
 	vpxor	ymm0, ymm0, ymm2
-	vpxor	ymm1, ymm1, ymmword ptr [rsp - 72]
+	vpxor	ymm1, ymm1, ymmword ptr [rsp + 32]
 	vpxor	ymm1, ymm1, ymm4
 	vpmuludq	ymm2, ymm1, ymm3
 	vpsrlq	ymm1, ymm1, 32
@@ -98,6 +99,7 @@
 	add	rsi, 1024
 	cmp	rax, rdx
 	jne	2b
+	add	rsp, 104
 22:
 	vmovdqu	ymmword ptr [rdi], ymm2
 	vmovdqu	ymmword ptr [rdi + 32], ymm4

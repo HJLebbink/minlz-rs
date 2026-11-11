@@ -71,6 +71,15 @@ impl Arch {
         }
     }
 
+    /// Returns the `llc` flag that turns jump tables off. A jump table holds absolute addresses,
+    /// which a position-independent program cannot hold.
+    fn no_jump_tables(self) -> &'static str {
+        match self {
+            Arch::Arm => "-aarch64-min-jump-table-entries=4294967295",
+            Arch::X86 => "-min-jump-table-entries=4294967295",
+        }
+    }
+
     /// Returns what starts a comment in the assembly.
     fn comment(self) -> &'static str {
         match self {
@@ -309,9 +318,25 @@ impl Lowering {
         )?;
         // A kernel's body must be whole: MLIR's inliner leaves some calls, and the functions it
         // writes have external linkage, so LLVM's inliner needs a high threshold to take them all.
-        let opt = [&["-O3", "-inline-threshold=100000"][..], &flags, &IO].concat();
+        // Every function keeps its stack frame above the stack pointer (noredzone): the kernels
+        // also run on Windows, which does not reserve the area below it.
+        let opt = [
+            &[
+                "-O3",
+                "-inline-threshold=100000",
+                "-force-attribute=noredzone",
+            ][..],
+            &flags,
+            &IO,
+        ]
+        .concat();
         let bc = tool("opt", &opt, &ir)?;
-        let llc = [&["-O3", "-asm-verbose=false"][..], &flags, &IO].concat();
+        let llc = [
+            &["-O3", "-asm-verbose=false", self.arch.no_jump_tables()][..],
+            &flags,
+            &IO,
+        ]
+        .concat();
         let asm = tool("llc", &llc, &bc)?;
         let asm = String::from_utf8(asm).map_err(|e| format!("llc wrote no text: {e}"))?;
         fs::create_dir_all(&self.out).map_err(|e| format!("{}: {e}", self.out.display()))?;

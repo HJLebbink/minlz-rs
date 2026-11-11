@@ -1,6 +1,6 @@
 # minlz_xxh3_accum of crates/minlz/mlir/xxh3.mlir for sse2, written by
 # cargo xtask mlir. Do not edit.
-	sub	rsp, 104
+	sub	rsp, 232
 	lea	rax, [rdx - 1]
 	mov	r8, rax
 	shr	r8, 10
@@ -10,21 +10,21 @@
 	movdqu	xmm6, xmmword ptr [rdi + 48]
 	je	22f
 	movups	xmm0, xmmword ptr [rcx + 1024]
-	movaps	xmmword ptr [rsp + 48], xmm0
+	movaps	xmmword ptr [rsp + 176], xmm0
 	movups	xmm0, xmmword ptr [rcx + 1040]
-	movaps	xmmword ptr [rsp + 32], xmm0
+	movaps	xmmword ptr [rsp + 160], xmm0
 	movups	xmm0, xmmword ptr [rcx + 1056]
-	movaps	xmmword ptr [rsp + 16], xmm0
+	movaps	xmmword ptr [rsp + 144], xmm0
 	movdqu	xmm0, xmmword ptr [rcx + 1072]
-	movdqa	xmmword ptr [rsp], xmm0
+	movdqa	xmmword ptr [rsp + 128], xmm0
 	lea	r9, [rsi + 192]
 	xor	r10d, r10d
 	.p2align	4
 2:
-	movdqa	xmmword ptr [rsp + 64], xmm6
-	movdqa	xmmword ptr [rsp + 80], xmm5
-	movdqa	xmmword ptr [rsp - 96], xmm4
-	movdqa	xmmword ptr [rsp - 80], xmm1
+	movdqa	xmmword ptr [rsp + 192], xmm6
+	movdqa	xmmword ptr [rsp + 208], xmm5
+	movdqa	xmmword ptr [rsp + 32], xmm4
+	movdqa	xmmword ptr [rsp + 48], xmm1
 	pxor	xmm10, xmm10
 	mov	r11, -256
 	pxor	xmm13, xmm13
@@ -37,11 +37,11 @@
 	.p2align	4
 12:
 	movdqu	xmm5, xmmword ptr [r9 + r11 + 64]
-	movdqa	xmmword ptr [rsp - 64], xmm5
+	movdqa	xmmword ptr [rsp + 64], xmm5
 	movdqu	xmm0, xmmword ptr [r9 + r11 + 80]
-	movdqa	xmmword ptr [rsp - 128], xmm0
+	movdqa	xmmword ptr [rsp], xmm0
 	movdqu	xmm12, xmmword ptr [r9 + r11 + 96]
-	movdqa	xmmword ptr [rsp - 112], xmm12
+	movdqa	xmmword ptr [rsp + 16], xmm12
 	movdqu	xmm6, xmmword ptr [r9 + r11 + 112]
 	movdqu	xmm7, xmmword ptr [rcx + r11 + 256]
 	movdqu	xmm8, xmmword ptr [rcx + r11 + 272]
@@ -67,22 +67,22 @@
 	paddq	xmm3, xmm10
 	pmuludq	xmm2, xmm9
 	paddq	xmm1, xmm2
-	movdqa	xmmword ptr [rsp - 48], xmm1
+	movdqa	xmmword ptr [rsp + 80], xmm1
 	pmuludq	xmm12, xmm8
 	paddq	xmm0, xmm12
-	movdqa	xmmword ptr [rsp - 32], xmm0
+	movdqa	xmmword ptr [rsp + 96], xmm0
 	pmuludq	xmm11, xmm7
 	paddq	xmm13, xmm11
-	movdqa	xmmword ptr [rsp - 16], xmm13
+	movdqa	xmmword ptr [rsp + 112], xmm13
 	movdqa	xmm13, xmm5
 	paddq	xmm4, xmm6
-	paddq	xmm15, xmmword ptr [rsp - 112]
-	paddq	xmm13, xmmword ptr [rsp - 64]
-	paddq	xmm14, xmmword ptr [rsp - 128]
+	paddq	xmm15, xmmword ptr [rsp + 16]
+	paddq	xmm13, xmmword ptr [rsp + 64]
+	paddq	xmm14, xmmword ptr [rsp]
 	movdqu	xmm9, xmmword ptr [r9 + r11 + 176]
 	movdqu	xmm8, xmmword ptr [r9 + r11 + 160]
 	movdqu	xmm0, xmmword ptr [r9 + r11 + 144]
-	movdqa	xmmword ptr [rsp - 128], xmm0
+	movdqa	xmmword ptr [rsp], xmm0
 	movdqu	xmm11, xmmword ptr [r9 + r11 + 128]
 	movdqu	xmm2, xmmword ptr [rcx + r11 + 368]
 	movdqu	xmm5, xmmword ptr [rcx + r11 + 352]
@@ -105,7 +105,7 @@
 	pmuludq	xmm0, xmm5
 	pmuludq	xmm1, xmm2
 	movdqu	xmm5, xmmword ptr [r9 + r11 + 240]
-	movdqa	xmmword ptr [rsp - 112], xmm5
+	movdqa	xmmword ptr [rsp + 16], xmm5
 	movdqu	xmm2, xmmword ptr [rcx + r11 + 432]
 	pxor	xmm2, xmm5
 	movdqa	xmm6, xmm2
@@ -123,7 +123,7 @@
 	paddq	xmm3, xmm0
 	movdqu	xmm0, xmmword ptr [rcx + r11 + 400]
 	pxor	xmm0, xmm5
-	paddq	xmm3, xmmword ptr [rsp - 48]
+	paddq	xmm3, xmmword ptr [rsp + 80]
 	movdqa	xmm2, xmm0
 	psrlq	xmm2, 32
 	pmuludq	xmm2, xmm0
@@ -131,19 +131,19 @@
 	paddq	xmm2, xmm12
 	movdqu	xmm12, xmmword ptr [rcx + r11 + 384]
 	pxor	xmm12, xmm1
-	paddq	xmm2, xmmword ptr [rsp - 32]
+	paddq	xmm2, xmmword ptr [rsp + 96]
 	movdqa	xmm0, xmm12
 	psrlq	xmm0, 32
 	pmuludq	xmm0, xmm12
 	paddq	xmm0, xmm10
-	paddq	xmm0, xmmword ptr [rsp - 16]
-	paddq	xmm9, xmmword ptr [rsp - 112]
+	paddq	xmm0, xmmword ptr [rsp + 112]
+	paddq	xmm9, xmmword ptr [rsp + 16]
 	paddq	xmm4, xmm9
 	paddq	xmm8, xmm7
 	paddq	xmm15, xmm8
 	paddq	xmm11, xmm1
 	paddq	xmm13, xmm11
-	movdqa	xmm1, xmmword ptr [rsp - 128]
+	movdqa	xmm1, xmmword ptr [rsp]
 	paddq	xmm1, xmm5
 	paddq	xmm14, xmm1
 	movdqu	xmm5, xmmword ptr [r9 + r11 + 304]
@@ -181,31 +181,31 @@
 	add	r11, 256
 	cmp	r11, 768
 	jb	12b
-	paddq	xmm3, xmmword ptr [rsp + 64]
+	paddq	xmm3, xmmword ptr [rsp + 192]
 	pshufd	xmm0, xmm4, 78
 	paddq	xmm3, xmm0
-	paddq	xmm2, xmmword ptr [rsp + 80]
+	paddq	xmm2, xmmword ptr [rsp + 208]
 	pshufd	xmm0, xmm15, 78
 	paddq	xmm2, xmm0
 	pshufd	xmm0, xmm14, 78
 	pshufd	xmm1, xmm13, 78
-	paddq	xmm11, xmmword ptr [rsp - 96]
+	paddq	xmm11, xmmword ptr [rsp + 32]
 	paddq	xmm11, xmm0
-	paddq	xmm10, xmmword ptr [rsp - 80]
+	paddq	xmm10, xmmword ptr [rsp + 48]
 	paddq	xmm10, xmm1
-	movdqa	xmm0, xmmword ptr [rsp]
+	movdqa	xmm0, xmmword ptr [rsp + 128]
 	pxor	xmm0, xmm3
 	psrlq	xmm3, 47
 	pxor	xmm3, xmm0
-	movdqa	xmm0, xmmword ptr [rsp + 16]
+	movdqa	xmm0, xmmword ptr [rsp + 144]
 	pxor	xmm0, xmm2
 	psrlq	xmm2, 47
 	pxor	xmm2, xmm0
-	movdqa	xmm0, xmmword ptr [rsp + 32]
+	movdqa	xmm0, xmmword ptr [rsp + 160]
 	pxor	xmm0, xmm11
 	psrlq	xmm11, 47
 	pxor	xmm11, xmm0
-	movdqa	xmm0, xmmword ptr [rsp + 48]
+	movdqa	xmm0, xmmword ptr [rsp + 176]
 	pxor	xmm0, xmm10
 	psrlq	xmm10, 47
 	pxor	xmm10, xmm0
@@ -249,9 +249,9 @@
 	movdqa	xmm2, xmm5
 	movdqa	xmm3, xmm6
 32:
-	movdqa	xmmword ptr [rsp - 48], xmm2
-	movdqa	xmmword ptr [rsp - 32], xmm11
-	movdqa	xmmword ptr [rsp - 16], xmm10
+	movdqa	xmmword ptr [rsp + 80], xmm2
+	movdqa	xmmword ptr [rsp + 96], xmm11
+	movdqa	xmmword ptr [rsp + 112], xmm10
 	mov	r8, rax
 	and	r8, -1024
 	mov	r9, rax
@@ -262,7 +262,7 @@
 	xor	r11d, r11d
 	pxor	xmm14, xmm14
 	pxor	xmm0, xmm0
-	movdqa	xmmword ptr [rsp - 128], xmm0
+	movdqa	xmmword ptr [rsp], xmm0
 	pxor	xmm4, xmm4
 	pxor	xmm5, xmm5
 	pxor	xmm8, xmm8
@@ -298,14 +298,14 @@
 	pmuludq	xmm2, xmm1
 	paddq	xmm4, xmm2
 	paddq	xmm0, xmm9
-	movdqa	xmmword ptr [rsp - 112], xmm0
-	movdqa	xmm0, xmmword ptr [rsp - 128]
+	movdqa	xmmword ptr [rsp + 16], xmm0
+	movdqa	xmm0, xmmword ptr [rsp]
 	paddq	xmm0, xmm7
-	movdqa	xmmword ptr [rsp - 128], xmm0
+	movdqa	xmmword ptr [rsp], xmm0
 	paddq	xmm13, xmm6
-	movdqa	xmmword ptr [rsp - 64], xmm13
+	movdqa	xmmword ptr [rsp + 64], xmm13
 	paddq	xmm14, xmm15
-	movdqa	xmmword ptr [rsp - 80], xmm14
+	movdqa	xmmword ptr [rsp + 48], xmm14
 	movdqu	xmm10, xmmword ptr [r10 + r11 - 80]
 	movdqu	xmm9, xmmword ptr [r10 + r11 - 96]
 	movdqu	xmm7, xmmword ptr [r10 + r11 - 112]
@@ -331,7 +331,7 @@
 	psrlq	xmm2, 32
 	pmuludq	xmm2, xmm1
 	movdqu	xmm12, xmmword ptr [r10 + r11 - 16]
-	movdqa	xmmword ptr [rsp - 96], xmm12
+	movdqa	xmmword ptr [rsp + 32], xmm12
 	movdqu	xmm1, xmmword ptr [rcx + r11 + 176]
 	pxor	xmm1, xmm12
 	movdqa	xmm12, xmm1
@@ -363,14 +363,14 @@
 	pmuludq	xmm0, xmm5
 	paddq	xmm0, xmm13
 	paddq	xmm0, xmm4
-	paddq	xmm10, xmmword ptr [rsp - 96]
-	paddq	xmm10, xmmword ptr [rsp - 112]
+	paddq	xmm10, xmmword ptr [rsp + 32]
+	paddq	xmm10, xmmword ptr [rsp + 16]
 	paddq	xmm9, xmm1
-	paddq	xmm9, xmmword ptr [rsp - 128]
+	paddq	xmm9, xmmword ptr [rsp]
 	paddq	xmm6, xmm2
-	paddq	xmm6, xmmword ptr [rsp - 64]
+	paddq	xmm6, xmmword ptr [rsp + 64]
 	paddq	xmm7, xmm15
-	paddq	xmm7, xmmword ptr [rsp - 80]
+	paddq	xmm7, xmmword ptr [rsp + 48]
 	movdqu	xmm2, xmmword ptr [r10 + r11 + 48]
 	movdqu	xmm14, xmmword ptr [r10 + r11 + 32]
 	movdqu	xmm13, xmmword ptr [r10 + r11 + 16]
@@ -407,7 +407,7 @@
 	cmp	r11, r9
 	movdqa	xmm13, xmm6
 	movdqa	xmm14, xmm7
-	movdqa	xmmword ptr [rsp - 128], xmm9
+	movdqa	xmmword ptr [rsp], xmm9
 	movdqa	xmm0, xmm10
 	jb	42b
 	and	eax, 960
@@ -467,9 +467,9 @@
 	jb	72b
 82:
 	movdqu	xmm2, xmmword ptr [rsi + rdx - 64]
-	movdqa	xmmword ptr [rsp - 128], xmm2
+	movdqa	xmmword ptr [rsp], xmm2
 	movdqu	xmm0, xmmword ptr [rsi + rdx - 48]
-	movdqa	xmmword ptr [rsp - 112], xmm0
+	movdqa	xmmword ptr [rsp + 16], xmm0
 	movdqu	xmm1, xmmword ptr [rcx + 1088]
 	pxor	xmm1, xmm2
 	movdqa	xmm13, xmm1
@@ -492,8 +492,8 @@
 	movdqa	xmm1, xmm0
 	psrlq	xmm1, 32
 	pmuludq	xmm1, xmm0
-	paddq	xmm6, xmmword ptr [rsp - 128]
-	paddq	xmm7, xmmword ptr [rsp - 112]
+	paddq	xmm6, xmmword ptr [rsp]
+	paddq	xmm7, xmmword ptr [rsp + 16]
 	paddq	xmm9, xmm2
 	paddq	xmm10, xmm14
 	pshufd	xmm0, xmm10, 78
@@ -501,17 +501,17 @@
 	paddq	xmm3, xmm11
 	paddq	xmm3, xmm1
 	pshufd	xmm0, xmm9, 78
-	movdqa	xmm9, xmmword ptr [rsp - 48]
+	movdqa	xmm9, xmmword ptr [rsp + 80]
 	paddq	xmm9, xmm0
 	paddq	xmm9, xmm8
 	paddq	xmm9, xmm15
 	pshufd	xmm0, xmm7, 78
-	movdqa	xmm2, xmmword ptr [rsp - 32]
+	movdqa	xmm2, xmmword ptr [rsp + 96]
 	paddq	xmm2, xmm0
 	paddq	xmm2, xmm5
 	paddq	xmm2, xmm12
 	pshufd	xmm0, xmm6, 78
-	movdqa	xmm1, xmmword ptr [rsp - 16]
+	movdqa	xmm1, xmmword ptr [rsp + 112]
 	paddq	xmm1, xmm0
 	paddq	xmm1, xmm4
 	paddq	xmm1, xmm13
@@ -519,7 +519,7 @@
 	movdqu	xmmword ptr [rdi + 16], xmm2
 	movdqu	xmmword ptr [rdi + 32], xmm9
 	movdqu	xmmword ptr [rdi + 48], xmm3
-	add	rsp, 104
+	add	rsp, 232
 	ret
 	.p2align	4, 0x0
 92:

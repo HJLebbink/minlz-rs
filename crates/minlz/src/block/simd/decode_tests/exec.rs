@@ -71,11 +71,13 @@ fn test_flat(
     }
 }
 
-/// Returns the last n bytes of g, starting with b and zero after it.
-fn at<'g>(g: &'g mut Buffer, b: &[u8], n: usize) -> &'g mut [u8] {
-    let s = g.slice(n, true);
-    s[..b.len()].copy_from_slice(b);
-    s[b.len()..].fill(0);
+/// Returns n bytes of g against a guard page, at its end or its start, starting with the first n
+/// bytes of b and zero after them.
+fn at<'g>(g: &'g mut Buffer, b: &[u8], n: usize, at_end: bool) -> &'g mut [u8] {
+    let s = g.slice(n, at_end);
+    let k = b.len().min(n);
+    s[..k].copy_from_slice(&b[..k]);
+    s[k..].fill(0);
     s
 }
 
@@ -132,11 +134,11 @@ fn simd_exec() {
                     // symbols they use. raw is read 8 bytes at each bit position.
                     let nt = v[TOK].len();
                     let c = Chunk {
-                        tok: at(g0, &v[TOK], nt + 7),
-                        ll: at(g1, &v[LL], v[LL].len() + 8),
-                        offc: at(g2, &v[OFFC], v[OFFC].len() + 8),
-                        esc: at(g3, &v[ESC], v[ESC].len()),
-                        raw: at(g4, &v[4], bits / 8 + 8),
+                        tok: at(g0, &v[TOK], nt + 7, true),
+                        ll: at(g1, &v[LL], v[LL].len() + 8, true),
+                        offc: at(g2, &v[OFFC], v[OFFC].len() + 8, true),
+                        esc: at(g3, &v[ESC], v[ESC].len(), true),
+                        raw: at(g4, &v[4], bits / 8 + 8, true),
                         n_tok: nt,
                         n_ll: v[LL].len(),
                         n_off: v[OFFC].len(),
@@ -145,8 +147,8 @@ fn simd_exec() {
                         delta,
                         flat,
                     };
-                    let dst = at(g5, &[], d + SLACK);
-                    let lits = at(g6, &e.stored[..l], l + SLACK);
+                    let dst = at(g5, &[], d + SLACK, true);
+                    let lits = at(g6, &e.stored[..l], l + SLACK, true);
                     let mut st = [0, 0, 1, 0];
                     f(tier, dst, lits, &c, nt, &mut st);
                     if bad {
@@ -365,8 +367,8 @@ fn simd_exec_split_counts() {
     let (mut gd, mut gl) = (Buffer::new(1 << 16).unwrap(), Buffer::new(1 << 16).unwrap());
     let lits: Vec<u8> = (0..N as u8).collect();
     for tier in Tier::tiers() {
-        let lits = at(&mut gl, &lits, N + SLACK);
-        let dst = at(&mut gd, &[], N);
+        let lits = at(&mut gl, &lits, N + SLACK, true);
+        let dst = at(&mut gd, &[], N, true);
         let mut want = vec![0u8; N + SLACK];
         let (mut st, mut sw) = ([0, 0, 1, 0], [0, 0, 1, 0]);
         exec_go(&mut want, lits, &c, N, &mut sw);
@@ -514,13 +516,6 @@ fn simd_tiers_neon() {
     assert_eq!((Tier::tiers(), Tier::best()), (vec![Tier::Go], Tier::Go));
 }
 
-/// Returns n bytes of g against a guard page, at its end or its start, starting with b.
-fn guarded<'g>(g: &'g mut Buffer, b: &[u8], n: usize, at_end: bool) -> &'g mut [u8] {
-    let s = g.slice(n, at_end);
-    s.copy_from_slice(&b[..n]);
-    s
-}
-
 /// The vector loops keep to the memory rules for any stream bytes, which they read as exec_go
 /// reads them, except that a literal length or a match length code from 33 on is 33 plus an
 /// escape: each operation then uses the escapes exec_go uses, and ends no later than there. The
@@ -588,11 +583,11 @@ fn simd_exec_any_bytes() {
             rng.read(&mut lv);
             rng.read(&mut dv);
             let c = Chunk {
-                tok: guarded(g0, tok, n + 7, true),
-                ll: guarded(g1, ll, li + 8, true),
-                offc: guarded(g2, offc, oi + 8, true),
-                esc: guarded(g3, esc, gi, true),
-                raw: guarded(g4, &raw, raw.len(), true),
+                tok: at(g0, tok, n + 7, true),
+                ll: at(g1, ll, li + 8, true),
+                offc: at(g2, offc, oi + 8, true),
+                esc: at(g3, esc, gi, true),
+                raw: at(g4, &raw, raw.len(), true),
                 n_tok: n,
                 n_ll: li,
                 n_off: oi,
@@ -602,8 +597,8 @@ fn simd_exec_any_bytes() {
                 flat,
             };
             let (dst, lits) = (
-                guarded(g5, &dv, dv.len(), i & 16 != 0),
-                guarded(g6, &lv, lv.len(), true),
+                at(g5, &dv, dv.len(), i & 16 != 0),
+                at(g6, &lv, lv.len(), true),
             );
             let before = dst[..d0].to_vec();
             let mut st = [d0, l0, 1 + rng.intn(1 << 20), 0];

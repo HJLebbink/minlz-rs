@@ -343,9 +343,7 @@ func.func private @expand_batch(%a: !p, %k: index, %m: index, %raise: i1) {
 // copy_one runs operation j of the batch of 64 at tk; see @op.
 func.func private @copy_one(%a: !p, %dst: !p, %lits: !p, %tk: !p, %j: index, %delta: i1,
     %flat: i1, %fd: i1, %d: index, %l: index, %x: index) -> (index, index, index) {
-  %c0 = arith.constant 0 : index
   %c4 = arith.constant 4 : index
-  %false = arith.constant false
   %lens = func.call @lens(%a) : (!p) -> !p
   %offs = func.call @offs(%a) : (!p) -> !p
   %t = func.call @byte(%tk, %j) : (!p, index) -> index
@@ -354,11 +352,9 @@ func.func private @copy_one(%a: !p, %dst: !p, %lits: !p, %tk: !p, %j: index, %de
   %oq = func.call @at(%offs, %jo) : (!p, index) -> !p
   %o32 = ptr.load %oq alignment = 4 : !p -> i32
   %o = arith.index_castui %o32 : i32 to index
-  %s:4 = func.call @op(%a, %dst, %lits, %a, %a, %t, %len, %o, %delta, %flat, %false, %fd, %d, %l,
-      %x, %c0)
-      : (!p, !p, !p, !p, !p, index, index, index, i1, i1, i1, i1, index, index, index, index)
-      -> (index, index, index, index)
-  return %s#0, %s#1, %s#2 : index, index, index
+  %s:2 = func.call @op(%a, %dst, %lits, %t, %len, %o, %delta, %flat, %fd, %d, %l, %x)
+      : (!p, !p, !p, index, index, index, i1, i1, i1, index, index, index) -> (index, index)
+  return %s#0, %s#1, %o : index, index, index
 }
 
 // copy runs the m operations of the batch of 64 at tk, from output position d, literal position l
