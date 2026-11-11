@@ -1480,6 +1480,81 @@ fn exec_page_guard_malformed() {
     }
 }
 
+/// The farthest a vector tier's merge reads past the K bytes of a child: a 64-byte load at a
+/// cursor inside it.
+const MERGE_OVERREAD: usize = 63;
+
+/// Ends the arena's accessible memory MERGE_OVERREAD bytes past the K bytes of the last merge
+/// child, the farthest a vector tier's merge reads (ARENA_SLACK covers it); the rest of the slack
+/// the arena claims is an inaccessible page. All-left and all-right bitmaps keep a cursor at its
+/// output position, where its loads reach farthest.
+#[test]
+#[cfg_attr(miri, ignore = "no page guards under Miri")]
+fn exec_merge_guard() {
+    if !crate::guard::supported() {
+        return;
+    }
+    let page = |n: usize| crate::guard::Buffer::new(n).expect("page guards");
+    let mut rng = new_rng();
+    for k in 0..200usize {
+        for density in [0.0, 0.5, 1.0] {
+            let (bits, kr) = rand_bits(&mut rng, k, density);
+            let mut gbm = page(bits.len());
+            let bm = gbm.slice(bits.len(), true);
+            bm.copy_from_slice(&bits);
+            let (ku, kru, kl) = (k as u32, kr as u32, k - kr);
+            let merge = |kind, p, l, r| Op {
+                kind,
+                flags: FLAG_DST,
+                p,
+                k: ku,
+                kr: kru,
+                l,
+                r,
+                ..Op::default()
+            };
+            for (op, alim) in [
+                (merge(OP_VV, 0, 0, ku), 2 * k),
+                (merge(OP_VV, 0, ku, 0), 2 * k),
+                (merge(OP_CV, 7, 0, 0), k),
+            ] {
+                let mut gmem = page(alim + MERGE_OVERREAD);
+                let mem = gmem.slice(alim + MERGE_OVERREAD, true);
+                rand_bytes(&mut rng, mem);
+                // SAFETY: deliberately not upheld: the slice claims ARENA_SLACK-MERGE_OVERREAD
+                // bytes of the inaccessible page after mem, as Go's test does, which
+                // from_raw_parts_mut forbids. Only the kernel may touch them, and it faults if it
+                // reads past the MERGE_OVERREAD; mem is not used again.
+                let arena = unsafe {
+                    core::slice::from_raw_parts_mut(mem.as_mut_ptr(), alim + ARENA_SLACK)
+                };
+                let l = if op.kind == OP_CV {
+                    vec![7; kl]
+                } else {
+                    arena[op.l as usize..][..kl].to_vec()
+                };
+                let (want, _) = ref_merge(bm, k, &l, &arena[op.r as usize..][..kr]);
+                for tier in vec_tiers() {
+                    let mut gdst = page(k);
+                    let mut p = Program {
+                        ops: &[op],
+                        input: bm,
+                        arena: &mut *arena,
+                        dst: gdst.slice(k, true),
+                        r2s: None,
+                    };
+                    let ret = tier.exec(&mut p);
+                    assert!(
+                        ret == Ok(()) && *p.dst == want,
+                        "{tier} density {density} {op:?}: exec = {ret:?}, out equal {}",
+                        *p.dst == want
+                    );
+                }
+            }
+        }
+    }
+}
+
 // The NEON specific tests (Go neon_arm64_test.go), a child of this module for its helpers.
 #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
 #[path = "neon.rs"]

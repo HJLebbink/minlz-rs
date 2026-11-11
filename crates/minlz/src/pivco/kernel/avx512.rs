@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! The AVX-512 tier: intrinsics ports of the assembly Go's `_generate/pivco` generates
-//! (`enc_avx512.go`, `dec_avx512.go` with `dec.go`, `hist_avx512.go`), with the slice
-//! contracts of `internal/pivco/kernel/avx512_amd64.go`. They port the AVX-512 primitives of
-//! PivCo-Huffman (`pivco_huffman_primitives_avx512.h`, `pivco_huffman_x86_vertical.h`,
-//! `pivco_huffman_avx512_pack.h`, `pivco_huffman_avx512_flat.h`).
+//! The AVX-512 tier of the encoder kernels and the histogram: intrinsics ports of the assembly
+//! Go's `_generate/pivco` generates (`enc_avx512.go`, `hist_avx512.go`), with the slice contracts
+//! of `internal/pivco/kernel/avx512_amd64.go`. They port the AVX-512 primitives of PivCo-Huffman
+//! (`pivco_huffman_primitives_avx512.h`, `pivco_huffman_x86_vertical.h`,
+//! `pivco_huffman_avx512_pack.h`). The decoder is in MLIR (`super::mlir`).
 //!
 //! Every entry point is an `unsafe fn` whose caller has checked
 //! [`PIVCO_AVX512`](crate::cpu::PIVCO_AVX512): AVX512 F/BW/VL/VBMI/VBMI2/VPOPCNTDQ (upstream's
@@ -24,23 +24,16 @@
 //! [`PIVCO_HIST_AVX512`](crate::cpu::PIVCO_HIST_AVX512) (GFNI, BITALG).
 //!
 //! Reads of src and ranks and stores to `ranks[..n]` and the packed region are exact;
-//! right-side and bitmap stores of the partitions use [`RANK_SLACK`]. The decoder checks each
-//! op before running it, reads the input and writes exactly (masked tails), and its merges
-//! load 64 bytes at each child cursor, which stays inside the op's K-byte child, so they read
-//! at most 63 bytes past it ([`ARENA_SLACK`]).
+//! right-side and bitmap stores of the partitions use [`RANK_SLACK`].
 //!
-//! Zen 5 is sensitive to code shape beyond instruction counts: [`reg`] keeps merge sources in
-//! registers, [`disp_base`] gives the merge loads a displacement, and the partitions count
-//! their loop down.
+//! Zen 5 is sensitive to code shape beyond instruction counts: [`reg`] keeps the partitions'
+//! sources in registers, and the partitions count their loop down.
 
 use core::arch::asm;
 use core::arch::x86_64::*;
 
 use super::generic_pack::pack_generic;
-use super::{
-    ARENA_SLACK, FLAG_DST, HIST_SCRATCH, OP_CC, OP_COPY, OP_CV, OP_NAT, OP_V128, OP_V512, OP_VV,
-    Op, Program, R2S_LEN, RANK_SLACK, vert_split,
-};
+use super::{HIST_SCRATCH, RANK_SLACK, vert_split};
 
 // The partitions store 64 bytes at right+nr, which can end 63 bytes past right[n], and 8
 // bitmap bytes per 64 ranks.
@@ -68,21 +61,11 @@ fn ld(t: &[u8; 64]) -> __m512i {
     unsafe { _mm512_loadu_si512(t.as_ptr().cast()) }
 }
 
-/// # Safety
-/// p has 8 readable bytes.
-#[inline]
-unsafe fn read64(p: *const u8) -> u64 {
-    // SAFETY: the caller's; no alignment is required.
-    unsafe { p.cast::<u64>().read_unaligned() }
-}
-
-/// Keeps `v` in a register. Zen 4/5 give the zero-masking forms of VPCOMPRESSB and VPEXPANDB
-/// a dependency on the old destination (upstream issue #11, 46-54% on part_full/part_right),
-/// and their memory forms are slow (vv 636 ns instead of 442 in dec_avx512.go's A/B), so they
-/// merge into a register that holds a loaded, broadcast or freshly zeroed vector. LLVM folds a
-/// zero merge source into the zero-masking form and a single-use load into the memory form;
-/// this empty asm hides both from it. The same goes for the partitions' VPCMPUB, whose memory
-/// form made part_none 1.25x Go's time on a Ryzen 9 9950X.
+/// Keeps `v` in a register. Zen 4/5 give the zero-masking form of VPCOMPRESSB a dependency on
+/// the old destination (upstream issue #11, 46-54% on part_full/part_right), and run its memory
+/// form slowly, so it merges into a register that holds a loaded vector. LLVM folds a
+/// single-use load into the memory form; this empty asm hides it. The same goes for the
+/// partitions' VPCMPUB, whose memory form made part_none 1.25x Go's time on a Ryzen 9 9950X.
 #[inline]
 #[target_feature(
     enable = "avx512f,avx512bw,avx512vl,avx512vbmi,avx512vbmi2,avx512vpopcntdq,bmi2,popcnt"
@@ -377,8 +360,6 @@ trait Lanes: Copy {
     unsafe fn sll16(a: Self, n: usize) -> Self;
     unsafe fn srl16(a: Self, n: usize) -> Self;
     unsafe fn tern<const IMM: i32>(a: Self, b: Self, c: Self) -> Self;
-    /// Maps the codes in v (junk above bit D allowed) to symbols (Go `lookup`).
-    unsafe fn lookup<const D: usize>(v: Self, t: &Lut) -> Self;
 }
 
 impl Lanes for __m512i {
@@ -448,14 +429,6 @@ impl Lanes for __m512i {
     )]
     unsafe fn tern<const IMM: i32>(a: Self, b: Self, c: Self) -> Self {
         _mm512_ternarylogic_epi32::<IMM>(a, b, c)
-    }
-
-    #[inline]
-    #[target_feature(
-        enable = "avx512f,avx512bw,avx512vl,avx512vbmi,avx512vbmi2,avx512vpopcntdq,bmi2,popcnt"
-    )]
-    unsafe fn lookup<const D: usize>(v: Self, t: &Lut) -> Self {
-        lookup::<D>(v, t)
     }
 }
 
@@ -531,21 +504,6 @@ impl Lanes for __m128i {
     )]
     unsafe fn tern<const IMM: i32>(a: Self, b: Self, c: Self) -> Self {
         _mm_ternarylogic_epi32::<IMM>(a, b, c)
-    }
-
-    #[inline]
-    #[target_feature(
-        enable = "avx512f,avx512bw,avx512vl,avx512vbmi,avx512vbmi2,avx512vpopcntdq,bmi2,popcnt"
-    )]
-    unsafe fn lookup<const D: usize>(v: Self, t: &Lut) -> Self {
-        match D {
-            6 | 7 => _mm512_castsi512_si128(lookup::<D>(_mm512_castsi128_si512(v), t)),
-            5 => _mm256_castsi256_si128(_mm256_permutexvar_epi8(
-                _mm256_castsi128_si256(v),
-                _mm512_castsi512_si256(t.0[0]),
-            )),
-            _ => _mm_permutexvar_epi8(v, _mm512_castsi512_si128(t.0[0])),
-        }
     }
 }
 
@@ -833,555 +791,6 @@ unsafe fn nat_pack<const D: usize>(
             let p = group::<D>(&g, cb);
             let k = if D == 8 { kv } else { low((n * D).div_ceil(8)) };
             _mm512_mask_storeu_epi8(dst.cast(), k, p);
-        }
-    }
-}
-
-/// decPeriodic: `PERIODIC[D-2][i] = i & (2^D-1)`; VPERMB with it repeats a 2^D-entry table
-/// over 64 bytes, so lookups ignore the junk above bit D of an unmasked code.
-static PERIODIC: [[u8; 64]; 4] = table!(4, |d, i| (i & ((4 << d) - 1)) as u8);
-/// decNatShuf: qword k of the gather holds bytes D*k..D*k+7 = codes 8k..8k+7 at bit offsets
-/// 0, D, ..., 7D (natural layout), indexed by D-2.
-static NAT_SHUF: [[u8; 64]; 6] = table!(6, |d, i| ((d + 2) * (i / 8) + i % 8) as u8);
-/// decNatCtrl: the VPMULTISHIFTQB controls that move those offsets to the bottom of each
-/// byte (upstream pivco_huffman_avx512_flat.h flat_dN_unpack64), indexed by D-2.
-const NAT_CTRL: [u64; 6] = {
-    let mut c = [0; 6];
-    let mut d = 0;
-    while d < 6 {
-        let mut k = 0;
-        while k < 8 {
-            c[d] |= (((d + 2) * k) as u64) << (8 * k);
-            k += 1;
-        }
-        d += 1;
-    }
-    c
-};
-
-/// The flat lookup table at &R2S[P] (Go `table`, Z10..Z13): for D <= 5 in `0[0]`, repeated
-/// every 2^D bytes so that VPERMB ignores code bits >= D; D = 6: `0[0]`; D = 7: `0[..2]`
-/// (VPERMI2B ignores bit 7); D = 8: all four. Reads are exact.
-#[derive(Clone, Copy)]
-struct Lut([__m512i; 4]);
-
-impl Lut {
-    /// # Safety
-    /// The CPU has the tier's features; t has 2^D readable bytes.
-    #[inline]
-    #[target_feature(
-        enable = "avx512f,avx512bw,avx512vl,avx512vbmi,avx512vbmi2,avx512vpopcntdq,bmi2,popcnt"
-    )]
-    unsafe fn at<const D: usize>(t: *const u8) -> Lut {
-        let mut l = Lut([_mm512_setzero_si512(); 4]);
-        if D <= 5 {
-            // SAFETY: the mask selects the 2^D bytes.
-            let v = unsafe { _mm512_maskz_loadu_epi8(low(1 << D), t.cast()) };
-            l.0[0] = _mm512_permutexvar_epi8(ld(&PERIODIC[D - 2]), v);
-        } else {
-            for (i, v) in l.0.iter_mut().enumerate().take((1 << D) / 64) {
-                // SAFETY: 64*i+64 <= 2^D.
-                *v = unsafe { _mm512_loadu_si512(t.add(64 * i).cast()) };
-            }
-        }
-        l
-    }
-}
-
-/// Maps the 64 codes in v (junk above bit D allowed) to symbols (Go `lookup`): D = 7 with
-/// VPERMI2B, which ignores bit 7, else VPERMB over the repeated table.
-#[inline]
-#[target_feature(
-    enable = "avx512f,avx512bw,avx512vl,avx512vbmi,avx512vbmi2,avx512vpopcntdq,bmi2,popcnt"
-)]
-fn lookup<const D: usize>(v: __m512i, t: &Lut) -> __m512i {
-    if D == 7 {
-        _mm512_permutex2var_epi8(t.0[0], v, t.0[1])
-    } else {
-        _mm512_permutexvar_epi8(v, t.0[0])
-    }
-}
-
-/// The buffers of a [`Program`]. In-place merges alias their children, so every arena pointer
-/// derives from one `arena.as_mut_ptr()`.
-struct Bufs<'a> {
-    arena: *mut u8,
-    /// max(len(arena) - ARENA_SLACK, 0).
-    alim: usize,
-    dst: *mut u8,
-    dst_len: usize,
-    input: &'a [u8],
-    r2s: Option<&'a [u8; R2S_LEN]>,
-}
-
-/// Runs `p.ops`, checking each op before it runs, so a malformed op fails closed (Go
-/// `execAVX512`, `execAVX512Asm`). Returns the index of the first op that fails its checks.
-///
-/// # Safety
-/// The CPU has [`PIVCO_AVX512`](crate::cpu::PIVCO_AVX512).
-#[target_feature(
-    enable = "avx512f,avx512bw,avx512vl,avx512vbmi,avx512vbmi2,avx512vpopcntdq,bmi2,popcnt"
-)]
-pub(super) unsafe fn exec(p: &mut Program<'_>) -> Result<(), usize> {
-    let b = Bufs {
-        arena: p.arena.as_mut_ptr(),
-        alim: p.arena.len().saturating_sub(ARENA_SLACK),
-        dst: p.dst.as_mut_ptr(),
-        dst_len: p.dst.len(),
-        input: p.input,
-        r2s: p.r2s,
-    };
-    for (i, op) in p.ops.iter().enumerate() {
-        // SAFETY: b holds p's buffers; the caller's features.
-        if !unsafe { exec_op(&b, op) } {
-            return Err(i);
-        }
-    }
-    Ok(())
-}
-
-/// Checks op against the buffers and runs it; returns false if it fails a check.
-///
-/// # Safety
-/// The CPU has the tier's features; b describes live buffers.
-#[inline]
-#[target_feature(
-    enable = "avx512f,avx512bw,avx512vl,avx512vbmi,avx512vbmi2,avx512vpopcntdq,bmi2,popcnt"
-)]
-unsafe fn exec_op(b: &Bufs<'_>, op: &Op) -> bool {
-    let (k, d, bm) = (op.k as usize, usize::from(op.d), op.bm as usize);
-    // Output: Out+K must fit Dst, or the arena less its slack.
-    let (o, olim) = if op.flags & FLAG_DST != 0 {
-        (b.dst, b.dst_len)
-    } else {
-        (b.arena, b.alim)
-    };
-    if op.out as usize + k > olim {
-        return false;
-    }
-    // SAFETY: Out+K is inside the output buffer.
-    let o = unsafe { o.add(op.out as usize) };
-    // The n source bytes at Bm, if they are inside the input.
-    let input = |n: usize| b.input.get(bm..bm + n).map(<[u8]>::as_ptr);
-    // R2S[P..P+2^D], D <= 8, if R2S is set and holds it.
-    let lut = || {
-        let p = usize::from(op.p);
-        b.r2s
-            .and_then(|t| t.get(p..p + (1 << d)))
-            .map(<[u8]>::as_ptr)
-    };
-    match op.kind {
-        OP_VV | OP_CV => {
-            let (vv, l, r) = (op.kind == OP_VV, op.l as usize, op.r as usize);
-            let Some(bmp) = input(k.div_ceil(8)) else {
-                return false;
-            };
-            if (vv && l + k > b.alim) || r + k > b.alim {
-                return false;
-            }
-            // SAFETY: the output, the bitmap and the K-byte children are in range, and
-            // ARENA_SLACK covers the 64-byte loads at the child cursors.
-            let end = unsafe {
-                if vv {
-                    merge::<true>(o, k, bmp, b.arena, l, r, 0)
-                } else {
-                    merge::<false>(o, k, bmp, b.arena, 0, r, op.p)
-                }
-            };
-            end - r == op.kr as usize
-        }
-        OP_CC => {
-            let Some(bmp) = input(k.div_ceil(8)) else {
-                return false;
-            };
-            // SAFETY: the output and the bitmap are in range.
-            unsafe { merge_cc(o, k, bmp, op.p, op.q) };
-            true
-        }
-        OP_V512 | OP_V128 => {
-            let wide = op.kind == OP_V512;
-            let blk = if wide { 512 } else { 128 };
-            if !(2..=7).contains(&d) || k % blk != 0 {
-                return false;
-            }
-            let (Some(src), Some(t)) = (input(k * d / 8), lut()) else {
-                return false;
-            };
-            // SAFETY: the output, the region and the table are in range.
-            unsafe {
-                if wide {
-                    vert::<__m512i>(o, src, k / blk, d, t)
-                } else {
-                    vert::<__m128i>(o, src, k / blk, d, t)
-                }
-            };
-            true
-        }
-        OP_NAT => {
-            if !(2..=8).contains(&d) {
-                return false;
-            }
-            let (Some(src), Some(t)) = (input((k * d).div_ceil(8)), lut()) else {
-                return false;
-            };
-            // SAFETY: the output, the region and the table are in range.
-            unsafe { nat(o, src, k, d, t) };
-            true
-        }
-        OP_COPY => {
-            if d != 8 {
-                return false;
-            }
-            let Some(src) = input(k) else {
-                return false;
-            };
-            // SAFETY: the output and the region are in range.
-            unsafe { copy(o, src, k) };
-            true
-        }
-        _ => false,
-    }
-}
-
-/// Loads the bitmap's last ceil(rem/8) bytes exactly; returns its rem valid bits and the
-/// mask of rem lanes, 0 < rem < 64 (Go `tailMasks`).
-///
-/// # Safety
-/// The CPU has the tier's features; bm has ceil(rem/8) readable bytes.
-#[inline]
-#[target_feature(
-    enable = "avx512f,avx512bw,avx512vl,avx512vbmi,avx512vbmi2,avx512vpopcntdq,bmi2,popcnt"
-)]
-unsafe fn tail_bits(bm: *const u8, rem: usize) -> (u64, u64) {
-    // SAFETY: the mask selects the caller's bytes.
-    let b = unsafe { _mm_maskz_loadu_epi8(low(rem.div_ceil(8)) as u16, bm.cast()) };
-    let kv = low(rem);
-    (_mm_cvtsi128_si64(b) as u64 & kv, kv)
-}
-
-/// What the merge loads add to their cursors, on the base [`disp_base`] lowers by it.
-const DISP: usize = 64;
-
-/// Returns `a - DISP` through an empty asm, which LLVM can't see through, so the merge loads
-/// address the arena as base + cursor + DISP instead of folding DISP back into the base. Zen 5
-/// runs these loads faster with a displacement: Go's CV loop as inline asm took 283 ns with
-/// `[R13+R12+0]` (R13 needs one, as in Go's binary) or `[R8+R12+64]`, 309 ns with `[R8+R12]`;
-/// the merges went from 0.88 (CV) and 0.95 (VV) of Go's speed to 0.99 and 1.0.
-#[inline(always)]
-#[allow(
-    clippy::pointers_in_nomem_asm_block,
-    reason = "the asm only passes the pointer through a register"
-)]
-fn disp_base(a: *const u8) -> *const u8 {
-    let mut b = a.wrapping_sub(DISP);
-    // SAFETY: the template is empty; it neither reads nor writes memory.
-    unsafe { asm!("/* {0} */", inout(reg) b, options(pure, nomem, nostack, preserves_flags)) };
-    b
-}
-
-/// Returns 64 merged symbols: R's next ones in the lanes of t, and L's next ones (VV) or c
-/// (CV) in the lanes of nt (Go `expand`).
-///
-/// # Safety
-/// The CPU has the tier's features; b is [`disp_base`] of the arena, which has 64 readable
-/// bytes at r, and at l for VV.
-#[inline]
-#[target_feature(
-    enable = "avx512f,avx512bw,avx512vl,avx512vbmi,avx512vbmi2,avx512vpopcntdq,bmi2,popcnt"
-)]
-unsafe fn expand<const VV: bool>(
-    t: u64,
-    nt: u64,
-    b: *const u8,
-    l: usize,
-    r: usize,
-    c: __m512i,
-) -> __m512i {
-    // SAFETY: the caller's; b + DISP is the arena.
-    unsafe {
-        let z = if VV {
-            let lv = reg(_mm512_loadu_si512(b.wrapping_add(DISP + l).cast()));
-            _mm512_mask_expand_epi8(reg(_mm512_setzero_si512()), nt, lv)
-        } else {
-            c
-        };
-        _mm512_mask_expand_epi8(
-            z,
-            t,
-            reg(_mm512_loadu_si512(b.wrapping_add(DISP + r).cast())),
-        )
-    }
-}
-
-/// One full 64-symbol step of [`merge`] (Go `vvStep`, `cvStep`); a is [`disp_base`] of the
-/// arena.
-///
-/// # Safety
-/// As for [`expand`]; bm has 8 readable bytes and out 64 writable.
-#[inline]
-#[target_feature(
-    enable = "avx512f,avx512bw,avx512vl,avx512vbmi,avx512vbmi2,avx512vpopcntdq,bmi2,popcnt"
-)]
-unsafe fn step<const VV: bool>(
-    out: *mut u8,
-    bm: *const u8,
-    a: *const u8,
-    l: &mut usize,
-    r: &mut usize,
-    c: __m512i,
-) {
-    // SAFETY: the caller's.
-    unsafe {
-        let t = read64(bm);
-        _mm512_storeu_si512(out.cast(), expand::<VV>(t, !t, a, *l, *r, c));
-        let p = t.count_ones() as usize;
-        (*l, *r) = (*l + 64 - p, *r + p);
-    }
-}
-
-/// Merges k symbols, `out[j] = bit j ? R[r++] : L[l++]` (VV, upstream
-/// merge_vec_vec_avx512) or `bit j ? R[r++] : c` (CV, merge_cst_vec_avx512), and returns the
-/// right cursor (Go `mergeVV`, `mergeCV`, `mergeLoop`). The full steps run two per iteration.
-///
-/// # Safety
-/// The CPU has the tier's features; out has k writable bytes and bm ceil(k/8) readable; the
-/// arena at a has k+63 readable bytes at r, and at l for VV. Each step loads its children
-/// before it stores, so out may be one of them (in place).
-#[target_feature(
-    enable = "avx512f,avx512bw,avx512vl,avx512vbmi,avx512vbmi2,avx512vpopcntdq,bmi2,popcnt"
-)]
-unsafe fn merge<const VV: bool>(
-    mut out: *mut u8,
-    k: usize,
-    mut bm: *const u8,
-    a: *const u8,
-    mut l: usize,
-    mut r: usize,
-    c: u8,
-) -> usize {
-    let (c, a) = (_mm512_set1_epi8(c as i8), disp_base(a));
-    // SAFETY: the steps cover out[..k] and bm[..ceil(k/8)]; the cursors stay below the end
-    // of their child, so the 64-byte loads stay inside k+63 bytes.
-    unsafe {
-        for _ in 0..k >> 7 {
-            step::<VV>(out, bm, a, &mut l, &mut r, c);
-            step::<VV>(out.add(64), bm.add(8), a, &mut l, &mut r, c);
-            (out, bm) = (out.add(128), bm.add(16));
-        }
-        if k & 64 != 0 {
-            step::<VV>(out, bm, a, &mut l, &mut r, c);
-            (out, bm) = (out.add(64), bm.add(8));
-        }
-        let rem = k & 63;
-        if rem != 0 {
-            let (t, kv) = tail_bits(bm, rem);
-            _mm512_mask_storeu_epi8(out.cast(), kv, expand::<VV>(t, !t & kv, a, l, r, c));
-            r += t.count_ones() as usize;
-        }
-    }
-    r
-}
-
-/// Writes `out[j] = bit j ? q : p` (Go `mergeCC`; upstream merge_cst_cst_avx512).
-///
-/// # Safety
-/// The CPU has the tier's features; out has k writable bytes and bm ceil(k/8) readable.
-#[target_feature(
-    enable = "avx512f,avx512bw,avx512vl,avx512vbmi,avx512vbmi2,avx512vpopcntdq,bmi2,popcnt"
-)]
-unsafe fn merge_cc(mut out: *mut u8, k: usize, mut bm: *const u8, p: u8, q: u8) {
-    let (pv, qv) = (_mm512_set1_epi8(p as i8), _mm512_set1_epi8(q as i8));
-    // SAFETY: the steps cover out[..k] and bm[..ceil(k/8)].
-    unsafe {
-        for _ in 0..k >> 6 {
-            _mm512_storeu_si512(out.cast(), _mm512_mask_blend_epi8(read64(bm), pv, qv));
-            (out, bm) = (out.add(64), bm.add(8));
-        }
-        let rem = k & 63;
-        if rem != 0 {
-            let (t, kv) = tail_bits(bm, rem);
-            _mm512_mask_storeu_epi8(out.cast(), kv, _mm512_mask_blend_epi8(t, pv, qv));
-        }
-    }
-}
-
-/// Unpacks `blocks` > 0 vertical blocks of W::N lanes and depth d (Go `vertical`).
-///
-/// # Safety
-/// The CPU has the tier's features; 2 <= d <= 7; src has blocks*N*d readable bytes, out
-/// blocks*8*N writable, and t 2^d readable.
-#[target_feature(
-    enable = "avx512f,avx512bw,avx512vl,avx512vbmi,avx512vbmi2,avx512vpopcntdq,bmi2,popcnt"
-)]
-unsafe fn vert<W: Lanes>(o: *mut u8, src: *const u8, blocks: usize, d: usize, t: *const u8) {
-    if blocks == 0 {
-        return;
-    }
-    // SAFETY: the caller's.
-    unsafe {
-        match d {
-            2 => vert_dec::<W, 2>(o, src, blocks, t),
-            3 => vert_dec::<W, 3>(o, src, blocks, t),
-            4 => vert_dec::<W, 4>(o, src, blocks, t),
-            5 => vert_dec::<W, 5>(o, src, blocks, t),
-            6 => vert_dec::<W, 6>(o, src, blocks, t),
-            _ => vert_dec::<W, 7>(o, src, blocks, t),
-        }
-    }
-}
-
-/// Unpacks the vertical blocks (Go `vertBlock`; upstream vert512_merge_zmm_d* and
-/// vert_merge_x86_d*). Lane l of a block holds its 8 codes in D column bytes at a stride of
-/// N lanes; step s extracts bit field s*D of every lane, which is codes s*N .. s*N+N-1.
-///
-/// # Safety
-/// As for [`vert`].
-#[inline]
-#[target_feature(
-    enable = "avx512f,avx512bw,avx512vl,avx512vbmi,avx512vbmi2,avx512vpopcntdq,bmi2,popcnt"
-)]
-unsafe fn vert_dec<W: Lanes, const D: usize>(
-    mut out: *mut u8,
-    mut src: *const u8,
-    blocks: usize,
-    t: *const u8,
-) {
-    // SAFETY: the caller's.
-    let t = unsafe { Lut::at::<D>(t) };
-    for _ in 0..blocks {
-        // SAFETY: the caller's, for this block.
-        unsafe {
-            let mut c = [W::splat(0); 8];
-            for (j, c) in c.iter_mut().enumerate().take(D) {
-                *c = W::load(src.add(j * W::N));
-            }
-            unroll8!(s => {
-                let (j, off) = ((s * D) >> 3, (s * D) & 7);
-                let v = if off == 0 {
-                    c[j]
-                } else if off + D <= 8 {
-                    W::srl16(c[j], off)
-                } else {
-                    // Bits off..7 of column j, then bits 0..off+D-9 of column j+1: the 16-bit
-                    // shifts leave the neighbour byte's bits where the other column's go, so
-                    // select per bit (0xE4: mask ? a : b) with the mask 0xFF>>off.
-                    let (a, b) = (W::srl16(c[j], off), W::sll16(c[j + 1], 8 - off));
-                    W::tern::<0xE4>(a, b, W::splat(0xFF >> off))
-                };
-                W::store(out.add(s * W::N), W::lookup::<D>(v, &t));
-            });
-            (src, out) = (src.add(W::N * D), out.add(8 * W::N));
-        }
-    }
-}
-
-/// Decodes k codes of depth d in the natural layout (Go `natural`).
-///
-/// # Safety
-/// The CPU has the tier's features; 2 <= d <= 8; src has ceil(k*d/8) readable bytes, out k
-/// writable and t 2^d readable.
-#[target_feature(
-    enable = "avx512f,avx512bw,avx512vl,avx512vbmi,avx512vbmi2,avx512vpopcntdq,bmi2,popcnt"
-)]
-unsafe fn nat(o: *mut u8, src: *const u8, k: usize, d: usize, t: *const u8) {
-    // SAFETY: the caller's.
-    unsafe {
-        match d {
-            2 => nat_dec::<2>(o, src, k, t),
-            3 => nat_dec::<3>(o, src, k, t),
-            4 => nat_dec::<4>(o, src, k, t),
-            5 => nat_dec::<5>(o, src, k, t),
-            6 => nat_dec::<6>(o, src, k, t),
-            7 => nat_dec::<7>(o, src, k, t),
-            _ => nat_dec::<8>(o, src, k, t),
-        }
-    }
-}
-
-/// The natural-layout kernel for depth D: 64 codes per step from an exact masked load of
-/// 8*D bytes; the last step loads ceil(rest*D/8) bytes and stores rest symbols (upstream
-/// merge_flat_avx512 64-wide loops, without the fast/safe split).
-///
-/// # Safety
-/// As for [`nat`].
-#[inline]
-#[target_feature(
-    enable = "avx512f,avx512bw,avx512vl,avx512vbmi,avx512vbmi2,avx512vpopcntdq,bmi2,popcnt"
-)]
-unsafe fn nat_dec<const D: usize>(
-    mut out: *mut u8,
-    mut src: *const u8,
-    mut k: usize,
-    t: *const u8,
-) {
-    // SAFETY: the caller's.
-    let t = unsafe { Lut::at::<D>(t) };
-    let (shuf, ctrl) = if D < 8 {
-        let i = D - 2;
-        (ld(&NAT_SHUF[i]), _mm512_set1_epi64(NAT_CTRL[i] as i64))
-    } else {
-        (_mm512_setzero_si512(), _mm512_setzero_si512())
-    };
-    let kd = low(8 * D);
-    // SAFETY: each step reads its 8*D region bytes (ceil(rest*D/8) in the tail) and writes
-    // its 64 (rest) symbols.
-    unsafe {
-        while k >= 64 {
-            let z = if D < 8 {
-                _mm512_maskz_loadu_epi8(kd, src.cast())
-            } else {
-                _mm512_loadu_si512(src.cast())
-            };
-            _mm512_storeu_si512(out.cast(), nat_codes::<D>(z, shuf, ctrl, &t));
-            (src, out, k) = (src.add(8 * D), out.add(64), k - 64);
-        }
-        if k > 0 {
-            let kv = low(k);
-            let kz = if D < 8 { low((k * D).div_ceil(8)) } else { kv };
-            let z = _mm512_maskz_loadu_epi8(kz, src.cast());
-            _mm512_mask_storeu_epi8(out.cast(), kv, nat_codes::<D>(z, shuf, ctrl, &t));
-        }
-    }
-}
-
-/// Turns the region bytes in z into 64 symbols (Go `natCodes`).
-#[inline]
-#[target_feature(
-    enable = "avx512f,avx512bw,avx512vl,avx512vbmi,avx512vbmi2,avx512vpopcntdq,bmi2,popcnt"
-)]
-fn nat_codes<const D: usize>(z: __m512i, shuf: __m512i, ctrl: __m512i, t: &Lut) -> __m512i {
-    if D < 8 {
-        let z = _mm512_multishift_epi64_epi8(ctrl, _mm512_permutexvar_epi8(shuf, z));
-        return lookup::<D>(z, t);
-    }
-    // 256 entries: two 128-entry VPERMI2B lookups, picked by bit 7.
-    lookup256(z, &t.0)
-}
-
-/// D = 8 flat: the codes are the symbols (Go `copyFlat`; upstream merge_flat_d8_avx512).
-///
-/// # Safety
-/// The CPU has the tier's features; src has k readable bytes and out k writable.
-#[target_feature(
-    enable = "avx512f,avx512bw,avx512vl,avx512vbmi,avx512vbmi2,avx512vpopcntdq,bmi2,popcnt"
-)]
-unsafe fn copy(mut out: *mut u8, mut src: *const u8, mut k: usize) {
-    // SAFETY: each step copies bytes that remain of the k.
-    unsafe {
-        while k >= 256 {
-            let v = load4(src);
-            for (i, &v) in v.iter().enumerate() {
-                _mm512_storeu_si512(out.add(64 * i).cast(), v);
-            }
-            (src, out, k) = (src.add(256), out.add(256), k - 256);
-        }
-        while k >= 64 {
-            _mm512_storeu_si512(out.cast(), _mm512_loadu_si512(src.cast()));
-            (src, out, k) = (src.add(64), out.add(64), k - 64);
-        }
-        if k > 0 {
-            let kv = low(k);
-            _mm512_mask_storeu_epi8(out.cast(), kv, _mm512_maskz_loadu_epi8(kv, src.cast()));
         }
     }
 }

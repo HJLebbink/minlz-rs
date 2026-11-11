@@ -18,9 +18,11 @@
 //! Rust may put two copies of a naked function in one assembly unit (two crate versions under
 //! LTO), so the body must define no named symbol or label. Each `.LBB` label becomes a numeric
 //! local label, and each reference to it becomes `Nf` or `Nb` by where the label lies. The
-//! constant pool entries (`.LCPI`) that the body uses follow the body, in the same section, under
-//! numeric labels of their own. All numbers end in 2, so the x86 Intel syntax never reads one as
-//! binary. CFI directives are dropped.
+//! functions of the same assembly that the kernel calls follow its body, each under a numeric
+//! label that its calls name; a call to anything else is an error. The constant pool entries
+//! (`.LCPI`) that the bodies use come last, in the same section, under numeric labels of their own.
+//! All numbers end in 2, so the x86 Intel syntax never reads one as binary. CFI directives are
+//! dropped.
 
 use std::collections::HashMap;
 
@@ -30,32 +32,25 @@ struct Pool<'a> {
     data: Vec<&'a str>,
 }
 
-/// Returns the body of the function `name` in `asm`.
+/// Returns the body of the function `name` in `asm`, followed by the functions it calls.
 pub fn extract(asm: &str, name: &str) -> Result<String, String> {
-    let start = format!("{name}:");
     let mut pools: HashMap<&str, Pool> = HashMap::new();
     let mut align = "";
     let mut pool: Option<&str> = None;
-    let mut lines = Vec::new();
-    // Each label's number and the index of the line where it lies.
-    let mut labels: HashMap<&str, (u32, usize)> = HashMap::new();
-    let mut n_labels = 0;
-    let mut found = false;
-    let mut inside = false;
+    // The lines of each function, from its label on.
+    let mut functions: HashMap<&str, Vec<&str>> = HashMap::new();
+    let mut inside: Option<&str> = None;
     for line in asm.lines() {
         let directive = line.trim_start_matches([' ', '\t']);
-        if line.starts_with(&start) {
-            (inside, found) = (true, true);
-        } else if inside {
+        if let Some(f) = inside {
             if line.starts_with(".Lfunc_end") {
-                inside = false;
+                inside = None;
             } else if !directive.is_empty() && !directive.starts_with(".cfi_") {
-                if let Some(label) = definition(line, ".LBB") {
-                    n_labels += 1;
-                    labels.insert(label, (10 * n_labels - 8, lines.len()));
-                }
-                lines.push(line);
+                functions.get_mut(f).expect("f is a function").push(line);
             }
+        } else if let Some(f) = function(line) {
+            functions.insert(f, vec![line]);
+            inside = Some(f);
         } else if let Some(label) = definition(line, ".LCPI") {
             pools.insert(
                 label,
@@ -74,15 +69,46 @@ pub fn extract(asm: &str, name: &str) -> Result<String, String> {
             pool = None;
         }
     }
-    if !found {
+    if !functions.contains_key(name) {
         return Err(format!("no function {name}"));
     }
-    // The body is the whole kernel: a call would name a function outside it.
-    if let Some(call) = lines.iter().find(|l| {
-        let mnemonic = l.split_whitespace().next().unwrap_or("");
-        matches!(mnemonic, "call" | "bl" | "blr")
-    }) {
-        return Err(format!("{name} calls out of its body: {}", call.trim()));
+    // The kernel and the functions it calls, in the order of their first call.
+    let mut order = vec![name];
+    let mut k = 0;
+    while k < order.len() {
+        for line in &functions[order[k]] {
+            let Some(callee) = callee(line) else {
+                continue;
+            };
+            if !functions.contains_key(callee) {
+                return Err(format!(
+                    "{} calls out of its body: {}",
+                    order[k],
+                    line.trim()
+                ));
+            }
+            if !order.contains(&callee) {
+                order.push(callee);
+            }
+        }
+        k += 1;
+    }
+    // The lines of the body, without the kernel's own label, and each label's number and the index
+    // of the line where it lies.
+    let mut lines = Vec::new();
+    let mut labels: HashMap<&str, (u32, usize)> = HashMap::new();
+    let mut n_labels = 0;
+    for (k, f) in order.iter().enumerate() {
+        for (j, line) in functions[f].iter().enumerate() {
+            if j == 0 && k == 0 {
+                continue;
+            }
+            if let Some(label) = definition(line, ".LBB").or((j == 0).then_some(*f)) {
+                n_labels += 1;
+                labels.insert(label, (10 * n_labels - 8, lines.len()));
+            }
+            lines.push(*line);
+        }
     }
 
     let mut out = String::new();
@@ -90,6 +116,16 @@ pub fn extract(asm: &str, name: &str) -> Result<String, String> {
     for (i, line) in lines.iter().enumerate() {
         if let Some(label) = definition(line, ".LBB") {
             out += &format!("{}:\n", labels[label].0);
+            continue;
+        }
+        if let Some(f) = function(line) {
+            out += &format!("\t.p2align\t4\n{}:\n", labels[f].0);
+            continue;
+        }
+        if let Some(f) = callee(line) {
+            let at = line.rfind(f).expect("the line names its callee");
+            let (n, def) = labels[f];
+            out += &format!("{}{n}{}\n", &line[..at], if def > i { "f" } else { "b" });
             continue;
         }
         let mut rest = *line;
@@ -134,6 +170,34 @@ pub fn extract(asm: &str, name: &str) -> Result<String, String> {
     Ok(out)
 }
 
+/// Returns the function that line starts: a name and a colon at the start of the line, which is
+/// not a label of llc's own (`.L`).
+fn function(line: &str) -> Option<&str> {
+    let name = line.strip_suffix(':')?;
+    let ok = !name.starts_with(".L")
+        && !name.is_empty()
+        && name
+            .bytes()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'_' | b'.' | b'$'));
+    ok.then_some(name)
+}
+
+/// Returns the function that line calls or jumps to: the target of a call or branch that is not a
+/// label of llc's own (`.L`), without the `@PLT` of a call through the PLT.
+fn callee(line: &str) -> Option<&str> {
+    let mut words = line.split_whitespace();
+    let mnemonic = words.next()?;
+    let branch = matches!(mnemonic, "call" | "bl" | "blr" | "b")
+        || mnemonic.starts_with('j')
+        || mnemonic.starts_with("b.");
+    if !branch {
+        return None;
+    }
+    let target = words.last().unwrap_or(mnemonic);
+    let target = target.strip_suffix("@PLT").unwrap_or(target);
+    (!target.starts_with(".L")).then_some(target)
+}
+
 /// Returns the label that line defines, when it starts with prefix, digits and a colon.
 fn definition<'a>(line: &'a str, prefix: &str) -> Option<&'a str> {
     let n = label_len(line, prefix)?;
@@ -172,4 +236,25 @@ fn is_data(directive: &str) -> bool {
             .strip_prefix(d)
             .is_some_and(|rest| rest.starts_with([' ', '\t']))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::extract;
+
+    /// A kernel that calls a function of the same assembly gets that function's body after its
+    /// own, under a numeric label that the call names; a call to anything else is an error.
+    #[test]
+    fn calls() {
+        let asm = "\t.type\tkernel,@function\nkernel:\n\tcall\twork\n\tret\n.Lfunc_end0:\n\
+                   \t.type\twork,@function\nwork:\n\tjmp\t.LBB1_1\n.LBB1_1:\n\tret\n.Lfunc_end1:\n";
+        let body = extract(asm, "kernel").expect("work is in the assembly");
+        assert_eq!(
+            body,
+            "\tcall\t2f\n\tret\n\t.p2align\t4\n2:\n\tjmp\t12f\n12:\n\tret\n"
+        );
+        let out = asm.replace("call\twork", "call\tmemcpy@PLT");
+        let err = extract(&out, "kernel").expect_err("memcpy is not in the assembly");
+        assert!(err.contains("calls out of its body"), "{err}");
+    }
 }

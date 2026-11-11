@@ -124,6 +124,19 @@ const BLOCK: [(&str, &str, &str, Arch, &str); 3] = [
     ("neon", "neon", EXEC8, Arch::Arm, "-mattr=+v8a,+neon"),
 ];
 
+/// The targets of the pivco kernels: the output folder, the target file in `mlir/pivco/`, the
+/// architecture and the features, each among those that `pivco::kernel` checks for its tier.
+const PIVCO: [(&str, &str, Arch, &str); 3] = [
+    ("avx2", "x86_256", Arch::X86, "-mattr=+avx2,+bmi2,+popcnt"),
+    (
+        "avx512",
+        "x86_512",
+        Arch::X86,
+        "-mattr=+avx512f,+avx512bw,+avx512vl,+avx512vbmi,+avx512vbmi2,+avx512vpopcntdq,+bmi2,+popcnt,-prefer-256-bit",
+    ),
+    ("neon", "neon", Arch::Arm, "-mattr=+v8a,+neon"),
+];
+
 /// The passes that take the kernels from the dialects they are written in to the LLVM dialect.
 const PASSES: [&str; 11] = [
     "--inline",
@@ -241,6 +254,25 @@ fn mlir() -> Result<(), String> {
                 &read(&format!("exec/{file}.mlir"))?,
                 &exec,
                 &read(structure)?,
+            ]
+            .concat(),
+        });
+    }
+
+    let pivco = read("pivco.mlir")?;
+    for (target, file, arch, mattr) in PIVCO {
+        lowerings.push(Lowering {
+            kernel: "pivco",
+            source: "pivco.mlir",
+            target,
+            out: src.join("pivco/kernel/mlir").join(target),
+            arch,
+            mattr,
+            functions: &["exec"],
+            mlir: [
+                common.as_str(),
+                &read(&format!("pivco/{file}.mlir"))?,
+                &pivco,
             ]
             .concat(),
         });

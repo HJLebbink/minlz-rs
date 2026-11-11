@@ -29,6 +29,14 @@ mod generic;
 mod generic_exec;
 mod generic_pack;
 mod layout;
+#[cfg(all(
+    any(
+        target_arch = "x86_64",
+        all(target_arch = "aarch64", target_endian = "little")
+    ),
+    not(miri)
+))]
+mod mlir;
 #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
 mod neon;
 
@@ -368,13 +376,15 @@ impl Tier {
         match self {
             #[cfg(all(target_arch = "x86_64", not(miri)))]
             // SAFETY: the guard checked the CPU features.
-            Tier::Avx512 if cpu::has(cpu::PIVCO_AVX512) => unsafe { avx512::exec(p) },
+            Tier::Avx512 if cpu::has(cpu::PIVCO_AVX512) => unsafe {
+                mlir::exec(mlir::Isa::Avx512, p)
+            },
             #[cfg(all(target_arch = "x86_64", not(miri)))]
             // SAFETY: the guard checked the CPU features.
-            Tier::Avx2 if cpu::has(cpu::PIVCO_AVX2) => unsafe { avx2::exec_avx2(p) },
+            Tier::Avx2 if cpu::has(cpu::PIVCO_AVX2) => unsafe { mlir::exec(mlir::Isa::Avx2, p) },
             #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
             // SAFETY: the guard checked the CPU features.
-            Tier::Neon if cpu::has(cpu::NEON) => unsafe { neon::exec_neon(p) },
+            Tier::Neon if cpu::has(cpu::NEON) => unsafe { mlir::exec(mlir::Isa::Neon, p) },
             _ => generic_exec::exec_generic(p),
         }
     }
