@@ -87,8 +87,8 @@
 	sub	x27, x24, x8
 	ldr	x19, [x11, x19]
 	lsr	x19, x19, x25
-	and	w19, w26, w19
-	adds	x19, x19, x26, lsr #40
+	and	w19, w19, w26, lsr #8
+	adds	x19, x19, x26, lsr #32
 	csel	x25, x21, x19, eq
 	cmp	x21, x27
 	csel	x19, x21, x27, lo
@@ -119,13 +119,12 @@
 	cmp	x27, #33
 	b.hs	302f
 62:
-	lsr	x26, x26, #32
+	add	x23, x23, w26, uxtb
+	add	x26, x24, x27
 	add	x22, x22, x21
 	ubfx	x21, x20, #8, #8
 	//APP
 	//NO_APP
-	add	x23, x23, w26, uxtb
-	add	x26, x24, x27
 	ldr	x24, [x12, x21, lsl #3]
 	ldp	q0, q1, [x22]
 	lsr	x21, x23, #3
@@ -133,8 +132,8 @@
 	ldr	x21, [x11, x21]
 	lsr	x21, x21, x27
 	sub	x27, x26, x8
-	and	w21, w24, w21
-	adds	x21, x21, x24, lsr #40
+	and	w21, w21, w24, lsr #8
+	adds	x21, x21, x24, lsr #32
 	csel	x21, x25, x21, eq
 	cmp	x25, x27
 	csel	x25, x25, x27, lo
@@ -162,22 +161,21 @@
 	cmp	x27, #33
 	b.hs	342f
 92:
-	lsr	x24, x24, #32
-	add	x26, x26, x27
 	add	x24, x23, w24, uxtb
 	add	x23, x22, x25
 	ubfx	x22, x20, #16, #8
 	//APP
 	//NO_APP
 	ldr	x25, [x12, x22, lsl #3]
+	add	x26, x26, x27
 	ldp	q0, q1, [x23]
 	lsr	x22, x24, #3
 	and	x27, x24, #0x7
 	ldr	x22, [x11, x22]
 	lsr	x22, x22, x27
 	sub	x27, x26, x8
-	and	w22, w25, w22
-	adds	x22, x22, x25, lsr #40
+	and	w22, w22, w25, lsr #8
+	adds	x22, x22, x25, lsr #32
 	csel	x22, x21, x22, eq
 	cmp	x21, x27
 	csel	x21, x21, x27, lo
@@ -206,22 +204,21 @@
 	cmp	x27, #33
 	b.hs	382f
 122:
-	lsr	x25, x25, #32
+	add	x24, x24, w25, uxtb
 	add	x23, x23, x21
 	lsr	w21, w20, #24
 	//APP
 	//NO_APP
-	add	x26, x26, x27
-	add	x24, x24, w25, uxtb
 	ldr	x25, [x12, x21, lsl #3]
+	add	x26, x26, x27
 	ldp	q0, q1, [x23]
 	lsr	x21, x24, #3
 	and	x27, x24, #0x7
 	ldr	x21, [x11, x21]
 	lsr	x21, x21, x27
 	sub	x27, x26, x8
-	and	w21, w25, w21
-	adds	x21, x21, x25, lsr #40
+	and	w21, w21, w25, lsr #8
+	adds	x21, x21, x25, lsr #32
 	csel	x21, x22, x21, eq
 	cmp	x22, x27
 	csel	x22, x22, x27, lo
@@ -250,22 +247,21 @@
 	cmp	x27, #33
 	b.hs	422f
 152:
-	lsr	x25, x25, #32
+	add	x24, x24, w25, uxtb
 	add	x23, x23, x22
 	ubfx	x22, x20, #32, #8
 	//APP
 	//NO_APP
-	add	x26, x26, x27
-	add	x24, x24, w25, uxtb
 	ldr	x25, [x12, x22, lsl #3]
+	add	x26, x26, x27
 	ldp	q0, q1, [x23]
 	lsr	x22, x24, #3
 	and	x27, x24, #0x7
 	ldr	x22, [x11, x22]
 	lsr	x22, x22, x27
 	sub	x27, x26, x8
-	and	w22, w25, w22
-	adds	x22, x22, x25, lsr #40
+	and	w22, w22, w25, lsr #8
+	adds	x22, x22, x25, lsr #32
 	csel	x22, x21, x22, eq
 	cmp	x21, x27
 	csel	x21, x21, x27, lo
@@ -294,22 +290,21 @@
 	cmp	x27, #33
 	b.hs	462f
 182:
-	lsr	x25, x25, #32
+	add	x24, x24, w25, uxtb
 	add	x23, x23, x21
 	ubfx	x21, x20, #40, #8
 	//APP
 	//NO_APP
-	add	x26, x26, x27
-	add	x24, x24, w25, uxtb
 	ldr	x25, [x12, x21, lsl #3]
+	add	x26, x26, x27
 	ldp	q0, q1, [x23]
 	lsr	x21, x24, #3
 	and	x27, x24, #0x7
 	ldr	x21, [x11, x21]
 	lsr	x21, x21, x27
 	sub	x27, x26, x8
-	and	w21, w25, w21
-	adds	x21, x21, x25, lsr #40
+	and	w21, w21, w25, lsr #8
+	adds	x21, x21, x25, lsr #32
 	csel	x21, x22, x21, eq
 	cmp	x22, x27
 	csel	x22, x22, x27, lo
@@ -338,22 +333,21 @@
 	cmp	x27, #33
 	b.hs	502f
 212:
-	lsr	x25, x25, #32
-	add	x26, x26, x27
 	add	x25, x24, w25, uxtb
 	add	x24, x23, x22
 	ubfx	x22, x20, #48, #8
 	//APP
 	//NO_APP
 	ldr	x23, [x12, x22, lsl #3]
+	add	x26, x26, x27
 	ldp	q0, q1, [x24]
 	lsr	x22, x25, #3
 	and	x27, x25, #0x7
 	ldr	x22, [x11, x22]
 	lsr	x22, x22, x27
 	sub	x27, x26, x8
-	and	w22, w23, w22
-	adds	x22, x22, x23, lsr #40
+	and	w22, w22, w23, lsr #8
+	adds	x22, x22, x23, lsr #32
 	csel	x22, x21, x22, eq
 	cmp	x21, x27
 	csel	x21, x21, x27, lo
@@ -382,22 +376,21 @@
 	cmp	x27, #33
 	b.hs	542f
 242:
-	lsr	x23, x23, #32
+	add	x23, x25, w23, uxtb
+	add	x25, x24, x21
 	lsr	x20, x20, #56
 	//APP
 	//NO_APP
 	ldr	x20, [x12, x20, lsl #3]
 	add	x26, x26, x27
-	add	x23, x25, w23, uxtb
-	add	x25, x24, x21
 	ldp	q0, q1, [x25]
 	lsr	x21, x23, #3
 	and	x24, x23, #0x7
 	ldr	x21, [x11, x21]
 	lsr	x21, x21, x24
 	sub	x24, x26, x8
-	and	w21, w20, w21
-	adds	x21, x21, x20, lsr #40
+	and	w21, w21, w20, lsr #8
+	adds	x21, x21, x20, lsr #32
 	csel	x21, x22, x21, eq
 	cmp	x22, x24
 	csel	x22, x22, x24, lo
@@ -426,12 +419,11 @@
 	cmp	x19, #33
 	b.hs	582f
 272:
-	lsr	x20, x20, #32
+	add	x23, x23, w20, uxtb
 	add	x24, x22, x19
 	add	x22, x25, x7
 	sub	x2, x2, #8
 	add	x6, x6, #8
-	add	x23, x23, w20, uxtb
 	cmp	x10, #7
 	b.hi	2b
 	b	772f
@@ -1378,8 +1370,8 @@
 	mov	x1, x21
 	ldr	x2, [x11, x2]
 	lsr	x2, x2, x3
-	and	w2, w17, w2
-	adds	x2, x2, x17, lsr #40
+	and	w2, w2, w17, lsr #8
+	adds	x2, x2, x17, lsr #32
 	csel	x21, x21, x2, eq
 	sub	x2, x24, x8
 	cmp	x1, x2
@@ -1410,13 +1402,12 @@
 	cmp	x3, #33
 	b.hs	862f
 832:
-	lsr	x17, x17, #32
+	add	x23, x23, w17, uxtb
 	add	x24, x2, x3
 	add	x22, x22, x1
 	subs	x10, x10, #1
 	lsr	x15, x15, #8
 	lsr	x13, x13, #8
-	add	x23, x23, w17, uxtb
 	lsr	x14, x14, #8
 	b.ne	792b
 	b	902f

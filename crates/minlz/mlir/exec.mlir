@@ -18,8 +18,8 @@
 // The structure file gives @run(a: !p, delta: i1, flat: i1), which runs the operations in
 // batches and copies each with @op.
 //
-// tab points to two tables. The first has a word per offset symbol, for exec8.mlir: the mask of
-// its raw bits in bits 0 to 31, their number in bits 32 to 39 and the base offset in bits 40 to
+// tab points to two tables. The first has a word per offset symbol, for exec8.mlir: the number
+// of its raw bits in bits 0 to 7, their mask in bits 8 to 31 and the base offset in bits 32 to
 // 63. Symbol 0 is all zero: the batch gives it to repeats, whose offset is then 0, which keeps the
 // last one. The second, from byte 2048, has 64 rows of 32 bytes for repeats: byte i of row r is
 // i % r for r from 2 to 31, 0 for rows 0 and 1, and i for rows 32 and up.

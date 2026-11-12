@@ -138,8 +138,8 @@ pub(super) unsafe fn off(isa: Isa, offc: &[u8]) -> (usize, usize, bool) {
 /// The tables of the operation loops (see `crates/minlz/mlir/exec.mlir`).
 #[repr(C, align(64))]
 struct Tables {
-    /// Per offset symbol: the mask of its raw bits in bits 0 to 31, their number in bits 32 to
-    /// 39 and the base offset in bits 40 to 63. Symbol 0 is all zero.
+    /// Per offset symbol: the number of its raw bits in bits 0 to 7, their mask in bits 8 to 31
+    /// and the base offset in bits 32 to 63. Symbol 0 is all zero.
     off: [u64; 256],
     /// Byte i of row r is i % r for r from 2 to 31, 0 for rows 0 and 1, and i for rows 32 and up:
     /// the indexes that repeat the bytes before an offset r. A delta reference at position 0
@@ -152,7 +152,7 @@ static TABLES: Tables = {
     let mut s = 1;
     while s < 256 {
         let (v, nb) = (OFF_TAB[s] as u64, OFF_TAB[s] as u64 >> 24);
-        off[s] = ((1 << nb) - 1) | nb << 32 | (v & 0xffffff) << 40;
+        off[s] = nb | ((1 << nb) - 1) << 8 | (v & 0xffffff) << 32;
         s += 1;
     }
     let mut rows = [[0u8; 32]; 64];
@@ -334,7 +334,7 @@ mod tests {
         for (s, &e) in TABLES.off.iter().enumerate().skip(1) {
             let nb = OFF_TAB[s] >> 24;
             assert_eq!(
-                (e >> 40, (e >> 32) as u8 as u32, e as u32),
+                (e >> 32, e as u8 as u32, e as u32 >> 8),
                 (u64::from(OFF_TAB[s] & 0xffffff), nb, (1 << nb) - 1),
                 "symbol {s}"
             );
