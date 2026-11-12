@@ -23,7 +23,11 @@
 //! It needs the LLVM and MLIR 23 tools `mlir-opt`, `mlir-translate`, `opt` and `llc`, in the
 //! directory `$LLVM_BIN` or on `PATH`. LLVM's Windows release includes them. On Debian and Ubuntu
 //! they are the apt.llvm.org packages `llvm-23` and `mlir-23-tools`.
+//!
+//! `cargo xtask bench <rev>` compares the speed of the working tree with commit `rev`; see
+//! `bench.rs`.
 
+mod bench;
 mod body;
 mod crc32c;
 
@@ -36,7 +40,8 @@ fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
     let result = match args.iter().map(String::as_str).collect::<Vec<_>>()[..] {
         ["mlir"] => mlir(),
-        _ => Err("usage: cargo xtask mlir".to_string()),
+        ["bench", ref rest @ ..] => bench::bench(rest),
+        _ => Err("usage: cargo xtask mlir | cargo xtask bench <rev> [...]".to_string()),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,
