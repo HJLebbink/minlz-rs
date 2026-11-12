@@ -1,26 +1,28 @@
 // minlz_exec_plain of crates/minlz/mlir/exec8.mlir for neon, written by
 // cargo xtask mlir. Do not edit.
-	ldr	x8, [x0, #64]
+	ldr	x10, [x0, #64]
 	mov	x16, #72340172838076673
 	//APP
 	//NO_APP
-	cbz	x8, 712f
+	cbz	x10, 802f
 	stp	x29, x30, [sp, #-96]!
-	ldp	x15, x17, [x0, #16]
-	ldp	x1, x11, [x0, #32]
 	stp	x24, x23, [sp, #48]
+	ldp	x8, x9, [x0]
+	ldp	x15, x17, [x0, #16]
+	ldp	x23, x14, [x0, #72]
 	stp	x22, x21, [sp, #64]
-	ldp	x9, x10, [x0]
+	ldp	x13, x21, [x0, #88]
+	ldp	x1, x11, [x0, #32]
 	ldr	x12, [x0, #56]
+	stp	x28, x27, [sp, #16]
+	add	x24, x8, x14
 	ldr	x14, [x15]
+	add	x22, x9, x13
 	ldr	d0, [x17]
-	ldp	x22, x21, [x0, #88]
-	ldp	x23, x24, [x0, #72]
+	stp	x26, x25, [sp, #32]
 	and	x13, x16, x14, lsr #1
 	bic	x2, x16, x14
 	and	x14, x14, x16
-	stp	x28, x27, [sp, #16]
-	stp	x26, x25, [sp, #32]
 	stp	x20, x19, [sp, #80]
 	mul	x4, x13, x16
 	sub	x3, x4, x13
@@ -36,15 +38,16 @@
 	ldr	d0, [x1]
 	tbl	v0.8b, { v0.16b }, v1.8b
 	fmov	x14, d0
-	cmp	x8, #8
-	b.lo	592f
+	cmp	x10, #8
+	b.lo	672f
 	lsr	x3, x3, #56
 	lsr	x4, x4, #56
+	mov	w5, #1
 	mov	x2, xzr
 	mov	x6, x15
 	.p2align	5, , 16
 2:
-	subs	x8, x8, #8
+	subs	x10, x10, #8
 	mov	x20, x13
 	mov	x19, x14
 	b.ne	12f
@@ -75,1284 +78,1249 @@
 	tbl	v0.8b, { v0.16b }, v1.8b
 	fmov	x14, d0
 22:
-	lsr	x27, x23, #3
-	ubfiz	x25, x19, #3, #8
+	and	x25, x19, #0xff
+	//APP
+	//NO_APP
+	ldr	x27, [x12, x25, lsl #3]
+	lsr	x25, x23, #3
 	and	x28, x23, #0x7
 	ldr	x7, [x6]
+	ldr	x25, [x11, x25]
+	ldp	q0, q1, [x22]
 	and	x26, x20, #0xff
-	ldr	x27, [x11, x27]
-	ldr	x25, [x12, x25]
-	lsr	x27, x27, x28
-	add	x28, x9, x24
-	and	w27, w25, w27
-	adds	x27, x27, x25, lsr #40
-	csel	x21, x21, x27, eq
-	add	x27, x10, x22
-	ldp	q0, q1, [x27]
-	stp	q0, q1, [x28]
+	lsr	x25, x25, x28
+	and	w25, w27, w25
+	stp	q0, q1, [x24]
+	adds	x25, x25, x27, lsr #40
+	csel	x25, x21, x25, eq
 	cmp	x26, #33
-	b.hs	222f
+	b.hs	272f
 32:
-	ubfx	x27, x7, #2, #6
-	add	x24, x26, x24
-	cmp	x21, x27
-	ccmp	x24, x21, #0, hs
-	b.lo	302f
-	sub	x29, x24, x21
-	mov	x30, x21
+	add	x21, x24, x26
+	ubfx	x24, x7, #2, #6
+	sub	x28, x21, x8
+	cmp	x25, x24
+	ccmp	x25, x28, #2, hs
+	b.hi	512f
+	sub	x28, x21, x25
+	mov	x29, x25
+	ldp	q1, q0, [x28]
 42:
-	add	x28, x9, x29
-	ldp	q0, q1, [x28]
-	add	x28, x9, x24
-	stp	q0, q1, [x28]
+	stp	q1, q0, [x21]
+	cmp	x24, #33
+	b.hs	282f
+52:
+	lsr	x27, x27, #32
+	add	x23, x23, w27, uxtb
+	add	x27, x21, x24
+	add	x21, x22, x26
+	ubfx	x22, x19, #8, #8
+	//APP
+	//NO_APP
+	ldr	x24, [x12, x22, lsl #3]
+	ubfx	x26, x20, #8, #8
+	ldp	q0, q1, [x21]
+	lsr	x22, x23, #3
+	and	x28, x23, #0x7
+	ldr	x22, [x11, x22]
+	lsr	x22, x22, x28
+	stp	q0, q1, [x27]
+	and	w22, w24, w22
+	adds	x22, x22, x24, lsr #40
+	csel	x22, x25, x22, eq
+	cmp	x26, #33
+	b.hs	302f
+62:
+	add	x25, x27, x26
+	ubfx	x27, x7, #10, #6
+	sub	x28, x25, x8
+	cmp	x22, x27
+	ccmp	x22, x28, #2, hs
+	b.hi	522f
+	sub	x28, x25, x22
+	mov	x29, x22
+	ldp	q1, q0, [x28]
+72:
+	stp	q1, q0, [x25]
 	cmp	x27, #33
 	b.hs	312f
-52:
-	lsr	x5, x25, #32
-	add	x22, x26, x22
-	add	x26, x27, x24
-	ubfx	x25, x20, #8, #8
-	add	x23, x23, w5, uxtb
-	lsr	x5, x19, #5
-	add	x28, x9, x26
-	and	x5, x5, #0x7f8
-	ldr	x24, [x12, x5]
-	lsr	x5, x23, #3
-	and	x27, x23, #0x7
-	ldr	x5, [x11, x5]
-	lsr	x5, x5, x27
-	add	x27, x10, x22
-	ldp	q0, q1, [x27]
-	and	w5, w24, w5
-	adds	x5, x5, x24, lsr #40
-	csel	x21, x21, x5, eq
-	stp	q0, q1, [x28]
-	cmp	x25, #33
-	b.hs	232f
-62:
-	ubfx	x27, x7, #10, #6
-	add	x26, x25, x26
-	cmp	x21, x27
-	ccmp	x26, x21, #0, hs
-	b.lo	332f
-	sub	x29, x26, x21
-	mov	x30, x21
-72:
-	add	x5, x9, x29
-	ldp	q0, q1, [x5]
-	add	x28, x9, x26
-	stp	q0, q1, [x28]
-	cmp	x27, #33
-	b.hs	342f
 82:
-	lsr	x5, x24, #32
-	add	x22, x25, x22
-	add	x27, x27, x26
-	ubfx	x26, x20, #16, #8
-	add	x24, x23, w5, uxtb
-	lsr	x5, x19, #13
-	add	x28, x9, x27
-	and	x5, x5, #0x7f8
-	ldr	x25, [x12, x5]
-	lsr	x5, x24, #3
-	and	x23, x24, #0x7
-	ldr	x5, [x11, x5]
-	lsr	x5, x5, x23
-	and	w5, w25, w5
-	adds	x5, x5, x25, lsr #40
-	csel	x23, x21, x5, eq
-	add	x21, x10, x22
+	lsr	x24, x24, #32
+	add	x21, x21, x26
+	add	x27, x25, x27
+	ubfx	x25, x20, #16, #8
+	add	x24, x23, w24, uxtb
+	ubfx	x23, x19, #16, #8
+	//APP
+	//NO_APP
+	ldr	x26, [x12, x23, lsl #3]
 	ldp	q0, q1, [x21]
-	stp	q0, q1, [x28]
-	cmp	x26, #33
-	b.hs	242f
+	lsr	x23, x24, #3
+	and	x28, x24, #0x7
+	ldr	x23, [x11, x23]
+	stp	q0, q1, [x27]
+	lsr	x23, x23, x28
+	and	w23, w26, w23
+	adds	x23, x23, x26, lsr #40
+	csel	x23, x22, x23, eq
+	cmp	x25, #33
+	b.hs	332f
 92:
+	add	x27, x27, x25
 	ubfx	x28, x7, #18, #6
-	add	x27, x26, x27
+	sub	x22, x27, x8
 	cmp	x23, x28
-	ccmp	x27, x23, #0, hs
-	b.lo	362f
-	sub	x29, x27, x23
-	mov	x30, x23
+	ccmp	x23, x22, #2, hs
+	b.hi	532f
+	sub	x22, x27, x23
+	mov	x29, x23
+	ldp	q1, q0, [x22]
 102:
-	add	x5, x9, x29
-	ldp	q0, q1, [x5]
-	add	x21, x9, x27
-	stp	q0, q1, [x21]
+	stp	q1, q0, [x27]
+	cmp	x28, #33
+	b.hs	342f
+112:
+	lsr	x22, x26, #32
+	add	x21, x21, x25
+	add	x27, x27, x28
+	lsr	w25, w20, #24
+	add	x22, x24, w22, uxtb
+	lsr	w24, w19, #24
+	//APP
+	//NO_APP
+	ldr	x26, [x12, x24, lsl #3]
+	ldp	q0, q1, [x21]
+	lsr	x24, x22, #3
+	and	x28, x22, #0x7
+	ldr	x24, [x11, x24]
+	stp	q0, q1, [x27]
+	lsr	x24, x24, x28
+	and	w24, w26, w24
+	adds	x24, x24, x26, lsr #40
+	csel	x24, x23, x24, eq
+	cmp	x25, #33
+	b.hs	362f
+122:
+	add	x27, x27, x25
+	lsr	w28, w7, #26
+	sub	x23, x27, x8
+	cmp	x24, x28
+	ccmp	x24, x23, #2, hs
+	b.hi	542f
+	sub	x23, x27, x24
+	mov	x29, x24
+	ldp	q1, q0, [x23]
+132:
+	stp	q1, q0, [x27]
 	cmp	x28, #33
 	b.hs	372f
-112:
-	lsr	x5, x25, #32
-	add	x21, x26, x22
-	add	x26, x28, x27
-	add	x22, x24, w5, uxtb
-	lsr	x5, x19, #21
-	lsr	w24, w20, #24
-	add	x28, x9, x26
-	and	x5, x5, #0x7f8
-	ldr	x25, [x12, x5]
-	lsr	x5, x22, #3
-	and	x27, x22, #0x7
-	ldr	x5, [x11, x5]
-	lsr	x5, x5, x27
-	add	x27, x10, x21
-	ldp	q0, q1, [x27]
-	and	w5, w25, w5
-	adds	x5, x5, x25, lsr #40
-	csel	x23, x23, x5, eq
-	stp	q0, q1, [x28]
-	cmp	x24, #33
-	b.hs	252f
-122:
-	add	x26, x24, x26
-	lsr	w27, w7, #26
-	cmp	x23, x27
-	b.lo	392f
-	subs	x29, x26, x23
-	b.lo	392f
-	add	x5, x9, x29
-	mov	x30, x23
-	ldp	q0, q1, [x5]
-	add	x28, x9, x26
-	stp	q0, q1, [x28]
-	cmp	x27, #33
-	b.hs	452f
-132:
-	lsr	x5, x25, #32
-	add	x24, x24, x21
-	add	x27, x27, x26
-	ubfx	x26, x20, #32, #8
-	add	x22, x22, w5, uxtb
-	lsr	x5, x19, #29
-	add	x28, x9, x27
-	and	x5, x5, #0x7f8
-	ldr	x25, [x12, x5]
-	lsr	x5, x22, #3
-	and	x21, x22, #0x7
-	ldr	x5, [x11, x5]
-	lsr	x5, x5, x21
-	and	w5, w25, w5
-	adds	x5, x5, x25, lsr #40
-	csel	x21, x23, x5, eq
-	add	x23, x10, x24
-	ldp	q0, q1, [x23]
-	stp	q0, q1, [x28]
-	cmp	x26, #33
-	b.hs	262f
 142:
-	add	x27, x26, x27
-	ubfx	x28, x7, #34, #6
-	cmp	x21, x28
-	b.lo	402f
-	subs	x29, x27, x21
-	b.lo	402f
-	add	x5, x9, x29
-	mov	x30, x21
-	ldp	q0, q1, [x5]
-	add	x23, x9, x27
-	stp	q0, q1, [x23]
-	cmp	x28, #33
-	b.hs	482f
-152:
-	lsr	x5, x25, #32
-	add	x23, x26, x24
-	add	x26, x28, x27
-	ubfx	x25, x20, #40, #8
-	add	x22, x22, w5, uxtb
-	lsr	x5, x19, #37
-	add	x28, x9, x26
-	and	x5, x5, #0x7f8
-	ldr	x24, [x12, x5]
-	lsr	x5, x22, #3
-	and	x27, x22, #0x7
-	ldr	x5, [x11, x5]
-	lsr	x5, x5, x27
-	add	x27, x10, x23
-	ldp	q0, q1, [x27]
-	and	w5, w24, w5
-	adds	x5, x5, x24, lsr #40
-	csel	x21, x21, x5, eq
-	stp	q0, q1, [x28]
+	lsr	x23, x26, #32
+	add	x21, x21, x25
+	add	x27, x27, x28
+	ubfx	x25, x20, #32, #8
+	add	x23, x22, w23, uxtb
+	ubfx	x22, x19, #32, #8
+	//APP
+	//NO_APP
+	ldr	x26, [x12, x22, lsl #3]
+	ldp	q0, q1, [x21]
+	lsr	x22, x23, #3
+	and	x28, x23, #0x7
+	ldr	x22, [x11, x22]
+	stp	q0, q1, [x27]
+	lsr	x22, x22, x28
+	and	w22, w26, w22
+	adds	x22, x22, x26, lsr #40
+	csel	x22, x24, x22, eq
 	cmp	x25, #33
-	b.hs	272f
+	b.hs	392f
+152:
+	add	x24, x27, x25
+	ubfx	x27, x7, #34, #6
+	sub	x28, x24, x8
+	cmp	x22, x27
+	b.lo	552f
+	cmp	x22, x28
+	b.hi	552f
+	sub	x28, x24, x22
+	mov	x29, x22
+	ldp	q1, q0, [x28]
 162:
-	add	x26, x25, x26
-	ubfx	x27, x7, #42, #6
-	cmp	x21, x27
-	b.lo	412f
-	subs	x29, x26, x21
-	b.lo	412f
-	add	x5, x9, x29
-	mov	x30, x21
-	ldp	q0, q1, [x5]
-	add	x28, x9, x26
-	stp	q0, q1, [x28]
+	stp	q1, q0, [x24]
 	cmp	x27, #33
-	b.hs	512f
+	b.hs	402f
 172:
-	lsr	x5, x24, #32
-	add	x23, x25, x23
-	add	x26, x27, x26
-	add	x24, x22, w5, uxtb
-	lsr	x5, x19, #45
-	ubfx	x22, x20, #48, #8
-	add	x28, x9, x26
-	and	x5, x5, #0x7f8
-	ldr	x25, [x12, x5]
-	lsr	x5, x24, #3
-	and	x27, x24, #0x7
-	ldr	x5, [x11, x5]
-	lsr	x5, x5, x27
-	add	x27, x10, x23
-	ldp	q0, q1, [x27]
-	and	w5, w25, w5
-	adds	x5, x5, x25, lsr #40
-	csel	x21, x21, x5, eq
-	stp	q0, q1, [x28]
-	cmp	x22, #33
-	b.hs	282f
-182:
-	add	x26, x22, x26
-	ubfx	x27, x7, #50, #6
-	cmp	x21, x27
-	b.lo	422f
-	subs	x29, x26, x21
-	b.lo	422f
-	add	x5, x9, x29
-	mov	x30, x21
-	ldp	q0, q1, [x5]
-	add	x28, x9, x26
-	stp	q0, q1, [x28]
-	cmp	x27, #33
-	b.hs	542f
-192:
-	lsr	x5, x25, #32
-	add	x22, x22, x23
-	lsr	x20, x20, #56
-	add	x23, x24, w5, uxtb
-	lsr	x5, x19, #53
-	add	x24, x27, x26
-	and	x5, x5, #0x7f8
-	add	x26, x9, x24
-	ldr	x19, [x12, x5]
-	lsr	x5, x23, #3
-	and	x25, x23, #0x7
-	ldr	x5, [x11, x5]
-	lsr	x5, x5, x25
-	add	x25, x10, x22
-	ldp	q0, q1, [x25]
-	and	w5, w19, w5
-	adds	x5, x5, x19, lsr #40
-	csel	x21, x21, x5, eq
+	lsr	x26, x26, #32
+	add	x21, x21, x25
+	ubfx	x25, x19, #40, #8
+	//APP
+	//NO_APP
+	ldr	x25, [x12, x25, lsl #3]
+	add	x23, x23, w26, uxtb
+	add	x26, x24, x27
+	ldp	q0, q1, [x21]
+	ubfx	x24, x20, #40, #8
+	lsr	x27, x23, #3
+	and	x28, x23, #0x7
+	ldr	x27, [x11, x27]
 	stp	q0, q1, [x26]
-	cmp	x20, #33
-	b.hs	292f
+	lsr	x27, x27, x28
+	and	w27, w25, w27
+	adds	x27, x27, x25, lsr #40
+	csel	x22, x22, x27, eq
+	cmp	x24, #33
+	b.hs	422f
+182:
+	add	x26, x26, x24
+	ubfx	x27, x7, #42, #6
+	sub	x28, x26, x8
+	cmp	x22, x27
+	b.lo	562f
+	cmp	x22, x28
+	b.hi	562f
+	sub	x28, x26, x22
+	mov	x29, x22
+	ldp	q1, q0, [x28]
+192:
+	stp	q1, q0, [x26]
+	cmp	x27, #33
+	b.hs	432f
 202:
-	add	x24, x20, x24
-	lsr	x7, x7, #58
-	cmp	x21, x7
-	b.lo	432f
-	subs	x26, x24, x21
-	b.lo	432f
-	add	x5, x9, x26
-	mov	x27, x21
-	ldp	q0, q1, [x5]
-	add	x25, x9, x24
-	stp	q0, q1, [x25]
-	cmp	x7, #33
-	b.hs	572f
+	lsr	x25, x25, #32
+	add	x27, x26, x27
+	add	x21, x21, x24
+	ubfx	x24, x19, #48, #8
+	//APP
+	//NO_APP
+	ldr	x26, [x12, x24, lsl #3]
+	add	x23, x23, w25, uxtb
+	ldp	q0, q1, [x21]
+	ubfx	x25, x20, #48, #8
+	lsr	x24, x23, #3
+	and	x28, x23, #0x7
+	ldr	x24, [x11, x24]
+	stp	q0, q1, [x27]
+	lsr	x24, x24, x28
+	and	w24, w26, w24
+	adds	x24, x24, x26, lsr #40
+	csel	x24, x22, x24, eq
+	cmp	x25, #33
+	b.hs	452f
 212:
-	lsr	x5, x19, #32
-	add	x22, x20, x22
-	add	x24, x7, x24
+	add	x22, x27, x25
+	ubfx	x27, x7, #50, #6
+	sub	x28, x22, x8
+	cmp	x24, x27
+	b.lo	572f
+	cmp	x24, x28
+	b.hi	572f
+	sub	x28, x22, x24
+	mov	x29, x24
+	ldp	q1, q0, [x28]
+222:
+	stp	q1, q0, [x22]
+	cmp	x27, #33
+	b.hs	462f
+232:
+	lsr	x26, x26, #32
+	lsr	x19, x19, #56
+	//APP
+	//NO_APP
+	ldr	x19, [x12, x19, lsl #3]
+	lsr	x20, x20, #56
+	add	x23, x23, w26, uxtb
+	add	x26, x22, x27
+	add	x22, x21, x25
+	ldp	q0, q1, [x22]
+	lsr	x21, x23, #3
+	and	x25, x23, #0x7
+	ldr	x21, [x11, x21]
+	lsr	x21, x21, x25
+	stp	q0, q1, [x26]
+	and	w21, w19, w21
+	adds	x21, x21, x19, lsr #40
+	csel	x21, x24, x21, eq
+	cmp	x20, #33
+	b.hs	482f
+242:
+	add	x24, x26, x20
+	lsr	x7, x7, #58
+	sub	x25, x24, x8
+	cmp	x21, x7
+	b.lo	582f
+	cmp	x21, x25
+	b.hi	582f
+	sub	x25, x24, x21
+	mov	x26, x21
+	ldp	q1, q0, [x25]
+252:
+	stp	q1, q0, [x24]
+	cmp	x7, #33
+	b.hs	492f
+262:
+	lsr	x19, x19, #32
+	add	x24, x24, x7
+	add	x22, x22, x20
 	sub	x2, x2, #8
 	add	x6, x6, #8
-	add	x23, x23, w5, uxtb
-	cmp	x8, #7
+	add	x23, x23, w19, uxtb
+	cmp	x10, #7
 	b.hi	2b
-	b	602f
-222:
-	ldr	x26, [x0, #48]
-	ldr	x30, [x0, #120]
-	ldrb	w29, [x26, x30]
-	add	x26, x30, #1
-	str	x26, [x0, #120]
-	ldp	q0, q1, [x27, #32]
-	add	x26, x29, #33
-	stp	q0, q1, [x28, #32]
-	cmp	w29, #32
-	b.lo	32b
-	ldp	q0, q1, [x27, #64]
-	stp	q0, q1, [x28, #64]
-	cmp	w29, #64
-	b.lo	32b
-	ldp	q0, q1, [x27, #96]
-	stp	q0, q1, [x28, #96]
-	cmp	w29, #96
-	b.lo	32b
-	ldp	q0, q1, [x27, #128]
-	stp	q0, q1, [x28, #128]
-	tbz	w29, #7, 32b
-	ldp	q0, q1, [x27, #160]
-	stp	q0, q1, [x28, #160]
-	cmp	w29, #160
-	b.lo	32b
-	ldp	q0, q1, [x27, #192]
-	stp	q0, q1, [x28, #192]
-	cmp	w29, #192
-	b.lo	32b
-	ldp	q0, q1, [x27, #224]
-	stp	q0, q1, [x28, #224]
-	cmp	w29, #224
-	b.lo	32b
-	ldp	q0, q1, [x27, #256]
-	stp	q0, q1, [x28, #256]
-	b	32b
-232:
-	ldr	x5, [x0, #48]
-	ldr	x25, [x0, #120]
-	ldrb	w29, [x5, x25]
-	add	x5, x25, #1
-	str	x5, [x0, #120]
-	ldp	q0, q1, [x27, #32]
-	add	x25, x29, #33
-	stp	q0, q1, [x28, #32]
-	cmp	w29, #32
-	b.lo	62b
-	ldp	q0, q1, [x27, #64]
-	stp	q0, q1, [x28, #64]
-	cmp	w29, #64
-	b.lo	62b
-	ldp	q0, q1, [x27, #96]
-	stp	q0, q1, [x28, #96]
-	cmp	w29, #96
-	b.lo	62b
-	ldp	q0, q1, [x27, #128]
-	stp	q0, q1, [x28, #128]
-	tbz	w29, #7, 62b
-	ldp	q0, q1, [x27, #160]
-	stp	q0, q1, [x28, #160]
-	cmp	w29, #160
-	b.lo	62b
-	ldp	q0, q1, [x27, #192]
-	stp	q0, q1, [x28, #192]
-	cmp	w29, #192
-	b.lo	62b
-	ldp	q0, q1, [x27, #224]
-	stp	q0, q1, [x28, #224]
-	cmp	w29, #224
-	b.lo	62b
-	ldp	q0, q1, [x27, #256]
-	stp	q0, q1, [x28, #256]
-	b	62b
-242:
-	ldr	x5, [x0, #48]
-	ldr	x26, [x0, #120]
-	ldrb	w29, [x5, x26]
-	add	x5, x26, #1
-	str	x5, [x0, #120]
-	ldp	q0, q1, [x21, #32]
-	add	x26, x29, #33
-	stp	q0, q1, [x28, #32]
-	cmp	w29, #32
-	b.lo	92b
-	ldp	q0, q1, [x21, #64]
-	stp	q0, q1, [x28, #64]
-	cmp	w29, #64
-	b.lo	92b
-	ldp	q0, q1, [x21, #96]
-	stp	q0, q1, [x28, #96]
-	cmp	w29, #96
-	b.lo	92b
-	ldp	q0, q1, [x21, #128]
-	stp	q0, q1, [x28, #128]
-	tbz	w29, #7, 92b
-	ldp	q0, q1, [x21, #160]
-	stp	q0, q1, [x28, #160]
-	cmp	w29, #160
-	b.lo	92b
-	ldp	q0, q1, [x21, #192]
-	stp	q0, q1, [x28, #192]
-	cmp	w29, #192
-	b.lo	92b
-	ldp	q0, q1, [x21, #224]
-	stp	q0, q1, [x28, #224]
-	cmp	w29, #224
-	b.lo	92b
-	ldp	q0, q1, [x21, #256]
-	stp	q0, q1, [x28, #256]
-	b	92b
-252:
-	ldr	x5, [x0, #48]
-	ldr	x24, [x0, #120]
-	ldrb	w29, [x5, x24]
-	add	x5, x24, #1
-	str	x5, [x0, #120]
-	ldp	q0, q1, [x27, #32]
-	add	x24, x29, #33
-	stp	q0, q1, [x28, #32]
-	cmp	w29, #32
-	b.lo	122b
-	ldp	q0, q1, [x27, #64]
-	stp	q0, q1, [x28, #64]
-	cmp	w29, #64
-	b.lo	122b
-	ldp	q0, q1, [x27, #96]
-	stp	q0, q1, [x28, #96]
-	cmp	w29, #96
-	b.lo	122b
-	ldp	q0, q1, [x27, #128]
-	stp	q0, q1, [x28, #128]
-	tbz	w29, #7, 122b
-	ldp	q0, q1, [x27, #160]
-	stp	q0, q1, [x28, #160]
-	cmp	w29, #160
-	b.lo	122b
-	ldp	q0, q1, [x27, #192]
-	stp	q0, q1, [x28, #192]
-	cmp	w29, #192
-	b.lo	122b
-	ldp	q0, q1, [x27, #224]
-	stp	q0, q1, [x28, #224]
-	cmp	w29, #224
-	b.lo	122b
-	ldp	q0, q1, [x27, #256]
-	stp	q0, q1, [x28, #256]
-	b	122b
-262:
-	ldr	x5, [x0, #48]
-	ldr	x26, [x0, #120]
-	ldrb	w29, [x5, x26]
-	add	x5, x26, #1
-	str	x5, [x0, #120]
-	ldp	q0, q1, [x23, #32]
-	add	x26, x29, #33
-	stp	q0, q1, [x28, #32]
-	cmp	w29, #32
-	b.lo	142b
-	ldp	q0, q1, [x23, #64]
-	stp	q0, q1, [x28, #64]
-	cmp	w29, #64
-	b.lo	142b
-	ldp	q0, q1, [x23, #96]
-	stp	q0, q1, [x28, #96]
-	cmp	w29, #96
-	b.lo	142b
-	ldp	q0, q1, [x23, #128]
-	stp	q0, q1, [x28, #128]
-	tbz	w29, #7, 142b
-	ldp	q0, q1, [x23, #160]
-	stp	q0, q1, [x28, #160]
-	cmp	w29, #160
-	b.lo	142b
-	ldp	q0, q1, [x23, #192]
-	stp	q0, q1, [x28, #192]
-	cmp	w29, #192
-	b.lo	142b
-	ldp	q0, q1, [x23, #224]
-	stp	q0, q1, [x28, #224]
-	cmp	w29, #224
-	b.lo	142b
-	ldp	q0, q1, [x23, #256]
-	stp	q0, q1, [x28, #256]
-	b	142b
+	b	682f
 272:
-	ldr	x5, [x0, #48]
-	ldr	x25, [x0, #120]
-	ldrb	w29, [x5, x25]
-	add	x5, x25, #1
-	str	x5, [x0, #120]
-	ldp	q0, q1, [x27, #32]
-	add	x25, x29, #33
-	stp	q0, q1, [x28, #32]
-	cmp	w29, #32
-	b.lo	162b
-	ldp	q0, q1, [x27, #64]
-	stp	q0, q1, [x28, #64]
-	cmp	w29, #64
-	b.lo	162b
-	ldp	q0, q1, [x27, #96]
-	stp	q0, q1, [x28, #96]
-	cmp	w29, #96
-	b.lo	162b
-	ldp	q0, q1, [x27, #128]
-	stp	q0, q1, [x28, #128]
-	tbz	w29, #7, 162b
-	ldp	q0, q1, [x27, #160]
-	stp	q0, q1, [x28, #160]
-	cmp	w29, #160
-	b.lo	162b
-	ldp	q0, q1, [x27, #192]
-	stp	q0, q1, [x28, #192]
-	cmp	w29, #192
-	b.lo	162b
-	ldp	q0, q1, [x27, #224]
-	stp	q0, q1, [x28, #224]
-	cmp	w29, #224
-	b.lo	162b
-	ldp	q0, q1, [x27, #256]
-	stp	q0, q1, [x28, #256]
-	b	162b
+	ldr	x21, [x0, #48]
+	ldr	x26, [x0, #120]
+	ldrb	w21, [x21, x26]
+	add	x26, x26, #1
+	str	x26, [x0, #120]
+	ldp	q0, q1, [x22, #32]
+	add	x26, x21, #33
+	stp	q0, q1, [x24, #32]
+	cmp	w21, #32
+	b.lo	32b
+	ldp	q0, q1, [x22, #64]
+	stp	q0, q1, [x24, #64]
+	cmp	w21, #64
+	b.lo	32b
+	ldp	q0, q1, [x22, #96]
+	stp	q0, q1, [x24, #96]
+	cmp	w21, #96
+	b.lo	32b
+	ldp	q0, q1, [x22, #128]
+	stp	q0, q1, [x24, #128]
+	tbz	w21, #7, 32b
+	ldp	q0, q1, [x22, #160]
+	stp	q0, q1, [x24, #160]
+	cmp	w21, #160
+	b.lo	32b
+	ldp	q0, q1, [x22, #192]
+	stp	q0, q1, [x24, #192]
+	cmp	w21, #192
+	b.lo	32b
+	ldp	q0, q1, [x22, #224]
+	stp	q0, q1, [x24, #224]
+	cmp	w21, #224
+	b.lo	32b
+	ldp	q0, q1, [x22, #256]
+	stp	q0, q1, [x24, #256]
+	b	32b
 282:
-	ldr	x5, [x0, #48]
-	ldr	x22, [x0, #120]
-	ldrb	w29, [x5, x22]
-	add	x5, x22, #1
-	str	x5, [x0, #120]
-	ldp	q0, q1, [x27, #32]
-	add	x22, x29, #33
-	stp	q0, q1, [x28, #32]
-	cmp	w29, #32
-	b.lo	182b
-	ldp	q0, q1, [x27, #64]
-	stp	q0, q1, [x28, #64]
-	cmp	w29, #64
-	b.lo	182b
-	ldp	q0, q1, [x27, #96]
-	stp	q0, q1, [x28, #96]
-	cmp	w29, #96
-	b.lo	182b
-	ldp	q0, q1, [x27, #128]
-	stp	q0, q1, [x28, #128]
-	tbz	w29, #7, 182b
-	ldp	q0, q1, [x27, #160]
-	stp	q0, q1, [x28, #160]
-	cmp	w29, #160
-	b.lo	182b
-	ldp	q0, q1, [x27, #192]
-	stp	q0, q1, [x28, #192]
-	cmp	w29, #192
-	b.lo	182b
-	ldp	q0, q1, [x27, #224]
-	stp	q0, q1, [x28, #224]
-	cmp	w29, #224
-	b.lo	182b
-	ldp	q0, q1, [x27, #256]
-	stp	q0, q1, [x28, #256]
-	b	182b
+	cmp	x29, #31
+	b.hi	292f
+	str	x5, [x0, #104]
 292:
-	ldr	x5, [x0, #48]
-	ldr	x20, [x0, #120]
-	ldrb	w27, [x5, x20]
-	add	x5, x20, #1
-	str	x5, [x0, #120]
-	ldp	q0, q1, [x25, #32]
-	add	x20, x27, #33
-	stp	q0, q1, [x26, #32]
-	cmp	w27, #32
-	b.lo	202b
-	ldp	q0, q1, [x25, #64]
-	stp	q0, q1, [x26, #64]
-	cmp	w27, #64
-	b.lo	202b
-	ldp	q0, q1, [x25, #96]
-	stp	q0, q1, [x26, #96]
-	cmp	w27, #96
-	b.lo	202b
-	ldp	q0, q1, [x25, #128]
-	stp	q0, q1, [x26, #128]
-	tbz	w27, #7, 202b
-	ldp	q0, q1, [x25, #160]
-	stp	q0, q1, [x26, #160]
-	cmp	w27, #160
-	b.lo	202b
-	ldp	q0, q1, [x25, #192]
-	stp	q0, q1, [x26, #192]
-	cmp	w27, #192
-	b.lo	202b
-	ldp	q0, q1, [x25, #224]
-	stp	q0, q1, [x26, #224]
-	cmp	w27, #224
-	b.lo	202b
-	ldp	q0, q1, [x25, #256]
-	stp	q0, q1, [x26, #256]
-	b	202b
-302:
-	cmp	x21, x24
-	csel	x30, x21, x24, lo
-	sub	x29, x24, x30
-	cmp	x30, x27
-	b.hs	42b
-	ldr	x28, [x0, #56]
-	add	x28, x28, x30, lsl #5
-	ldr	q1, [x28, #2064]
-	ldr	q0, [x28, #2048]
-	add	x28, x9, x29
-	ldp	q2, q3, [x28]
-	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
-	tbl	v1.16b, { v2.16b, v3.16b }, v1.16b
-	add	x28, x9, x24
-	stp	q0, q1, [x28]
-	cmp	x27, #33
+	ldr	x24, [x0, #48]
+	ldr	x30, [x0, #120]
+	ldrb	w29, [x24, x30]
+	add	x24, x30, #1
+	str	x24, [x0, #120]
+	ldp	q0, q1, [x28, #32]
+	add	x24, x29, #33
+	stp	q0, q1, [x21, #32]
+	cmp	w29, #32
 	b.lo	52b
+	ldp	q0, q1, [x28, #64]
+	stp	q0, q1, [x21, #64]
+	cmp	w29, #64
+	b.lo	52b
+	ldp	q0, q1, [x28, #96]
+	stp	q0, q1, [x21, #96]
+	cmp	w29, #96
+	b.lo	52b
+	ldp	q0, q1, [x28, #128]
+	stp	q0, q1, [x21, #128]
+	tbz	w29, #7, 52b
+	ldp	q0, q1, [x28, #160]
+	stp	q0, q1, [x21, #160]
+	cmp	w29, #160
+	b.lo	52b
+	ldp	q0, q1, [x28, #192]
+	stp	q0, q1, [x21, #192]
+	cmp	w29, #192
+	b.lo	52b
+	ldp	q0, q1, [x28, #224]
+	stp	q0, q1, [x21, #224]
+	cmp	w29, #224
+	b.lo	52b
+	ldp	q0, q1, [x28, #256]
+	stp	q0, q1, [x21, #256]
+	b	52b
+302:
+	ldr	x25, [x0, #48]
+	ldr	x26, [x0, #120]
+	ldrb	w25, [x25, x26]
+	add	x26, x26, #1
+	str	x26, [x0, #120]
+	ldp	q0, q1, [x21, #32]
+	add	x26, x25, #33
+	stp	q0, q1, [x27, #32]
+	cmp	w25, #32
+	b.lo	62b
+	ldp	q0, q1, [x21, #64]
+	stp	q0, q1, [x27, #64]
+	cmp	w25, #64
+	b.lo	62b
+	ldp	q0, q1, [x21, #96]
+	stp	q0, q1, [x27, #96]
+	cmp	w25, #96
+	b.lo	62b
+	ldp	q0, q1, [x21, #128]
+	stp	q0, q1, [x27, #128]
+	tbz	w25, #7, 62b
+	ldp	q0, q1, [x21, #160]
+	stp	q0, q1, [x27, #160]
+	cmp	w25, #160
+	b.lo	62b
+	ldp	q0, q1, [x21, #192]
+	stp	q0, q1, [x27, #192]
+	cmp	w25, #192
+	b.lo	62b
+	ldp	q0, q1, [x21, #224]
+	stp	q0, q1, [x27, #224]
+	cmp	w25, #224
+	b.lo	62b
+	ldp	q0, q1, [x21, #256]
+	stp	q0, q1, [x27, #256]
+	b	62b
 312:
-	cmp	x30, #31
+	cmp	x29, #31
 	b.hi	322f
-	mov	w5, #1
 	str	x5, [x0, #104]
 322:
 	ldr	x27, [x0, #48]
-	ldr	x5, [x0, #120]
-	add	x29, x9, x29
-	ldrb	w30, [x27, x5]
-	add	x5, x5, #1
-	add	x27, x30, #33
-	str	x5, [x0, #120]
-	ldp	q0, q1, [x29, #32]
-	stp	q0, q1, [x28, #32]
-	cmp	w30, #32
-	b.lo	52b
-	ldp	q0, q1, [x29, #64]
-	stp	q0, q1, [x28, #64]
-	cmp	w30, #64
-	b.lo	52b
-	ldp	q0, q1, [x29, #96]
-	stp	q0, q1, [x28, #96]
-	cmp	w30, #96
-	b.lo	52b
-	ldp	q0, q1, [x29, #128]
-	stp	q0, q1, [x28, #128]
-	tbz	w30, #7, 52b
-	ldp	q0, q1, [x29, #160]
-	stp	q0, q1, [x28, #160]
-	cmp	w30, #160
-	b.lo	52b
-	ldp	q0, q1, [x29, #192]
-	stp	q0, q1, [x28, #192]
-	cmp	w30, #192
-	b.lo	52b
-	ldp	q0, q1, [x29, #224]
-	stp	q0, q1, [x28, #224]
-	cmp	w30, #224
-	b.lo	52b
-	ldp	q0, q1, [x29, #256]
-	stp	q0, q1, [x28, #256]
-	b	52b
-332:
-	cmp	x21, x26
-	csel	x30, x21, x26, lo
-	sub	x29, x26, x30
-	cmp	x30, x27
-	b.hs	72b
-	ldr	x5, [x0, #56]
-	add	x5, x5, x30, lsl #5
-	ldr	q1, [x5, #2064]
-	ldr	q0, [x5, #2048]
-	add	x5, x9, x29
-	ldp	q2, q3, [x5]
-	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
-	tbl	v1.16b, { v2.16b, v3.16b }, v1.16b
-	add	x28, x9, x26
-	stp	q0, q1, [x28]
-	cmp	x27, #33
+	ldr	x30, [x0, #120]
+	ldrb	w29, [x27, x30]
+	add	x27, x30, #1
+	str	x27, [x0, #120]
+	ldp	q0, q1, [x28, #32]
+	add	x27, x29, #33
+	stp	q0, q1, [x25, #32]
+	cmp	w29, #32
 	b.lo	82b
+	ldp	q0, q1, [x28, #64]
+	stp	q0, q1, [x25, #64]
+	cmp	w29, #64
+	b.lo	82b
+	ldp	q0, q1, [x28, #96]
+	stp	q0, q1, [x25, #96]
+	cmp	w29, #96
+	b.lo	82b
+	ldp	q0, q1, [x28, #128]
+	stp	q0, q1, [x25, #128]
+	tbz	w29, #7, 82b
+	ldp	q0, q1, [x28, #160]
+	stp	q0, q1, [x25, #160]
+	cmp	w29, #160
+	b.lo	82b
+	ldp	q0, q1, [x28, #192]
+	stp	q0, q1, [x25, #192]
+	cmp	w29, #192
+	b.lo	82b
+	ldp	q0, q1, [x28, #224]
+	stp	q0, q1, [x25, #224]
+	cmp	w29, #224
+	b.lo	82b
+	ldp	q0, q1, [x28, #256]
+	stp	q0, q1, [x25, #256]
+	b	82b
+332:
+	ldr	x22, [x0, #48]
+	ldr	x25, [x0, #120]
+	ldrb	w22, [x22, x25]
+	add	x25, x25, #1
+	str	x25, [x0, #120]
+	ldp	q0, q1, [x21, #32]
+	add	x25, x22, #33
+	stp	q0, q1, [x27, #32]
+	cmp	w22, #32
+	b.lo	92b
+	ldp	q0, q1, [x21, #64]
+	stp	q0, q1, [x27, #64]
+	cmp	w22, #64
+	b.lo	92b
+	ldp	q0, q1, [x21, #96]
+	stp	q0, q1, [x27, #96]
+	cmp	w22, #96
+	b.lo	92b
+	ldp	q0, q1, [x21, #128]
+	stp	q0, q1, [x27, #128]
+	tbz	w22, #7, 92b
+	ldp	q0, q1, [x21, #160]
+	stp	q0, q1, [x27, #160]
+	cmp	w22, #160
+	b.lo	92b
+	ldp	q0, q1, [x21, #192]
+	stp	q0, q1, [x27, #192]
+	cmp	w22, #192
+	b.lo	92b
+	ldp	q0, q1, [x21, #224]
+	stp	q0, q1, [x27, #224]
+	cmp	w22, #224
+	b.lo	92b
+	ldp	q0, q1, [x21, #256]
+	stp	q0, q1, [x27, #256]
+	b	92b
 342:
-	cmp	x30, #31
+	cmp	x29, #31
 	b.hi	352f
-	mov	w5, #1
 	str	x5, [x0, #104]
 352:
-	ldr	x5, [x0, #48]
-	ldr	x27, [x0, #120]
-	add	x29, x9, x29
-	ldrb	w30, [x5, x27]
-	add	x5, x27, #1
-	add	x27, x30, #33
-	str	x5, [x0, #120]
-	ldp	q0, q1, [x29, #32]
-	stp	q0, q1, [x28, #32]
-	cmp	w30, #32
-	b.lo	82b
-	ldp	q0, q1, [x29, #64]
-	stp	q0, q1, [x28, #64]
-	cmp	w30, #64
-	b.lo	82b
-	ldp	q0, q1, [x29, #96]
-	stp	q0, q1, [x28, #96]
-	cmp	w30, #96
-	b.lo	82b
-	ldp	q0, q1, [x29, #128]
-	stp	q0, q1, [x28, #128]
-	tbz	w30, #7, 82b
-	ldp	q0, q1, [x29, #160]
-	stp	q0, q1, [x28, #160]
-	cmp	w30, #160
-	b.lo	82b
-	ldp	q0, q1, [x29, #192]
-	stp	q0, q1, [x28, #192]
-	cmp	w30, #192
-	b.lo	82b
-	ldp	q0, q1, [x29, #224]
-	stp	q0, q1, [x28, #224]
-	cmp	w30, #224
-	b.lo	82b
-	ldp	q0, q1, [x29, #256]
-	stp	q0, q1, [x28, #256]
-	b	82b
-362:
-	cmp	x23, x27
-	csel	x30, x23, x27, lo
-	sub	x29, x27, x30
-	cmp	x30, x28
-	b.hs	102b
-	ldr	x5, [x0, #56]
-	add	x5, x5, x30, lsl #5
-	ldr	q1, [x5, #2064]
-	ldr	q0, [x5, #2048]
-	add	x5, x9, x29
-	ldp	q2, q3, [x5]
-	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
-	tbl	v1.16b, { v2.16b, v3.16b }, v1.16b
-	add	x21, x9, x27
-	stp	q0, q1, [x21]
-	cmp	x28, #33
+	ldr	x28, [x0, #48]
+	ldr	x30, [x0, #120]
+	ldrb	w29, [x28, x30]
+	add	x28, x30, #1
+	str	x28, [x0, #120]
+	ldp	q0, q1, [x22, #32]
+	add	x28, x29, #33
+	stp	q0, q1, [x27, #32]
+	cmp	w29, #32
 	b.lo	112b
+	ldp	q0, q1, [x22, #64]
+	stp	q0, q1, [x27, #64]
+	cmp	w29, #64
+	b.lo	112b
+	ldp	q0, q1, [x22, #96]
+	stp	q0, q1, [x27, #96]
+	cmp	w29, #96
+	b.lo	112b
+	ldp	q0, q1, [x22, #128]
+	stp	q0, q1, [x27, #128]
+	tbz	w29, #7, 112b
+	ldp	q0, q1, [x22, #160]
+	stp	q0, q1, [x27, #160]
+	cmp	w29, #160
+	b.lo	112b
+	ldp	q0, q1, [x22, #192]
+	stp	q0, q1, [x27, #192]
+	cmp	w29, #192
+	b.lo	112b
+	ldp	q0, q1, [x22, #224]
+	stp	q0, q1, [x27, #224]
+	cmp	w29, #224
+	b.lo	112b
+	ldp	q0, q1, [x22, #256]
+	stp	q0, q1, [x27, #256]
+	b	112b
+362:
+	ldr	x23, [x0, #48]
+	ldr	x25, [x0, #120]
+	ldrb	w23, [x23, x25]
+	add	x25, x25, #1
+	str	x25, [x0, #120]
+	ldp	q0, q1, [x21, #32]
+	add	x25, x23, #33
+	stp	q0, q1, [x27, #32]
+	cmp	w23, #32
+	b.lo	122b
+	ldp	q0, q1, [x21, #64]
+	stp	q0, q1, [x27, #64]
+	cmp	w23, #64
+	b.lo	122b
+	ldp	q0, q1, [x21, #96]
+	stp	q0, q1, [x27, #96]
+	cmp	w23, #96
+	b.lo	122b
+	ldp	q0, q1, [x21, #128]
+	stp	q0, q1, [x27, #128]
+	tbz	w23, #7, 122b
+	ldp	q0, q1, [x21, #160]
+	stp	q0, q1, [x27, #160]
+	cmp	w23, #160
+	b.lo	122b
+	ldp	q0, q1, [x21, #192]
+	stp	q0, q1, [x27, #192]
+	cmp	w23, #192
+	b.lo	122b
+	ldp	q0, q1, [x21, #224]
+	stp	q0, q1, [x27, #224]
+	cmp	w23, #224
+	b.lo	122b
+	ldp	q0, q1, [x21, #256]
+	stp	q0, q1, [x27, #256]
+	b	122b
 372:
-	cmp	x30, #31
+	cmp	x29, #31
 	b.hi	382f
-	mov	w5, #1
 	str	x5, [x0, #104]
 382:
-	ldr	x5, [x0, #48]
-	ldr	x28, [x0, #120]
-	add	x29, x9, x29
-	ldrb	w30, [x5, x28]
-	add	x5, x28, #1
-	add	x28, x30, #33
-	str	x5, [x0, #120]
-	ldp	q0, q1, [x29, #32]
-	stp	q0, q1, [x21, #32]
-	cmp	w30, #32
-	b.lo	112b
-	ldp	q0, q1, [x29, #64]
-	stp	q0, q1, [x21, #64]
-	cmp	w30, #64
-	b.lo	112b
-	ldp	q0, q1, [x29, #96]
-	stp	q0, q1, [x21, #96]
-	cmp	w30, #96
-	b.lo	112b
-	ldp	q0, q1, [x29, #128]
-	stp	q0, q1, [x21, #128]
-	tbz	w30, #7, 112b
-	ldp	q0, q1, [x29, #160]
-	stp	q0, q1, [x21, #160]
-	cmp	w30, #160
-	b.lo	112b
-	ldp	q0, q1, [x29, #192]
-	stp	q0, q1, [x21, #192]
-	cmp	w30, #192
-	b.lo	112b
-	ldp	q0, q1, [x29, #224]
-	stp	q0, q1, [x21, #224]
-	cmp	w30, #224
-	b.lo	112b
-	ldp	q0, q1, [x29, #256]
-	stp	q0, q1, [x21, #256]
-	b	112b
+	ldr	x28, [x0, #48]
+	ldr	x30, [x0, #120]
+	ldrb	w29, [x28, x30]
+	add	x28, x30, #1
+	str	x28, [x0, #120]
+	ldp	q0, q1, [x23, #32]
+	add	x28, x29, #33
+	stp	q0, q1, [x27, #32]
+	cmp	w29, #32
+	b.lo	142b
+	ldp	q0, q1, [x23, #64]
+	stp	q0, q1, [x27, #64]
+	cmp	w29, #64
+	b.lo	142b
+	ldp	q0, q1, [x23, #96]
+	stp	q0, q1, [x27, #96]
+	cmp	w29, #96
+	b.lo	142b
+	ldp	q0, q1, [x23, #128]
+	stp	q0, q1, [x27, #128]
+	tbz	w29, #7, 142b
+	ldp	q0, q1, [x23, #160]
+	stp	q0, q1, [x27, #160]
+	cmp	w29, #160
+	b.lo	142b
+	ldp	q0, q1, [x23, #192]
+	stp	q0, q1, [x27, #192]
+	cmp	w29, #192
+	b.lo	142b
+	ldp	q0, q1, [x23, #224]
+	stp	q0, q1, [x27, #224]
+	cmp	w29, #224
+	b.lo	142b
+	ldp	q0, q1, [x23, #256]
+	stp	q0, q1, [x27, #256]
+	b	142b
 392:
-	cmp	x23, x26
-	csel	x30, x23, x26, lo
-	sub	x29, x26, x30
-	cmp	x30, x27
-	b.hs	442f
-	ldr	x5, [x0, #56]
-	add	x5, x5, x30, lsl #5
-	ldr	q1, [x5, #2064]
-	ldr	q0, [x5, #2048]
-	add	x5, x9, x29
-	ldp	q2, q3, [x5]
-	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
-	tbl	v1.16b, { v2.16b, v3.16b }, v1.16b
-	add	x28, x9, x26
-	stp	q0, q1, [x28]
-	cmp	x27, #33
-	b.lo	132b
-	b	452f
-402:
-	cmp	x21, x27
-	csel	x30, x21, x27, lo
-	sub	x29, x27, x30
-	cmp	x30, x28
-	b.hs	472f
-	ldr	x5, [x0, #56]
-	add	x5, x5, x30, lsl #5
-	ldr	q1, [x5, #2064]
-	ldr	q0, [x5, #2048]
-	add	x5, x9, x29
-	ldp	q2, q3, [x5]
-	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
-	tbl	v1.16b, { v2.16b, v3.16b }, v1.16b
-	add	x23, x9, x27
-	stp	q0, q1, [x23]
-	cmp	x28, #33
+	ldr	x24, [x0, #48]
+	ldr	x25, [x0, #120]
+	ldrb	w24, [x24, x25]
+	add	x25, x25, #1
+	str	x25, [x0, #120]
+	ldp	q0, q1, [x21, #32]
+	add	x25, x24, #33
+	stp	q0, q1, [x27, #32]
+	cmp	w24, #32
 	b.lo	152b
-	b	482f
-412:
-	cmp	x21, x26
-	csel	x30, x21, x26, lo
-	sub	x29, x26, x30
-	cmp	x30, x27
-	b.hs	502f
-	ldr	x5, [x0, #56]
-	add	x5, x5, x30, lsl #5
-	ldr	q1, [x5, #2064]
-	ldr	q0, [x5, #2048]
-	add	x5, x9, x29
-	ldp	q2, q3, [x5]
-	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
-	tbl	v1.16b, { v2.16b, v3.16b }, v1.16b
-	add	x28, x9, x26
-	stp	q0, q1, [x28]
-	cmp	x27, #33
-	b.lo	172b
-	b	512f
-422:
-	cmp	x21, x26
-	csel	x30, x21, x26, lo
-	sub	x29, x26, x30
-	cmp	x30, x27
-	b.hs	532f
-	ldr	x5, [x0, #56]
-	add	x5, x5, x30, lsl #5
-	ldr	q1, [x5, #2064]
-	ldr	q0, [x5, #2048]
-	add	x5, x9, x29
-	ldp	q2, q3, [x5]
-	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
-	tbl	v1.16b, { v2.16b, v3.16b }, v1.16b
-	add	x28, x9, x26
-	stp	q0, q1, [x28]
-	cmp	x27, #33
-	b.lo	192b
-	b	542f
-432:
-	cmp	x21, x24
-	csel	x27, x21, x24, lo
-	sub	x26, x24, x27
-	cmp	x27, x7
-	b.hs	562f
-	ldr	x5, [x0, #56]
-	add	x5, x5, x27, lsl #5
-	ldr	q1, [x5, #2064]
-	ldr	q0, [x5, #2048]
-	add	x5, x9, x26
-	ldp	q2, q3, [x5]
-	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
-	tbl	v1.16b, { v2.16b, v3.16b }, v1.16b
-	add	x25, x9, x24
-	stp	q0, q1, [x25]
-	cmp	x7, #33
-	b.lo	212b
-	b	572f
-442:
-	add	x5, x9, x29
-	ldp	q0, q1, [x5]
-	add	x28, x9, x26
-	stp	q0, q1, [x28]
-	cmp	x27, #33
-	b.lo	132b
-452:
-	cmp	x30, #31
-	b.hi	462f
-	mov	w5, #1
-	str	x5, [x0, #104]
-462:
-	ldr	x5, [x0, #48]
-	ldr	x27, [x0, #120]
-	add	x29, x9, x29
-	ldrb	w30, [x5, x27]
-	add	x5, x27, #1
-	add	x27, x30, #33
-	str	x5, [x0, #120]
-	ldp	q0, q1, [x29, #32]
-	stp	q0, q1, [x28, #32]
-	cmp	w30, #32
-	b.lo	132b
-	ldp	q0, q1, [x29, #64]
-	stp	q0, q1, [x28, #64]
-	cmp	w30, #64
-	b.lo	132b
-	ldp	q0, q1, [x29, #96]
-	stp	q0, q1, [x28, #96]
-	cmp	w30, #96
-	b.lo	132b
-	ldp	q0, q1, [x29, #128]
-	stp	q0, q1, [x28, #128]
-	tbz	w30, #7, 132b
-	ldp	q0, q1, [x29, #160]
-	stp	q0, q1, [x28, #160]
-	cmp	w30, #160
-	b.lo	132b
-	ldp	q0, q1, [x29, #192]
-	stp	q0, q1, [x28, #192]
-	cmp	w30, #192
-	b.lo	132b
-	ldp	q0, q1, [x29, #224]
-	stp	q0, q1, [x28, #224]
-	cmp	w30, #224
-	b.lo	132b
-	ldp	q0, q1, [x29, #256]
-	stp	q0, q1, [x28, #256]
-	b	132b
-472:
-	add	x5, x9, x29
-	ldp	q0, q1, [x5]
-	add	x23, x9, x27
-	stp	q0, q1, [x23]
-	cmp	x28, #33
+	ldp	q0, q1, [x21, #64]
+	stp	q0, q1, [x27, #64]
+	cmp	w24, #64
 	b.lo	152b
-482:
-	cmp	x30, #31
-	b.hi	492f
-	mov	w5, #1
-	str	x5, [x0, #104]
-492:
-	ldr	x5, [x0, #48]
-	ldr	x28, [x0, #120]
-	add	x29, x9, x29
-	ldrb	w30, [x5, x28]
-	add	x5, x28, #1
-	add	x28, x30, #33
-	str	x5, [x0, #120]
-	ldp	q0, q1, [x29, #32]
-	stp	q0, q1, [x23, #32]
-	cmp	w30, #32
+	ldp	q0, q1, [x21, #96]
+	stp	q0, q1, [x27, #96]
+	cmp	w24, #96
 	b.lo	152b
-	ldp	q0, q1, [x29, #64]
-	stp	q0, q1, [x23, #64]
-	cmp	w30, #64
+	ldp	q0, q1, [x21, #128]
+	stp	q0, q1, [x27, #128]
+	tbz	w24, #7, 152b
+	ldp	q0, q1, [x21, #160]
+	stp	q0, q1, [x27, #160]
+	cmp	w24, #160
 	b.lo	152b
-	ldp	q0, q1, [x29, #96]
-	stp	q0, q1, [x23, #96]
-	cmp	w30, #96
+	ldp	q0, q1, [x21, #192]
+	stp	q0, q1, [x27, #192]
+	cmp	w24, #192
 	b.lo	152b
-	ldp	q0, q1, [x29, #128]
-	stp	q0, q1, [x23, #128]
-	tbz	w30, #7, 152b
-	ldp	q0, q1, [x29, #160]
-	stp	q0, q1, [x23, #160]
-	cmp	w30, #160
+	ldp	q0, q1, [x21, #224]
+	stp	q0, q1, [x27, #224]
+	cmp	w24, #224
 	b.lo	152b
-	ldp	q0, q1, [x29, #192]
-	stp	q0, q1, [x23, #192]
-	cmp	w30, #192
-	b.lo	152b
-	ldp	q0, q1, [x29, #224]
-	stp	q0, q1, [x23, #224]
-	cmp	w30, #224
-	b.lo	152b
-	ldp	q0, q1, [x29, #256]
-	stp	q0, q1, [x23, #256]
+	ldp	q0, q1, [x21, #256]
+	stp	q0, q1, [x27, #256]
 	b	152b
-502:
-	add	x5, x9, x29
-	ldp	q0, q1, [x5]
-	add	x28, x9, x26
-	stp	q0, q1, [x28]
-	cmp	x27, #33
-	b.lo	172b
-512:
-	cmp	x30, #31
-	b.hi	522f
-	mov	w5, #1
+402:
+	cmp	x29, #31
+	b.hi	412f
 	str	x5, [x0, #104]
-522:
-	ldr	x5, [x0, #48]
-	ldr	x27, [x0, #120]
-	add	x29, x9, x29
-	ldrb	w30, [x5, x27]
-	add	x5, x27, #1
-	add	x27, x30, #33
-	str	x5, [x0, #120]
-	ldp	q0, q1, [x29, #32]
-	stp	q0, q1, [x28, #32]
-	cmp	w30, #32
+412:
+	ldr	x27, [x0, #48]
+	ldr	x30, [x0, #120]
+	ldrb	w29, [x27, x30]
+	add	x27, x30, #1
+	str	x27, [x0, #120]
+	ldp	q0, q1, [x28, #32]
+	add	x27, x29, #33
+	stp	q0, q1, [x24, #32]
+	cmp	w29, #32
 	b.lo	172b
-	ldp	q0, q1, [x29, #64]
-	stp	q0, q1, [x28, #64]
-	cmp	w30, #64
+	ldp	q0, q1, [x28, #64]
+	stp	q0, q1, [x24, #64]
+	cmp	w29, #64
 	b.lo	172b
-	ldp	q0, q1, [x29, #96]
-	stp	q0, q1, [x28, #96]
-	cmp	w30, #96
+	ldp	q0, q1, [x28, #96]
+	stp	q0, q1, [x24, #96]
+	cmp	w29, #96
 	b.lo	172b
-	ldp	q0, q1, [x29, #128]
-	stp	q0, q1, [x28, #128]
-	tbz	w30, #7, 172b
-	ldp	q0, q1, [x29, #160]
-	stp	q0, q1, [x28, #160]
-	cmp	w30, #160
+	ldp	q0, q1, [x28, #128]
+	stp	q0, q1, [x24, #128]
+	tbz	w29, #7, 172b
+	ldp	q0, q1, [x28, #160]
+	stp	q0, q1, [x24, #160]
+	cmp	w29, #160
 	b.lo	172b
-	ldp	q0, q1, [x29, #192]
-	stp	q0, q1, [x28, #192]
-	cmp	w30, #192
+	ldp	q0, q1, [x28, #192]
+	stp	q0, q1, [x24, #192]
+	cmp	w29, #192
 	b.lo	172b
-	ldp	q0, q1, [x29, #224]
-	stp	q0, q1, [x28, #224]
-	cmp	w30, #224
+	ldp	q0, q1, [x28, #224]
+	stp	q0, q1, [x24, #224]
+	cmp	w29, #224
 	b.lo	172b
-	ldp	q0, q1, [x29, #256]
-	stp	q0, q1, [x28, #256]
+	ldp	q0, q1, [x28, #256]
+	stp	q0, q1, [x24, #256]
 	b	172b
-532:
-	add	x5, x9, x29
-	ldp	q0, q1, [x5]
-	add	x28, x9, x26
-	stp	q0, q1, [x28]
-	cmp	x27, #33
-	b.lo	192b
-542:
-	cmp	x30, #31
-	b.hi	552f
-	mov	w5, #1
-	str	x5, [x0, #104]
-552:
-	ldr	x5, [x0, #48]
-	ldr	x27, [x0, #120]
-	add	x29, x9, x29
-	ldrb	w30, [x5, x27]
-	add	x5, x27, #1
-	add	x27, x30, #33
-	str	x5, [x0, #120]
-	ldp	q0, q1, [x29, #32]
-	stp	q0, q1, [x28, #32]
-	cmp	w30, #32
-	b.lo	192b
-	ldp	q0, q1, [x29, #64]
-	stp	q0, q1, [x28, #64]
-	cmp	w30, #64
-	b.lo	192b
-	ldp	q0, q1, [x29, #96]
-	stp	q0, q1, [x28, #96]
-	cmp	w30, #96
-	b.lo	192b
-	ldp	q0, q1, [x29, #128]
-	stp	q0, q1, [x28, #128]
-	tbz	w30, #7, 192b
-	ldp	q0, q1, [x29, #160]
-	stp	q0, q1, [x28, #160]
-	cmp	w30, #160
-	b.lo	192b
-	ldp	q0, q1, [x29, #192]
-	stp	q0, q1, [x28, #192]
-	cmp	w30, #192
-	b.lo	192b
-	ldp	q0, q1, [x29, #224]
-	stp	q0, q1, [x28, #224]
-	cmp	w30, #224
-	b.lo	192b
-	ldp	q0, q1, [x29, #256]
-	stp	q0, q1, [x28, #256]
-	b	192b
-562:
-	add	x5, x9, x26
-	ldp	q0, q1, [x5]
-	add	x25, x9, x24
-	stp	q0, q1, [x25]
-	cmp	x7, #33
-	b.lo	212b
-572:
-	cmp	x27, #31
-	b.hi	582f
-	mov	w5, #1
-	str	x5, [x0, #104]
-582:
-	ldr	x5, [x0, #48]
-	ldr	x7, [x0, #120]
-	add	x26, x9, x26
-	ldrb	w27, [x5, x7]
-	add	x5, x7, #1
-	add	x7, x27, #33
-	str	x5, [x0, #120]
-	ldp	q0, q1, [x26, #32]
-	stp	q0, q1, [x25, #32]
+422:
+	ldr	x24, [x0, #48]
+	ldr	x28, [x0, #120]
+	ldrb	w27, [x24, x28]
+	add	x24, x28, #1
+	str	x24, [x0, #120]
+	ldp	q0, q1, [x21, #32]
+	add	x24, x27, #33
+	stp	q0, q1, [x26, #32]
 	cmp	w27, #32
-	b.lo	212b
-	ldp	q0, q1, [x26, #64]
-	stp	q0, q1, [x25, #64]
+	b.lo	182b
+	ldp	q0, q1, [x21, #64]
+	stp	q0, q1, [x26, #64]
 	cmp	w27, #64
-	b.lo	212b
-	ldp	q0, q1, [x26, #96]
-	stp	q0, q1, [x25, #96]
+	b.lo	182b
+	ldp	q0, q1, [x21, #96]
+	stp	q0, q1, [x26, #96]
 	cmp	w27, #96
-	b.lo	212b
-	ldp	q0, q1, [x26, #128]
-	stp	q0, q1, [x25, #128]
-	tbz	w27, #7, 212b
-	ldp	q0, q1, [x26, #160]
-	stp	q0, q1, [x25, #160]
+	b.lo	182b
+	ldp	q0, q1, [x21, #128]
+	stp	q0, q1, [x26, #128]
+	tbz	w27, #7, 182b
+	ldp	q0, q1, [x21, #160]
+	stp	q0, q1, [x26, #160]
 	cmp	w27, #160
-	b.lo	212b
-	ldp	q0, q1, [x26, #192]
-	stp	q0, q1, [x25, #192]
+	b.lo	182b
+	ldp	q0, q1, [x21, #192]
+	stp	q0, q1, [x26, #192]
 	cmp	w27, #192
-	b.lo	212b
-	ldp	q0, q1, [x26, #224]
-	stp	q0, q1, [x25, #224]
+	b.lo	182b
+	ldp	q0, q1, [x21, #224]
+	stp	q0, q1, [x26, #224]
 	cmp	w27, #224
+	b.lo	182b
+	ldp	q0, q1, [x21, #256]
+	stp	q0, q1, [x26, #256]
+	b	182b
+432:
+	cmp	x29, #31
+	b.hi	442f
+	str	x5, [x0, #104]
+442:
+	ldr	x27, [x0, #48]
+	ldr	x30, [x0, #120]
+	ldrb	w29, [x27, x30]
+	add	x27, x30, #1
+	str	x27, [x0, #120]
+	ldp	q0, q1, [x28, #32]
+	add	x27, x29, #33
+	stp	q0, q1, [x26, #32]
+	cmp	w29, #32
+	b.lo	202b
+	ldp	q0, q1, [x28, #64]
+	stp	q0, q1, [x26, #64]
+	cmp	w29, #64
+	b.lo	202b
+	ldp	q0, q1, [x28, #96]
+	stp	q0, q1, [x26, #96]
+	cmp	w29, #96
+	b.lo	202b
+	ldp	q0, q1, [x28, #128]
+	stp	q0, q1, [x26, #128]
+	tbz	w29, #7, 202b
+	ldp	q0, q1, [x28, #160]
+	stp	q0, q1, [x26, #160]
+	cmp	w29, #160
+	b.lo	202b
+	ldp	q0, q1, [x28, #192]
+	stp	q0, q1, [x26, #192]
+	cmp	w29, #192
+	b.lo	202b
+	ldp	q0, q1, [x28, #224]
+	stp	q0, q1, [x26, #224]
+	cmp	w29, #224
+	b.lo	202b
+	ldp	q0, q1, [x28, #256]
+	stp	q0, q1, [x26, #256]
+	b	202b
+452:
+	ldr	x22, [x0, #48]
+	ldr	x25, [x0, #120]
+	ldrb	w22, [x22, x25]
+	add	x25, x25, #1
+	str	x25, [x0, #120]
+	ldp	q0, q1, [x21, #32]
+	add	x25, x22, #33
+	stp	q0, q1, [x27, #32]
+	cmp	w22, #32
 	b.lo	212b
-	ldp	q0, q1, [x26, #256]
-	stp	q0, q1, [x25, #256]
+	ldp	q0, q1, [x21, #64]
+	stp	q0, q1, [x27, #64]
+	cmp	w22, #64
+	b.lo	212b
+	ldp	q0, q1, [x21, #96]
+	stp	q0, q1, [x27, #96]
+	cmp	w22, #96
+	b.lo	212b
+	ldp	q0, q1, [x21, #128]
+	stp	q0, q1, [x27, #128]
+	tbz	w22, #7, 212b
+	ldp	q0, q1, [x21, #160]
+	stp	q0, q1, [x27, #160]
+	cmp	w22, #160
+	b.lo	212b
+	ldp	q0, q1, [x21, #192]
+	stp	q0, q1, [x27, #192]
+	cmp	w22, #192
+	b.lo	212b
+	ldp	q0, q1, [x21, #224]
+	stp	q0, q1, [x27, #224]
+	cmp	w22, #224
+	b.lo	212b
+	ldp	q0, q1, [x21, #256]
+	stp	q0, q1, [x27, #256]
 	b	212b
+462:
+	cmp	x29, #31
+	b.hi	472f
+	str	x5, [x0, #104]
+472:
+	ldr	x27, [x0, #48]
+	ldr	x30, [x0, #120]
+	ldrb	w29, [x27, x30]
+	add	x27, x30, #1
+	str	x27, [x0, #120]
+	ldp	q0, q1, [x28, #32]
+	add	x27, x29, #33
+	stp	q0, q1, [x22, #32]
+	cmp	w29, #32
+	b.lo	232b
+	ldp	q0, q1, [x28, #64]
+	stp	q0, q1, [x22, #64]
+	cmp	w29, #64
+	b.lo	232b
+	ldp	q0, q1, [x28, #96]
+	stp	q0, q1, [x22, #96]
+	cmp	w29, #96
+	b.lo	232b
+	ldp	q0, q1, [x28, #128]
+	stp	q0, q1, [x22, #128]
+	tbz	w29, #7, 232b
+	ldp	q0, q1, [x28, #160]
+	stp	q0, q1, [x22, #160]
+	cmp	w29, #160
+	b.lo	232b
+	ldp	q0, q1, [x28, #192]
+	stp	q0, q1, [x22, #192]
+	cmp	w29, #192
+	b.lo	232b
+	ldp	q0, q1, [x28, #224]
+	stp	q0, q1, [x22, #224]
+	cmp	w29, #224
+	b.lo	232b
+	ldp	q0, q1, [x28, #256]
+	stp	q0, q1, [x22, #256]
+	b	232b
+482:
+	ldr	x20, [x0, #48]
+	ldr	x25, [x0, #120]
+	ldrb	w24, [x20, x25]
+	add	x20, x25, #1
+	str	x20, [x0, #120]
+	ldp	q0, q1, [x22, #32]
+	add	x20, x24, #33
+	stp	q0, q1, [x26, #32]
+	cmp	w24, #32
+	b.lo	242b
+	ldp	q0, q1, [x22, #64]
+	stp	q0, q1, [x26, #64]
+	cmp	w24, #64
+	b.lo	242b
+	ldp	q0, q1, [x22, #96]
+	stp	q0, q1, [x26, #96]
+	cmp	w24, #96
+	b.lo	242b
+	ldp	q0, q1, [x22, #128]
+	stp	q0, q1, [x26, #128]
+	tbz	w24, #7, 242b
+	ldp	q0, q1, [x22, #160]
+	stp	q0, q1, [x26, #160]
+	cmp	w24, #160
+	b.lo	242b
+	ldp	q0, q1, [x22, #192]
+	stp	q0, q1, [x26, #192]
+	cmp	w24, #192
+	b.lo	242b
+	ldp	q0, q1, [x22, #224]
+	stp	q0, q1, [x26, #224]
+	cmp	w24, #224
+	b.lo	242b
+	ldp	q0, q1, [x22, #256]
+	stp	q0, q1, [x26, #256]
+	b	242b
+492:
+	cmp	x26, #31
+	b.hi	502f
+	str	x5, [x0, #104]
+502:
+	ldr	x7, [x0, #48]
+	ldr	x27, [x0, #120]
+	ldrb	w26, [x7, x27]
+	add	x7, x27, #1
+	str	x7, [x0, #120]
+	ldp	q0, q1, [x25, #32]
+	add	x7, x26, #33
+	stp	q0, q1, [x24, #32]
+	cmp	w26, #32
+	b.lo	262b
+	ldp	q0, q1, [x25, #64]
+	stp	q0, q1, [x24, #64]
+	cmp	w26, #64
+	b.lo	262b
+	ldp	q0, q1, [x25, #96]
+	stp	q0, q1, [x24, #96]
+	cmp	w26, #96
+	b.lo	262b
+	ldp	q0, q1, [x25, #128]
+	stp	q0, q1, [x24, #128]
+	tbz	w26, #7, 262b
+	ldp	q0, q1, [x25, #160]
+	stp	q0, q1, [x24, #160]
+	cmp	w26, #160
+	b.lo	262b
+	ldp	q0, q1, [x25, #192]
+	stp	q0, q1, [x24, #192]
+	cmp	w26, #192
+	b.lo	262b
+	ldp	q0, q1, [x25, #224]
+	stp	q0, q1, [x24, #224]
+	cmp	w26, #224
+	b.lo	262b
+	ldp	q0, q1, [x25, #256]
+	stp	q0, q1, [x24, #256]
+	b	262b
+512:
+	cmp	x25, x28
+	csel	x29, x25, x28, lo
+	sub	x28, x28, x29
+	cmp	x29, x24
+	b.hs	592f
+	ldr	x30, [x0, #56]
+	add	x30, x30, x29, lsl #5
+	ldr	q0, [x30, #2064]
+	ldr	q1, [x30, #2048]
+	add	x30, x8, x28
+	add	x28, x8, x28
+	ldp	q2, q3, [x30]
+	tbl	v1.16b, { v2.16b, v3.16b }, v1.16b
+	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
+	b	42b
+522:
+	cmp	x22, x28
+	csel	x29, x22, x28, lo
+	sub	x28, x28, x29
+	cmp	x29, x27
+	b.hs	602f
+	ldr	x30, [x0, #56]
+	add	x30, x30, x29, lsl #5
+	ldr	q0, [x30, #2064]
+	ldr	q1, [x30, #2048]
+	add	x30, x8, x28
+	add	x28, x8, x28
+	ldp	q2, q3, [x30]
+	tbl	v1.16b, { v2.16b, v3.16b }, v1.16b
+	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
+	b	72b
+532:
+	cmp	x23, x22
+	csel	x29, x23, x22, lo
+	sub	x22, x22, x29
+	cmp	x29, x28
+	b.hs	612f
+	ldr	x30, [x0, #56]
+	add	x30, x30, x29, lsl #5
+	ldr	q0, [x30, #2064]
+	ldr	q1, [x30, #2048]
+	add	x30, x8, x22
+	add	x22, x8, x22
+	ldp	q2, q3, [x30]
+	tbl	v1.16b, { v2.16b, v3.16b }, v1.16b
+	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
+	b	102b
+542:
+	cmp	x24, x23
+	csel	x29, x24, x23, lo
+	sub	x23, x23, x29
+	cmp	x29, x28
+	b.hs	622f
+	ldr	x30, [x0, #56]
+	add	x30, x30, x29, lsl #5
+	ldr	q0, [x30, #2064]
+	ldr	q1, [x30, #2048]
+	add	x30, x8, x23
+	add	x23, x8, x23
+	ldp	q2, q3, [x30]
+	tbl	v1.16b, { v2.16b, v3.16b }, v1.16b
+	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
+	b	132b
+552:
+	cmp	x22, x28
+	csel	x29, x22, x28, lo
+	sub	x28, x28, x29
+	cmp	x29, x27
+	b.hs	632f
+	ldr	x30, [x0, #56]
+	add	x30, x30, x29, lsl #5
+	ldr	q0, [x30, #2064]
+	ldr	q1, [x30, #2048]
+	add	x30, x8, x28
+	add	x28, x8, x28
+	ldp	q2, q3, [x30]
+	tbl	v1.16b, { v2.16b, v3.16b }, v1.16b
+	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
+	b	162b
+562:
+	cmp	x22, x28
+	csel	x29, x22, x28, lo
+	sub	x28, x28, x29
+	cmp	x29, x27
+	b.hs	642f
+	ldr	x30, [x0, #56]
+	add	x30, x30, x29, lsl #5
+	ldr	q0, [x30, #2064]
+	ldr	q1, [x30, #2048]
+	add	x30, x8, x28
+	add	x28, x8, x28
+	ldp	q2, q3, [x30]
+	tbl	v1.16b, { v2.16b, v3.16b }, v1.16b
+	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
+	b	192b
+572:
+	cmp	x24, x28
+	csel	x29, x24, x28, lo
+	sub	x28, x28, x29
+	cmp	x29, x27
+	b.hs	652f
+	ldr	x30, [x0, #56]
+	add	x30, x30, x29, lsl #5
+	ldr	q0, [x30, #2064]
+	ldr	q1, [x30, #2048]
+	add	x30, x8, x28
+	add	x28, x8, x28
+	ldp	q2, q3, [x30]
+	tbl	v1.16b, { v2.16b, v3.16b }, v1.16b
+	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
+	b	222b
+582:
+	cmp	x21, x25
+	csel	x26, x21, x25, lo
+	sub	x25, x25, x26
+	cmp	x26, x7
+	b.hs	662f
+	ldr	x27, [x0, #56]
+	add	x27, x27, x26, lsl #5
+	ldr	q0, [x27, #2064]
+	ldr	q1, [x27, #2048]
+	add	x27, x8, x25
+	add	x25, x8, x25
+	ldp	q2, q3, [x27]
+	tbl	v1.16b, { v2.16b, v3.16b }, v1.16b
+	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
+	b	252b
 592:
-	mov	x16, xzr
-	b	612f
+	add	x30, x8, x28
+	add	x28, x8, x28
+	ldp	q1, q0, [x30]
+	b	42b
 602:
-	cbz	x8, 702f
-	neg	x16, x2
+	add	x30, x8, x28
+	add	x28, x8, x28
+	ldp	q1, q0, [x30]
+	b	72b
 612:
+	add	x30, x8, x22
+	add	x22, x8, x22
+	ldp	q1, q0, [x30]
+	b	102b
+622:
+	add	x30, x8, x23
+	add	x23, x8, x23
+	ldp	q1, q0, [x30]
+	b	132b
+632:
+	add	x30, x8, x28
+	add	x28, x8, x28
+	ldp	q1, q0, [x30]
+	b	162b
+642:
+	add	x30, x8, x28
+	add	x28, x8, x28
+	ldp	q1, q0, [x30]
+	b	192b
+652:
+	add	x30, x8, x28
+	add	x28, x8, x28
+	ldp	q1, q0, [x30]
+	b	222b
+662:
+	add	x27, x8, x25
+	add	x25, x8, x25
+	ldp	q1, q0, [x27]
+	b	252b
+672:
+	mov	x16, xzr
+	b	692f
+682:
+	cbz	x10, 792f
+	neg	x16, x2
+692:
 	ldr	x15, [x15, x16]
 	mov	w16, #1
 	.p2align	5, , 16
-622:
+702:
 	lsr	x2, x23, #3
-	ubfiz	x17, x14, #3, #8
+	and	x1, x14, #0xff
+	//APP
+	//NO_APP
+	ldr	x1, [x12, x1, lsl #3]
 	and	x3, x23, #0x7
-	and	x1, x13, #0xff
+	and	x17, x13, #0xff
 	ldr	x2, [x11, x2]
-	ldr	x17, [x12, x17]
+	ldp	q0, q1, [x22]
 	lsr	x2, x2, x3
-	add	x3, x9, x24
-	and	w2, w17, w2
-	adds	x2, x2, x17, lsr #40
+	and	w2, w1, w2
+	stp	q0, q1, [x24]
+	adds	x2, x2, x1, lsr #40
 	csel	x21, x21, x2, eq
-	add	x2, x10, x22
-	ldp	q0, q1, [x2]
-	stp	q0, q1, [x3]
-	cmp	x1, #33
-	b.hs	662f
-632:
+	cmp	x17, #33
+	b.hs	742f
+712:
+	add	x2, x24, x17
 	ubfx	x3, x15, #2, #6
-	add	x2, x1, x24
+	sub	x4, x2, x8
 	cmp	x21, x3
-	ccmp	x2, x21, #0, hs
-	b.lo	672f
-	sub	x5, x2, x21
-	mov	x6, x21
-642:
-	add	x4, x9, x5
-	ldp	q0, q1, [x4]
-	add	x4, x9, x2
-	stp	q0, q1, [x4]
+	ccmp	x21, x4, #2, hs
+	b.hi	772f
+	sub	x4, x2, x21
+	mov	x5, x21
+	ldp	q1, q0, [x4]
+722:
+	stp	q1, q0, [x2]
 	cmp	x3, #33
-	b.hs	682f
-652:
-	lsr	x17, x17, #32
-	add	x22, x1, x22
-	add	x24, x3, x2
-	subs	x8, x8, #1
+	b.hs	752f
+732:
+	lsr	x1, x1, #32
+	add	x24, x2, x3
+	add	x22, x22, x17
+	subs	x10, x10, #1
 	lsr	x15, x15, #8
 	lsr	x13, x13, #8
-	add	x23, x23, w17, uxtb
+	add	x23, x23, w1, uxtb
 	lsr	x14, x14, #8
-	b.ne	622b
-	b	702f
-662:
-	ldr	x1, [x0, #48]
-	ldr	x5, [x0, #120]
-	ldrb	w4, [x1, x5]
-	add	x1, x5, #1
-	str	x1, [x0, #120]
-	ldp	q0, q1, [x2, #32]
-	add	x1, x4, #33
-	stp	q0, q1, [x3, #32]
-	cmp	w4, #32
-	b.lo	632b
-	ldp	q0, q1, [x2, #64]
-	stp	q0, q1, [x3, #64]
-	cmp	w4, #64
-	b.lo	632b
-	ldp	q0, q1, [x2, #96]
-	stp	q0, q1, [x3, #96]
-	cmp	w4, #96
-	b.lo	632b
-	ldp	q0, q1, [x2, #128]
-	stp	q0, q1, [x3, #128]
-	tbz	w4, #7, 632b
-	ldp	q0, q1, [x2, #160]
-	stp	q0, q1, [x3, #160]
-	cmp	w4, #160
-	b.lo	632b
-	ldp	q0, q1, [x2, #192]
-	stp	q0, q1, [x3, #192]
-	cmp	w4, #192
-	b.lo	632b
-	ldp	q0, q1, [x2, #224]
-	stp	q0, q1, [x3, #224]
-	cmp	w4, #224
-	b.lo	632b
-	ldp	q0, q1, [x2, #256]
-	stp	q0, q1, [x3, #256]
-	b	632b
-672:
-	cmp	x21, x2
-	csel	x6, x21, x2, lo
-	sub	x5, x2, x6
-	cmp	x6, x3
-	b.hs	642b
-	ldr	x4, [x0, #56]
-	add	x4, x4, x6, lsl #5
-	ldr	q1, [x4, #2064]
-	ldr	q0, [x4, #2048]
-	add	x4, x9, x5
-	ldp	q2, q3, [x4]
-	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
-	tbl	v1.16b, { v2.16b, v3.16b }, v1.16b
-	add	x4, x9, x2
-	stp	q0, q1, [x4]
-	cmp	x3, #33
-	b.lo	652b
-682:
-	cmp	x6, #31
-	b.hi	692f
+	b.ne	702b
+	b	792f
+742:
+	ldr	x17, [x0, #48]
+	ldr	x3, [x0, #120]
+	ldrb	w2, [x17, x3]
+	add	x17, x3, #1
+	str	x17, [x0, #120]
+	ldp	q0, q1, [x22, #32]
+	add	x17, x2, #33
+	stp	q0, q1, [x24, #32]
+	cmp	w2, #32
+	b.lo	712b
+	ldp	q0, q1, [x22, #64]
+	stp	q0, q1, [x24, #64]
+	cmp	w2, #64
+	b.lo	712b
+	ldp	q0, q1, [x22, #96]
+	stp	q0, q1, [x24, #96]
+	cmp	w2, #96
+	b.lo	712b
+	ldp	q0, q1, [x22, #128]
+	stp	q0, q1, [x24, #128]
+	tbz	w2, #7, 712b
+	ldp	q0, q1, [x22, #160]
+	stp	q0, q1, [x24, #160]
+	cmp	w2, #160
+	b.lo	712b
+	ldp	q0, q1, [x22, #192]
+	stp	q0, q1, [x24, #192]
+	cmp	w2, #192
+	b.lo	712b
+	ldp	q0, q1, [x22, #224]
+	stp	q0, q1, [x24, #224]
+	cmp	w2, #224
+	b.lo	712b
+	ldp	q0, q1, [x22, #256]
+	stp	q0, q1, [x24, #256]
+	b	712b
+752:
+	cmp	x5, #31
+	b.hi	762f
 	str	x16, [x0, #104]
-692:
+762:
 	ldr	x3, [x0, #48]
-	ldr	x7, [x0, #120]
-	add	x5, x9, x5
-	ldrb	w6, [x3, x7]
-	add	x3, x7, #1
+	ldr	x6, [x0, #120]
+	ldrb	w5, [x3, x6]
+	add	x3, x6, #1
 	str	x3, [x0, #120]
-	ldp	q0, q1, [x5, #32]
-	add	x3, x6, #33
-	stp	q0, q1, [x4, #32]
-	cmp	w6, #32
-	b.lo	652b
-	ldp	q0, q1, [x5, #64]
-	stp	q0, q1, [x4, #64]
-	cmp	w6, #64
-	b.lo	652b
-	ldp	q0, q1, [x5, #96]
-	stp	q0, q1, [x4, #96]
-	cmp	w6, #96
-	b.lo	652b
-	ldp	q0, q1, [x5, #128]
-	stp	q0, q1, [x4, #128]
-	tbz	w6, #7, 652b
-	ldp	q0, q1, [x5, #160]
-	stp	q0, q1, [x4, #160]
-	cmp	w6, #160
-	b.lo	652b
-	ldp	q0, q1, [x5, #192]
-	stp	q0, q1, [x4, #192]
-	cmp	w6, #192
-	b.lo	652b
-	ldp	q0, q1, [x5, #224]
-	stp	q0, q1, [x4, #224]
-	cmp	w6, #224
-	b.lo	652b
-	ldp	q0, q1, [x5, #256]
-	stp	q0, q1, [x4, #256]
-	b	652b
-702:
-	stp	x24, x22, [x0, #80]
+	ldp	q0, q1, [x4, #32]
+	add	x3, x5, #33
+	stp	q0, q1, [x2, #32]
+	cmp	w5, #32
+	b.lo	732b
+	ldp	q0, q1, [x4, #64]
+	stp	q0, q1, [x2, #64]
+	cmp	w5, #64
+	b.lo	732b
+	ldp	q0, q1, [x4, #96]
+	stp	q0, q1, [x2, #96]
+	cmp	w5, #96
+	b.lo	732b
+	ldp	q0, q1, [x4, #128]
+	stp	q0, q1, [x2, #128]
+	tbz	w5, #7, 732b
+	ldp	q0, q1, [x4, #160]
+	stp	q0, q1, [x2, #160]
+	cmp	w5, #160
+	b.lo	732b
+	ldp	q0, q1, [x4, #192]
+	stp	q0, q1, [x2, #192]
+	cmp	w5, #192
+	b.lo	732b
+	ldp	q0, q1, [x4, #224]
+	stp	q0, q1, [x2, #224]
+	cmp	w5, #224
+	b.lo	732b
+	ldp	q0, q1, [x4, #256]
+	stp	q0, q1, [x2, #256]
+	b	732b
+772:
+	cmp	x21, x4
+	csel	x5, x21, x4, lo
+	sub	x4, x4, x5
+	cmp	x5, x3
+	b.hs	782f
+	ldr	x6, [x0, #56]
+	add	x6, x6, x5, lsl #5
+	ldr	q0, [x6, #2064]
+	ldr	q1, [x6, #2048]
+	add	x6, x8, x4
+	add	x4, x8, x4
+	ldp	q2, q3, [x6]
+	tbl	v1.16b, { v2.16b, v3.16b }, v1.16b
+	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
+	b	722b
+782:
+	add	x6, x8, x4
+	add	x4, x8, x4
+	ldp	q1, q0, [x6]
+	b	722b
+792:
+	sub	x8, x24, x8
+	sub	x9, x22, x9
 	str	x21, [x0, #96]
 	ldp	x20, x19, [sp, #80]
 	ldp	x22, x21, [sp, #64]
 	ldp	x24, x23, [sp, #48]
 	ldp	x26, x25, [sp, #32]
 	ldp	x28, x27, [sp, #16]
+	stp	x8, x9, [x0, #80]
 	ldp	x29, x30, [sp], #96
-712:
+802:
 	ret
