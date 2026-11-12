@@ -4,6 +4,7 @@
 	jle	52f
 	push	r15
 	push	r14
+	push	r13
 	push	r12
 	push	rbx
 	vpxor	xmm0, xmm0, xmm0
@@ -15,69 +16,56 @@
 	xor	r9d, r9d
 	xor	r10d, r10d
 	xor	r8d, r8d
-	xor	ebx, ebx
+	xor	r15d, r15d
 	jmp	22f
 	.p2align	4
 2:
-	xor	ebx, ebx
-	xor	r14d, r14d
 	xor	r15d, r15d
 	xor	r12d, r12d
+	xor	ebx, ebx
+	xor	r14d, r14d
 12:
-	add	rcx, r12
-	add	r9, r15
-	add	r10, r14
-	add	r8, rbx
+	add	rcx, r14
+	add	r9, rbx
+	add	r10, r12
+	add	r8, r15
 	cmp	r11, rsi
-	mov	rbx, r11
+	mov	r15, r11
 	jge	42f
 22:
-	lea	r11, [rbx + rax]
+	lea	r11, [r15 + rax]
 	cmp	r11, rsi
-	mov	r14, rsi
-	cmovb	r14, r11
-	cmp	rbx, r14
+	mov	r12, rsi
+	cmovb	r12, r11
+	cmp	r15, r12
 	jge	2b
 	vpxor	xmm4, xmm4, xmm4
+	xor	r14d, r14d
+	xor	ebx, ebx
 	vpxor	xmm5, xmm5, xmm5
-	vpxor	xmm6, xmm6, xmm6
-	vpxor	xmm7, xmm7, xmm7
 	.p2align	4
 32:
-	vmovdqu64	zmm8, zmmword ptr [rdi + rbx]
-	vpsrlw	zmm9, zmm8, 2
-	vpandq	zmm10, zmm9, zmm2
-	vpsadbw	zmm10, zmm10, zmm0
-	vpaddq	zmm7, zmm10, zmm7
-	vpsrlw	zmm10, zmm8, 1
-	vpandq	zmm10, zmm10, zmm3
-	vpsadbw	zmm10, zmm10, zmm0
-	vpaddq	zmm6, zmm10, zmm6
-	vpandq	zmm10, zmm8, zmm3
-	vpsadbw	zmm10, zmm10, zmm0
-	vpaddq	zmm5, zmm10, zmm5
-	vpsrlw	zmm10, zmm8, 7
-	vpternlogq	zmm10, zmm3, zmm9, 128
-	vpsadbw	zmm9, zmm10, zmm0
-	vpaddq	zmm4, zmm9, zmm4
-	vpmaxub	zmm1, zmm1, zmm8
-	add	rbx, 64
-	cmp	rbx, r14
+	vmovdqu64	zmm6, zmmword ptr [rdi + r15]
+	vpsadbw	zmm7, zmm6, zmm0
+	vpaddq	zmm5, zmm7, zmm5
+	vpandq	zmm7, zmm6, zmm2
+	vpsadbw	zmm7, zmm7, zmm0
+	vpaddq	zmm4, zmm7, zmm4
+	vpsllw	zmm7, zmm6, 7
+	vpmovb2m	k0, zmm7
+	kmovq	r13, k0
+	popcnt	r13, r13
+	add	rbx, r13
+	vpsllw	zmm7, zmm6, 5
+	vpternlogq	zmm7, zmm6, zmm3, 128
+	vpmovb2m	k0, zmm7
+	kmovq	r13, k0
+	popcnt	r13, r13
+	add	r14, r13
+	vpmaxub	zmm1, zmm1, zmm6
+	add	r15, 64
+	cmp	r15, r12
 	jl	32b
-	vextracti64x4	ymm8, zmm7, 1
-	vpaddq	zmm7, zmm7, zmm8
-	vextracti128	xmm8, ymm7, 1
-	vpaddq	xmm7, xmm8, xmm7
-	vpshufd	xmm8, xmm7, 238
-	vpaddq	xmm7, xmm8, xmm7
-	vmovq	rbx, xmm7
-	vextracti64x4	ymm7, zmm6, 1
-	vpaddq	zmm6, zmm6, zmm7
-	vextracti128	xmm7, ymm6, 1
-	vpaddq	xmm6, xmm6, xmm7
-	vpshufd	xmm7, xmm6, 238
-	vpaddq	xmm6, xmm6, xmm7
-	vmovq	r14, xmm6
 	vextracti64x4	ymm6, zmm5, 1
 	vpaddq	zmm5, zmm5, zmm6
 	vextracti128	xmm6, ymm5, 1
@@ -108,6 +96,7 @@
 	setb	al
 	pop	rbx
 	pop	r12
+	pop	r13
 	pop	r14
 	pop	r15
 	jmp	62f
@@ -118,6 +107,10 @@
 	xor	ecx, ecx
 	xor	eax, eax
 62:
+	sub	r8, r10
+	shr	r8, 2
+	sub	r10, r9
+	shr	r10
 	mov	qword ptr [rdx], r8
 	mov	qword ptr [rdx + 8], r10
 	mov	qword ptr [rdx + 16], r9
@@ -126,7 +119,7 @@
 	ret
 	.p2align	6, 0x0
 72:
-	.byte	63
+	.byte	3
 	.p2align	6, 0x0
 82:
-	.byte	1
+	.byte	224

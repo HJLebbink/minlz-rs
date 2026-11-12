@@ -122,7 +122,13 @@ const EXEC8: &str = "exec8.mlir";
 /// the target file in `mlir/stats/` and in `mlir/exec/`, the structure of the operation loops, the
 /// architecture and the features, each among those that `block::simd` checks for its tier.
 const BLOCK: [(&str, &str, &str, Arch, &str); 3] = [
-    ("avx2", "x86_256", EXEC64, Arch::X86, "-mattr=+avx2,+bmi2"),
+    (
+        "avx2",
+        "x86_256",
+        EXEC64,
+        Arch::X86,
+        "-mattr=+avx2,+bmi2,+popcnt",
+    ),
     (
         "avx512",
         "x86_512",

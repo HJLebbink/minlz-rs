@@ -20,7 +20,7 @@
 
 use core::sync::atomic::{AtomicU32, Ordering};
 
-/// The SIMD exec loops and stats on x86-64: AVX2 and BMI2 (Go `cpu.AVX2`).
+/// The SIMD exec loops and stats on x86-64: AVX2, BMI2 and POPCNT (Go `cpu.AVX2`).
 pub const AVX2: u32 = 1;
 /// The AVX-512 exec loops and stats (Go `cpu.AVX512`).
 pub const AVX512: u32 = 2;
@@ -99,20 +99,16 @@ fn detected() -> u32 {
 fn detect() -> u32 {
     use std::arch::is_x86_feature_detected as f;
     let mut m = 0;
-    if f!("avx2") && f!("bmi2") {
-        m |= AVX2;
+    if f!("avx2") && f!("bmi2") && f!("popcnt") {
+        m |= AVX2 | PIVCO_AVX2;
         if f!("avx512f")
             && f!("avx512bw")
             && f!("avx512vl")
             && f!("avx512vbmi")
             && f!("avx512vbmi2")
-            && f!("popcnt")
         {
             m |= AVX512;
         }
-    }
-    if f!("avx2") && f!("bmi2") && f!("popcnt") {
-        m |= PIVCO_AVX2;
     }
     if m & AVX512 != 0 && f!("avx512vpopcntdq") {
         m |= PIVCO_AVX512;

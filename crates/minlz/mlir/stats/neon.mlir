@@ -1,7 +1,8 @@
 // Target file of stats.mlir for NEON: the sums of each 2 bytes in the 32 16-bit lanes of four q
-// registers.
+// registers. A count of bytes is an accumulator of the same shape.
 
 !acc = vector<32xi16>
+!cnt = vector<32xi16>
 
 func.func private @acc_zero() -> !acc {
   %r = arith.constant dense<0> : !acc
@@ -45,6 +46,28 @@ func.func private @acc_total(%a: !acc) -> i64 {
   %w = arith.extui %a : !acc to vector<32xi32>
   %s = vector.reduction <add>, %w : vector<32xi32> into i32
   %r = arith.extui %s : i32 to i64
+  return %r : i64
+}
+
+func.func private @cnt_zero() -> !cnt {
+  %r = arith.constant dense<0> : !cnt
+  return %r : !cnt
+}
+
+// cnt_add adds each set lane of m to c as a byte of 255, which the compare mask already is, so
+// cnt_total divides the sum by 255.
+func.func private @cnt_add(%c: !cnt, %m: vector<64xi1>) -> !cnt {
+  %vm1 = arith.constant dense<-1> : vector<64xi8>
+  %zv = arith.constant dense<0> : vector<64xi8>
+  %b = arith.select %m, %vm1, %zv : vector<64xi1>, vector<64xi8>
+  %s = func.call @acc_add(%c, %b) : (!acc, vector<64xi8>) -> !acc
+  return %s : !cnt
+}
+
+func.func private @cnt_total(%c: !cnt) -> i64 {
+  %c255 = arith.constant 255 : i64
+  %s = func.call @acc_total(%c) : (!acc) -> i64
+  %r = arith.divui %s, %c255 : i64
   return %r : i64
 }
 

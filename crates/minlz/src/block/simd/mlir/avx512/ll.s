@@ -2,6 +2,8 @@
 # cargo xtask mlir. Do not edit.
 	test	rsi, rsi
 	jle	52f
+	push	r14
+	push	rbx
 	vpxor	xmm0, xmm0, xmm0
 	xor	ecx, ecx
 	movabs	rax, 70368744177664
@@ -9,48 +11,41 @@
 	vpternlogd	zmm3, zmm3, zmm3, 255
 	vpxor	xmm1, xmm1, xmm1
 	xor	r8d, r8d
-	xor	r10d, r10d
+	xor	r11d, r11d
 	jmp	22f
 	.p2align	4
 2:
-	xor	r10d, r10d
 	xor	r11d, r11d
+	xor	r10d, r10d
 12:
-	add	rcx, r11
-	add	r8, r10
+	add	rcx, r10
+	add	r8, r11
 	cmp	r9, rsi
-	mov	r10, r9
+	mov	r11, r9
 	jge	42f
 22:
-	lea	r9, [r10 + rax]
+	lea	r9, [r11 + rax]
 	cmp	r9, rsi
-	mov	r11, rsi
-	cmovb	r11, r9
-	cmp	r10, r11
+	mov	rbx, rsi
+	cmovb	rbx, r9
+	cmp	r11, rbx
 	jge	2b
 	vpxor	xmm4, xmm4, xmm4
-	vpxor	xmm5, xmm5, xmm5
+	xor	r10d, r10d
 	.p2align	4
 32:
-	vmovdqu64	zmm6, zmmword ptr [rdi + r10]
-	vpsadbw	zmm7, zmm6, zmm0
-	vpaddq	zmm5, zmm7, zmm5
-	vpcmpeqb	k1, zmm6, zmm2
-	vmovdqu8	zmm7 {k1} {z}, zmmword ptr [rip + 72f]
-	vpsadbw	zmm7, zmm7, zmm0
-	vpaddq	zmm4, zmm7, zmm4
-	vpaddb	zmm6, zmm6, zmm3
-	vpmaxub	zmm1, zmm1, zmm6
-	add	r10, 64
-	cmp	r10, r11
+	vmovdqu64	zmm5, zmmword ptr [rdi + r11]
+	vpsadbw	zmm6, zmm5, zmm0
+	vpaddq	zmm4, zmm6, zmm4
+	vpcmpeqb	k0, zmm5, zmm2
+	kmovq	r14, k0
+	popcnt	r14, r14
+	add	r10, r14
+	vpaddb	zmm5, zmm5, zmm3
+	vpmaxub	zmm1, zmm1, zmm5
+	add	r11, 64
+	cmp	r11, rbx
 	jl	32b
-	vextracti64x4	ymm6, zmm5, 1
-	vpaddq	zmm5, zmm5, zmm6
-	vextracti128	xmm6, ymm5, 1
-	vpaddq	xmm5, xmm5, xmm6
-	vpshufd	xmm6, xmm5, 238
-	vpaddq	xmm5, xmm5, xmm6
-	vmovq	r10, xmm5
 	vextracti64x4	ymm5, zmm4, 1
 	vpaddq	zmm4, zmm4, zmm5
 	vextracti128	xmm5, ymm4, 1
@@ -72,6 +67,8 @@
 	xor	eax, eax
 	cmp	sil, -33
 	setb	al
+	pop	rbx
+	pop	r14
 	mov	qword ptr [rdx], r8
 	mov	qword ptr [rdx + 8], rcx
 	vzeroupper
@@ -86,6 +83,3 @@
 	.p2align	6, 0x0
 62:
 	.byte	33
-	.p2align	6, 0x0
-72:
-	.zero	64,1
