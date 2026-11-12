@@ -25,20 +25,25 @@
 	mov	edx, 7
 	mov	qword ptr [rsp + 88], rdx
 	mov	qword ptr [rsp + 120], 0
-	vmovdqa64	zmm22, zmmword ptr [rip + 812f]
+	vmovdqa64	zmm0, zmmword ptr [rip + 812f]
 	vpbroadcastb	zmm1, byte ptr [rip + 822f]
 	vpbroadcastb	zmm2, byte ptr [rip + 832f]
-	vpbroadcastd	zmm3, dword ptr [rip + 842f]
-	vpternlogd	zmm4, zmm4, zmm4, 255
-	vpbroadcastd	zmm5, dword ptr [rip + 852f]
-	vpbroadcastd	zmm6, dword ptr [rip + 862f]
-	vpxor	xmm7, xmm7, xmm7
-	vbroadcasti32x4	zmm8, xmmword ptr [rip + 872f]
-	vpbroadcastd	zmm9, dword ptr [rip + 882f]
-	vmovdqa64	zmm10, zmmword ptr [rip + 892f]
+	vpbroadcastb	zmm3, byte ptr [rip + 842f]
+	vpxor	xmm4, xmm4, xmm4
+	vmovdqa64	zmm5, zmmword ptr [rip + 852f]
+	vmovdqa64	zmm6, zmmword ptr [rip + 862f]
+	vmovdqa64	zmm29, zmmword ptr [rip + 872f]
+	vmovdqa64	zmm8, zmmword ptr [rip + 882f]
+	vpbroadcastd	zmm9, dword ptr [rip + 892f]
+	vpternlogd	zmm10, zmm10, zmm10, 255
 	vpbroadcastd	zmm11, dword ptr [rip + 902f]
-	vpbroadcastb	xmm12, byte ptr [rip + 912f]
-	vpbroadcastb	xmm13, byte ptr [rip + 922f]
+	vpbroadcastd	zmm12, dword ptr [rip + 912f]
+	vbroadcasti32x4	zmm13, xmmword ptr [rip + 922f]
+	vpbroadcastd	zmm14, dword ptr [rip + 932f]
+	vmovdqa64	zmm15, zmmword ptr [rip + 942f]
+	vpbroadcastd	zmm16, dword ptr [rip + 952f]
+	vpbroadcastb	xmm17, byte ptr [rip + 962f]
+	vpbroadcastb	xmm18, byte ptr [rip + 972f]
 	mov	rdx, rcx
 	xor	esi, esi
 	mov	qword ptr [rsp + 112], rcx
@@ -132,14 +137,14 @@
 	mov	rcx, qword ptr [rsp]
 	.p2align	4
 42:
-	vmovdqu64	zmm14, zmmword ptr [rax + r10 - 192]
-	vmovdqu64	zmm15, zmmword ptr [rax + r10 - 128]
-	vmovdqu64	zmm16, zmmword ptr [rax + r10 - 64]
-	vmovdqu64	zmm17, zmmword ptr [rax + r10]
-	vmovdqu64	zmmword ptr [rcx + r10 + 512], zmm14
-	vmovdqu64	zmmword ptr [rcx + r10 + 576], zmm15
-	vmovdqu64	zmmword ptr [rcx + r10 + 640], zmm16
-	vmovdqu64	zmmword ptr [rcx + r10 + 704], zmm17
+	vmovdqu64	zmm19, zmmword ptr [rax + r10 - 192]
+	vmovdqu64	zmm20, zmmword ptr [rax + r10 - 128]
+	vmovdqu64	zmm21, zmmword ptr [rax + r10 - 64]
+	vmovdqu64	zmm22, zmmword ptr [rax + r10]
+	vmovdqu64	zmmword ptr [rcx + r10 + 512], zmm19
+	vmovdqu64	zmmword ptr [rcx + r10 + 576], zmm20
+	vmovdqu64	zmmword ptr [rcx + r10 + 640], zmm21
+	vmovdqu64	zmmword ptr [rcx + r10 + 704], zmm22
 	add	r10, 256
 	cmp	r8, r10
 	jne	42b
@@ -160,8 +165,8 @@
 	and	r14, -16
 	.p2align	4
 62:
-	vmovdqu	xmm14, xmmword ptr [r8 + rbp]
-	vmovdqu	xmmword ptr [rcx + rbp], xmm14
+	vmovdqu64	xmm19, xmmword ptr [r8 + rbp]
+	vmovdqu64	xmmword ptr [rcx + rbp], xmm19
 	add	rbp, 16
 	cmp	r14, rbp
 	jne	62b
@@ -181,17 +186,17 @@
 	jne	82b
 	mov	rax, rcx
 92:
-	vmovdqu64	zmm14, zmmword ptr [rax]
+	vmovdqu64	zmm19, zmmword ptr [rax]
 	mov	rax, qword ptr [rsp + 72]
-	vpbroadcastb	zmm15, eax
-	vpcmpnleub	k2, zmm15, zmm22
-	vptestmb	k1 {k2}, zmm14, zmm1
-	vptestnmb	k2 {k2}, zmm14, zmm2
-	vpexpandb	zmm15 {k1} {z}, zmmword ptr [r11 + r8]
+	vpbroadcastb	zmm20, eax
+	vpcmpnleub	k2, zmm20, zmm0
+	vptestmb	k1 {k2}, zmm19, zmm1
+	vptestnmb	k2 {k2}, zmm19, zmm2
+	vpexpandb	zmm20 {k1} {z}, zmmword ptr [r11 + r8]
 	mov	rax, qword ptr [rsp]
-	vmovdqu64	zmmword ptr [rax + 192], zmm15
+	vmovdqu64	zmmword ptr [rax + 192], zmm20
 	mov	rax, qword ptr [rsp + 32]
-	vpexpandb	zmm15 {k2} {z}, zmmword ptr [rdx + rax]
+	vpexpandb	zmm20 {k2} {z}, zmmword ptr [rdx + rax]
 	mov	rcx, qword ptr [rsp + 48]
 	mov	rdx, rcx
 	shr	rdx, 3
@@ -235,14 +240,14 @@
 	mov	rcx, qword ptr [rsp]
 	.p2align	4
 122:
-	vmovdqu64	zmm16, zmmword ptr [rax + r8 - 192]
-	vmovdqu64	zmm17, zmmword ptr [rax + r8 - 128]
-	vmovdqu64	zmm18, zmmword ptr [rax + r8 - 64]
-	vmovdqu64	zmm19, zmmword ptr [rax + r8]
-	vmovdqu64	zmmword ptr [rcx + r8 + 576], zmm16
-	vmovdqu64	zmmword ptr [rcx + r8 + 640], zmm17
-	vmovdqu64	zmmword ptr [rcx + r8 + 704], zmm18
-	vmovdqu64	zmmword ptr [rcx + r8 + 768], zmm19
+	vmovdqu64	zmm21, zmmword ptr [rax + r8 - 192]
+	vmovdqu64	zmm22, zmmword ptr [rax + r8 - 128]
+	vmovdqu64	zmm23, zmmword ptr [rax + r8 - 64]
+	vmovdqu64	zmm24, zmmword ptr [rax + r8]
+	vmovdqu64	zmmword ptr [rcx + r8 + 576], zmm21
+	vmovdqu64	zmmword ptr [rcx + r8 + 640], zmm22
+	vmovdqu64	zmmword ptr [rcx + r8 + 704], zmm23
+	vmovdqu64	zmmword ptr [rcx + r8 + 768], zmm24
 	add	r8, 256
 	cmp	rbx, r8
 	jne	122b
@@ -259,8 +264,8 @@
 	lea	rdi, [rdx + rax]
 	.p2align	4
 142:
-	vmovdqu64	xmm16, xmmword ptr [r11 + rbx]
-	vmovdqu64	xmmword ptr [r15 + rbx], xmm16
+	vmovdqu64	xmm21, xmmword ptr [r11 + rbx]
+	vmovdqu64	xmmword ptr [r15 + rbx], xmm21
 	add	rbx, 16
 	cmp	rax, rbx
 	jne	142b
@@ -280,62 +285,68 @@
 	jne	162b
 	mov	r14, r15
 172:
+	vpsrlw	zmm21, zmm20, 3
+	vpandq	zmm21, zmm21, zmm3
+	vpsubusb	zmm21, zmm21, zmm2
+	vpsllq	zmm22, zmm21, 8
+	vpaddb	zmm22, zmm21, zmm22
+	vpsllq	zmm23, zmm22, 16
+	vpaddb	zmm22, zmm22, zmm23
+	vpsllq	zmm23, zmm22, 32
+	vpaddb	zmm22, zmm22, zmm23
+	vpsubb	zmm23, zmm22, zmm21
 	mov	rax, qword ptr [rsp + 64]
-	vpbroadcastd	zmm17, eax
-	vpmovzxbd	zmm16, xmm15
-	vpsrld	zmm18, zmm16, 3
-	vpmaxud	zmm18, zmm18, zmm3
-	vpaddd	zmm18, zmm18, zmm4
-	vpminud	zmm19, zmm16, zmm6
-	vpandd	zmm19, zmm19, zmm6
-	vpternlogd	zmm19, zmm16, zmm5, 248
-	vpsllvd	zmm16, zmm19, zmm18
-	vpsllvd	zmm19, zmm4, zmm18
-	valignd	zmm20, zmm18, zmm7, 15
-	vpaddd	zmm20, zmm20, zmm18
-	valignq	zmm21, zmm20, zmm7, 7
-	vpaddd	zmm20, zmm21, zmm20
-	valignq	zmm21, zmm20, zmm7, 6
-	vpaddd	zmm20, zmm21, zmm20
-	valignq	zmm21, zmm20, zmm7, 4
-	vpaddd	zmm20, zmm21, zmm20
-	vpsubd	zmm18, zmm20, zmm18
+	vpbroadcastd	zmm24, eax
+	vmovdqa64	zmm21, zmm22
+	vpermt2b	zmm21, zmm8, zmm4
+	vpmovzxbd	zmm25, xmm23
+	vpaddd	zmm21, zmm21, zmm25
+	vpmovzxbd	zmm25, xmm20
+	vpsrld	zmm26, zmm25, 3
+	vpmaxud	zmm26, zmm26, zmm9
+	vpaddd	zmm26, zmm26, zmm10
+	vpminud	zmm27, zmm25, zmm12
+	vpandd	zmm27, zmm27, zmm12
+	vpternlogd	zmm27, zmm25, zmm11, 248
+	vpsllvd	zmm25, zmm27, zmm26
+	vpsllvd	zmm27, zmm10, zmm26
+	vpaddd	zmm26, zmm21, zmm26
 	mov	eax, ecx
 	and	eax, 7
-	vpbroadcastd	zmm21, eax
-	vpaddd	zmm18, zmm18, zmm21
-	vpsrld	zmm21, zmm18, 3
-	vpandd	zmm18, zmm18, zmm5
-	vpshufb	zmm21, zmm21, zmm8
-	vpaddb	zmm21, zmm21, zmm9
-	vpermb	zmm21, zmm21, zmmword ptr [r14]
-	vpsrlvd	zmm18, zmm21, zmm18
-	vpandnd	zmm18, zmm19, zmm18
-	vpaddd	zmm16, zmm18, zmm16
-	vptestmd	k3, zmm16, zmm16
-	vpord	zmm16 {k3} {z}, zmm16, zmm10
-	valignd	zmm18, zmm16, zmm7, 15
-	vpmaxud	zmm16, zmm16, zmm18
-	valignq	zmm18, zmm16, zmm7, 7
-	vpmaxud	zmm16, zmm16, zmm18
-	valignq	zmm18, zmm16, zmm7, 6
-	vpmaxud	zmm16, zmm16, zmm18
-	valignq	zmm18, zmm16, zmm7, 4
-	vpmaxud	zmm16, zmm16, zmm18
-	vptestmd	k3, zmm16, zmm16
-	vpandd	zmm17 {k3}, zmm16, zmm11
-	vpshufd	zmm16, zmm17, 255
-	vshufi64x2	zmm16, zmm16, zmm16, 255
-	vpsrlw	xmm18, xmm14, 2
-	vpandq	xmm18, xmm18, xmm12
-	vpminub	xmm18, xmm18, xmm13
-	vpmovzxbd	zmm18, xmm18
-	vpmaxud	zmm17, zmm17, zmm18
-	vextracti32x4	xmm0, zmm20, 3
-	vpextrd	eax, xmm0, 3
+	vpbroadcastd	zmm28, eax
+	vpaddd	zmm21, zmm21, zmm28
+	vpsrld	zmm28, zmm21, 3
+	vpandd	zmm21, zmm21, zmm11
+	vpshufb	zmm28, zmm28, zmm13
+	vpaddb	zmm28, zmm28, zmm14
+	vpermb	zmm28, zmm28, zmmword ptr [r14]
+	vpsrlvd	zmm21, zmm28, zmm21
+	vpandnd	zmm21, zmm27, zmm21
+	vpaddd	zmm21, zmm21, zmm25
+	vptestmd	k3, zmm21, zmm21
+	vpord	zmm21 {k3} {z}, zmm21, zmm15
+	valignd	zmm25, zmm21, zmm4, 15
+	vpmaxud	zmm21, zmm21, zmm25
+	valignq	zmm25, zmm21, zmm4, 7
+	vpmaxud	zmm21, zmm21, zmm25
+	valignq	zmm25, zmm21, zmm4, 6
+	vpmaxud	zmm21, zmm21, zmm25
+	valignq	zmm25, zmm21, zmm4, 4
+	vpmaxud	zmm21, zmm21, zmm25
+	vptestmd	k3, zmm21, zmm21
+	vpandd	zmm24 {k3}, zmm21, zmm16
+	vpshufd	zmm21, zmm24, 255
+	vshufi64x2	zmm21, zmm21, zmm21, 255
+	vpsrlw	xmm25, xmm19, 2
+	vpandq	xmm25, xmm25, xmm17
+	vpminub	xmm25, xmm25, xmm18
+	vpmovzxbd	zmm25, xmm25
+	vpmaxud	zmm24, zmm24, zmm25
+	vextracti32x4	xmm7, zmm26, 3
+	vpextrd	eax, xmm7, 3
 	add	rax, rcx
 	mov	rcx, qword ptr [rsp]
-	vmovdqu64	zmmword ptr [rcx + 256], zmm17
+	vmovdqu64	zmmword ptr [rcx + 256], zmm24
 	cmp	qword ptr [rsp + 24], 17
 	jb	182f
 	mov	r14, r10
@@ -382,14 +393,14 @@
 	mov	rcx, qword ptr [rsp]
 	.p2align	4
 212:
-	vmovdqu64	zmm0, zmmword ptr [r8 + rbx - 192]
-	vmovdqu64	zmm17, zmmword ptr [r8 + rbx - 128]
-	vmovdqu64	zmm18, zmmword ptr [r8 + rbx - 64]
-	vmovdqu64	zmm19, zmmword ptr [r8 + rbx]
-	vmovdqu64	zmmword ptr [rcx + rbx + 576], zmm0
-	vmovdqu64	zmmword ptr [rcx + rbx + 640], zmm17
-	vmovdqu64	zmmword ptr [rcx + rbx + 704], zmm18
-	vmovdqu64	zmmword ptr [rcx + rbx + 768], zmm19
+	vmovdqu64	zmm7, zmmword ptr [r8 + rbx - 192]
+	vmovdqu64	zmm24, zmmword ptr [r8 + rbx - 128]
+	vmovdqu64	zmm25, zmmword ptr [r8 + rbx - 64]
+	vmovdqu64	zmm26, zmmword ptr [r8 + rbx]
+	vmovdqu64	zmmword ptr [rcx + rbx + 576], zmm7
+	vmovdqu64	zmmword ptr [rcx + rbx + 640], zmm24
+	vmovdqu64	zmmword ptr [rcx + rbx + 704], zmm25
+	vmovdqu64	zmmword ptr [rcx + rbx + 768], zmm26
 	add	rbx, 256
 	cmp	r11, rbx
 	jne	212b
@@ -406,8 +417,8 @@
 	lea	rdi, [rdx + r8]
 	.p2align	4
 232:
-	vmovdqu	xmm0, xmmword ptr [r10 + r11]
-	vmovdqu	xmmword ptr [r15 + r11], xmm0
+	vmovdqu	xmm7, xmmword ptr [r10 + r11]
+	vmovdqu	xmmword ptr [r15 + r11], xmm7
 	add	r11, 16
 	cmp	r8, r11
 	jne	232b
@@ -427,62 +438,59 @@
 	jne	252b
 	mov	rbx, r15
 262:
-	vextracti128	xmm0, ymm15, 1
-	vpmovzxbd	zmm0, xmm0
-	vpsrld	zmm17, zmm0, 3
-	vpmaxud	zmm17, zmm17, zmm3
-	vpaddd	zmm17, zmm17, zmm4
-	vpminud	zmm18, zmm0, zmm6
-	vpandd	zmm18, zmm18, zmm6
-	vpternlogd	zmm18, zmm0, zmm5, 248
-	vpsllvd	zmm0, zmm18, zmm17
-	vpsllvd	zmm18, zmm4, zmm17
-	valignd	zmm19, zmm17, zmm7, 15
-	vpaddd	zmm19, zmm19, zmm17
-	valignq	zmm20, zmm19, zmm7, 7
-	vpaddd	zmm19, zmm20, zmm19
-	valignq	zmm20, zmm19, zmm7, 6
-	vpaddd	zmm19, zmm20, zmm19
-	valignq	zmm20, zmm19, zmm7, 4
-	vpaddd	zmm19, zmm20, zmm19
-	vpsubd	zmm17, zmm19, zmm17
+	vextracti32x4	xmm7, ymm23, 1
+	vpmovzxbd	zmm7, xmm7
+	vmovdqa64	zmm24, zmm22
+	vpermt2b	zmm24, zmm5, zmm4
+	vpaddd	zmm7, zmm24, zmm7
+	vextracti32x4	xmm24, ymm20, 1
+	vpmovzxbd	zmm24, xmm24
+	vpsrld	zmm25, zmm24, 3
+	vpmaxud	zmm25, zmm25, zmm9
+	vpaddd	zmm25, zmm25, zmm10
+	vpminud	zmm26, zmm24, zmm12
+	vpandd	zmm26, zmm26, zmm12
+	vpternlogd	zmm26, zmm24, zmm11, 248
+	vpsllvd	zmm24, zmm26, zmm25
+	vpsllvd	zmm26, zmm10, zmm25
+	vpaddd	zmm25, zmm7, zmm25
 	mov	edx, eax
 	and	edx, 7
-	vpbroadcastd	zmm20, edx
-	vpaddd	zmm17, zmm20, zmm17
-	vpsrld	zmm20, zmm17, 3
-	vpandd	zmm17, zmm17, zmm5
-	vpshufb	zmm20, zmm20, zmm8
-	vpaddb	zmm20, zmm20, zmm9
-	vpermb	zmm20, zmm20, zmmword ptr [rbx]
-	vpsrlvd	zmm17, zmm20, zmm17
-	vpandnd	zmm17, zmm18, zmm17
-	vpaddd	zmm0, zmm17, zmm0
-	vptestmd	k3, zmm0, zmm0
-	vpord	zmm0 {k3} {z}, zmm0, zmm10
-	valignd	zmm17, zmm0, zmm7, 15
-	vpmaxud	zmm0, zmm0, zmm17
-	valignq	zmm17, zmm0, zmm7, 7
-	vpmaxud	zmm0, zmm0, zmm17
-	valignq	zmm17, zmm0, zmm7, 6
-	vpmaxud	zmm0, zmm0, zmm17
-	valignq	zmm17, zmm0, zmm7, 4
-	vpmaxud	zmm0, zmm0, zmm17
-	vptestmd	k3, zmm0, zmm0
-	vpandd	zmm16 {k3}, zmm0, zmm11
-	vpshufd	zmm0, zmm16, 255
-	vextracti32x4	xmm17, ymm14, 1
-	vpsrlw	xmm17, xmm17, 2
-	vpandq	xmm17, xmm17, xmm12
-	vpminub	xmm17, xmm17, xmm13
-	vpmovzxbd	zmm17, xmm17
-	vpmaxud	zmm17, zmm16, zmm17
-	vshufi64x2	zmm16, zmm0, zmm0, 255
-	vextracti32x4	xmm0, zmm19, 3
-	vpextrd	edx, xmm0, 3
+	vpbroadcastd	zmm27, edx
+	vpaddd	zmm7, zmm27, zmm7
+	vpsrld	zmm27, zmm7, 3
+	vpandd	zmm7, zmm7, zmm11
+	vpshufb	zmm27, zmm27, zmm13
+	vpaddb	zmm27, zmm27, zmm14
+	vpermb	zmm27, zmm27, zmmword ptr [rbx]
+	vpsrlvd	zmm7, zmm27, zmm7
+	vpandnd	zmm7, zmm26, zmm7
+	vpaddd	zmm7, zmm7, zmm24
+	vptestmd	k3, zmm7, zmm7
+	vpord	zmm7 {k3} {z}, zmm7, zmm15
+	valignd	zmm24, zmm7, zmm4, 15
+	vpmaxud	zmm7, zmm7, zmm24
+	valignq	zmm24, zmm7, zmm4, 7
+	vpmaxud	zmm7, zmm7, zmm24
+	valignq	zmm24, zmm7, zmm4, 6
+	vpmaxud	zmm7, zmm7, zmm24
+	valignq	zmm24, zmm7, zmm4, 4
+	vpmaxud	zmm7, zmm7, zmm24
+	vptestmd	k3, zmm7, zmm7
+	vpandd	zmm21 {k3}, zmm7, zmm16
+	vpshufd	zmm7, zmm21, 255
+	vextracti32x4	xmm24, ymm19, 1
+	vpsrlw	xmm24, xmm24, 2
+	vpandq	xmm24, xmm24, xmm17
+	vpminub	xmm24, xmm24, xmm18
+	vpmovzxbd	zmm24, xmm24
+	vpmaxud	zmm24, zmm21, zmm24
+	vshufi64x2	zmm21, zmm7, zmm7, 255
+	vextracti32x4	xmm7, zmm25, 3
+	vpextrd	edx, xmm7, 3
 	add	rax, rdx
 	mov	rcx, qword ptr [rsp]
-	vmovdqu64	zmmword ptr [rcx + 320], zmm17
+	vmovdqu64	zmmword ptr [rcx + 320], zmm24
 	cmp	qword ptr [rsp + 24], 33
 	jb	352f
 	mov	rdx, rax
@@ -522,14 +530,14 @@
 	mov	rcx, qword ptr [rsp]
 	.p2align	4
 292:
-	vmovdqu64	zmm0, zmmword ptr [r8 + rbx - 192]
-	vmovdqu64	zmm17, zmmword ptr [r8 + rbx - 128]
-	vmovdqu64	zmm18, zmmword ptr [r8 + rbx - 64]
-	vmovdqu64	zmm19, zmmword ptr [r8 + rbx]
-	vmovdqu64	zmmword ptr [rcx + rbx + 576], zmm0
-	vmovdqu64	zmmword ptr [rcx + rbx + 640], zmm17
-	vmovdqu64	zmmword ptr [rcx + rbx + 704], zmm18
-	vmovdqu64	zmmword ptr [rcx + rbx + 768], zmm19
+	vmovdqu64	zmm7, zmmword ptr [r8 + rbx - 192]
+	vmovdqu64	zmm24, zmmword ptr [r8 + rbx - 128]
+	vmovdqu64	zmm25, zmmword ptr [r8 + rbx - 64]
+	vmovdqu64	zmm26, zmmword ptr [r8 + rbx]
+	vmovdqu64	zmmword ptr [rcx + rbx + 576], zmm7
+	vmovdqu64	zmmword ptr [rcx + rbx + 640], zmm24
+	vmovdqu64	zmmword ptr [rcx + rbx + 704], zmm25
+	vmovdqu64	zmmword ptr [rcx + rbx + 768], zmm26
 	add	rbx, 256
 	cmp	r11, rbx
 	jne	292b
@@ -546,8 +554,8 @@
 	lea	rdi, [rdx + r8]
 	.p2align	4
 312:
-	vmovdqu	xmm0, xmmword ptr [r10 + r11]
-	vmovdqu	xmmword ptr [r15 + r11], xmm0
+	vmovdqu	xmm7, xmmword ptr [r10 + r11]
+	vmovdqu	xmmword ptr [r15 + r11], xmm7
 	add	r11, 16
 	cmp	r8, r11
 	jne	312b
@@ -567,62 +575,59 @@
 	jne	332b
 	mov	rbx, r15
 342:
-	vextracti32x4	xmm0, zmm15, 2
-	vpmovzxbd	zmm0, xmm0
-	vpsrld	zmm17, zmm0, 3
-	vpmaxud	zmm17, zmm17, zmm3
-	vpaddd	zmm17, zmm17, zmm4
-	vpminud	zmm18, zmm0, zmm6
-	vpandd	zmm18, zmm18, zmm6
-	vpternlogd	zmm18, zmm0, zmm5, 248
-	vpsllvd	zmm0, zmm18, zmm17
-	vpsllvd	zmm18, zmm4, zmm17
-	valignd	zmm19, zmm17, zmm7, 15
-	vpaddd	zmm19, zmm19, zmm17
-	valignq	zmm20, zmm19, zmm7, 7
-	vpaddd	zmm19, zmm20, zmm19
-	valignq	zmm20, zmm19, zmm7, 6
-	vpaddd	zmm19, zmm20, zmm19
-	valignq	zmm20, zmm19, zmm7, 4
-	vpaddd	zmm19, zmm20, zmm19
-	vpsubd	zmm17, zmm19, zmm17
+	vextracti32x4	xmm7, zmm23, 2
+	vpmovzxbd	zmm7, xmm7
+	vmovdqa64	zmm24, zmm22
+	vpermt2b	zmm24, zmm6, zmm4
+	vpaddd	zmm7, zmm24, zmm7
+	vextracti32x4	xmm24, zmm20, 2
+	vpmovzxbd	zmm24, xmm24
+	vpsrld	zmm25, zmm24, 3
+	vpmaxud	zmm25, zmm25, zmm9
+	vpaddd	zmm25, zmm25, zmm10
+	vpminud	zmm26, zmm24, zmm12
+	vpandd	zmm26, zmm26, zmm12
+	vpternlogd	zmm26, zmm24, zmm11, 248
+	vpsllvd	zmm24, zmm26, zmm25
+	vpsllvd	zmm26, zmm10, zmm25
+	vpaddd	zmm25, zmm7, zmm25
 	mov	edx, eax
 	and	edx, 7
-	vpbroadcastd	zmm20, edx
-	vpaddd	zmm17, zmm20, zmm17
-	vpsrld	zmm20, zmm17, 3
-	vpandd	zmm17, zmm17, zmm5
-	vpshufb	zmm20, zmm20, zmm8
-	vpaddb	zmm20, zmm20, zmm9
-	vpermb	zmm20, zmm20, zmmword ptr [rbx]
-	vpsrlvd	zmm17, zmm20, zmm17
-	vpandnd	zmm17, zmm18, zmm17
-	vpaddd	zmm0, zmm17, zmm0
-	vptestmd	k3, zmm0, zmm0
-	vpord	zmm0 {k3} {z}, zmm0, zmm10
-	valignd	zmm17, zmm0, zmm7, 15
-	vpmaxud	zmm0, zmm0, zmm17
-	valignq	zmm17, zmm0, zmm7, 7
-	vpmaxud	zmm0, zmm0, zmm17
-	valignq	zmm17, zmm0, zmm7, 6
-	vpmaxud	zmm0, zmm0, zmm17
-	valignq	zmm17, zmm0, zmm7, 4
-	vpmaxud	zmm0, zmm0, zmm17
-	vptestmd	k3, zmm0, zmm0
-	vpandd	zmm16 {k3}, zmm0, zmm11
-	vpshufd	zmm0, zmm16, 255
-	vextracti32x4	xmm17, zmm14, 2
-	vpsrlw	xmm17, xmm17, 2
-	vpandq	xmm17, xmm17, xmm12
-	vpminub	xmm17, xmm17, xmm13
-	vpmovzxbd	zmm17, xmm17
-	vpmaxud	zmm17, zmm16, zmm17
-	vshufi64x2	zmm16, zmm0, zmm0, 255
-	vextracti32x4	xmm0, zmm19, 3
-	vpextrd	edx, xmm0, 3
+	vpbroadcastd	zmm27, edx
+	vpaddd	zmm7, zmm27, zmm7
+	vpsrld	zmm27, zmm7, 3
+	vpandd	zmm7, zmm7, zmm11
+	vpshufb	zmm27, zmm27, zmm13
+	vpaddb	zmm27, zmm27, zmm14
+	vpermb	zmm27, zmm27, zmmword ptr [rbx]
+	vpsrlvd	zmm7, zmm27, zmm7
+	vpandnd	zmm7, zmm26, zmm7
+	vpaddd	zmm7, zmm7, zmm24
+	vptestmd	k3, zmm7, zmm7
+	vpord	zmm7 {k3} {z}, zmm7, zmm15
+	valignd	zmm24, zmm7, zmm4, 15
+	vpmaxud	zmm7, zmm7, zmm24
+	valignq	zmm24, zmm7, zmm4, 7
+	vpmaxud	zmm7, zmm7, zmm24
+	valignq	zmm24, zmm7, zmm4, 6
+	vpmaxud	zmm7, zmm7, zmm24
+	valignq	zmm24, zmm7, zmm4, 4
+	vpmaxud	zmm7, zmm7, zmm24
+	vptestmd	k3, zmm7, zmm7
+	vpandd	zmm21 {k3}, zmm7, zmm16
+	vpshufd	zmm7, zmm21, 255
+	vextracti32x4	xmm24, zmm19, 2
+	vpsrlw	xmm24, xmm24, 2
+	vpandq	xmm24, xmm24, xmm17
+	vpminub	xmm24, xmm24, xmm18
+	vpmovzxbd	zmm24, xmm24
+	vpmaxud	zmm24, zmm21, zmm24
+	vshufi64x2	zmm21, zmm7, zmm7, 255
+	vextracti32x4	xmm7, zmm25, 3
+	vpextrd	edx, xmm7, 3
 	add	rax, rdx
 	mov	rcx, qword ptr [rsp]
-	vmovdqu64	zmmword ptr [rcx + 384], zmm17
+	vmovdqu64	zmmword ptr [rcx + 384], zmm24
 	cmp	qword ptr [rsp + 24], 49
 	jb	352f
 	mov	rdx, rax
@@ -667,14 +672,14 @@
 	mov	rcx, qword ptr [rsp]
 	.p2align	4
 382:
-	vmovdqu64	zmm0, zmmword ptr [r11 + rbx - 192]
-	vmovdqu64	zmm17, zmmword ptr [r11 + rbx - 128]
-	vmovdqu64	zmm18, zmmword ptr [r11 + rbx - 64]
-	vmovdqu64	zmm19, zmmword ptr [r11 + rbx]
-	vmovdqu64	zmmword ptr [rcx + rbx + 576], zmm0
-	vmovdqu64	zmmword ptr [rcx + rbx + 640], zmm17
-	vmovdqu64	zmmword ptr [rcx + rbx + 704], zmm18
-	vmovdqu64	zmmword ptr [rcx + rbx + 768], zmm19
+	vmovdqu64	zmm7, zmmword ptr [r11 + rbx - 192]
+	vmovdqu64	zmm24, zmmword ptr [r11 + rbx - 128]
+	vmovdqu64	zmm25, zmmword ptr [r11 + rbx - 64]
+	vmovdqu64	zmm26, zmmword ptr [r11 + rbx]
+	vmovdqu64	zmmword ptr [rcx + rbx + 576], zmm7
+	vmovdqu64	zmmword ptr [rcx + rbx + 640], zmm24
+	vmovdqu64	zmmword ptr [rcx + rbx + 704], zmm25
+	vmovdqu64	zmmword ptr [rcx + rbx + 768], zmm26
 	add	rbx, 256
 	cmp	r10, rbx
 	jne	382b
@@ -691,8 +696,8 @@
 	lea	rdi, [rdx + r11]
 	.p2align	4
 402:
-	vmovdqu	xmm0, xmmword ptr [rbx + r10]
-	vmovdqu	xmmword ptr [r15 + r10], xmm0
+	vmovdqu	xmm7, xmmword ptr [rbx + r10]
+	vmovdqu	xmmword ptr [r15 + r10], xmm7
 	add	r10, 16
 	cmp	r11, r10
 	jne	402b
@@ -711,62 +716,58 @@
 	jne	422b
 	mov	r11, r15
 432:
-	vextracti32x4	xmm0, zmm15, 3
-	vpmovzxbd	zmm0, xmm0
-	vpsrld	zmm15, zmm0, 3
-	vpmaxud	zmm15, zmm15, zmm3
-	vpaddd	zmm15, zmm15, zmm4
-	vpminud	zmm17, zmm0, zmm6
-	vpandd	zmm17, zmm17, zmm6
-	vpternlogd	zmm17, zmm0, zmm5, 248
-	vpsllvd	zmm0, zmm17, zmm15
-	vpsllvd	zmm17, zmm4, zmm15
-	valignd	zmm18, zmm15, zmm7, 15
-	vpaddd	zmm18, zmm18, zmm15
-	valignq	zmm19, zmm18, zmm7, 7
-	vpaddd	zmm18, zmm19, zmm18
-	valignq	zmm19, zmm18, zmm7, 6
-	vpaddd	zmm18, zmm19, zmm18
-	valignq	zmm19, zmm18, zmm7, 4
-	vpaddd	zmm18, zmm19, zmm18
-	vpsubd	zmm15, zmm18, zmm15
+	vextracti32x4	xmm7, zmm23, 3
+	vpmovzxbd	zmm7, xmm7
+	vpermt2b	zmm22, zmm29, zmm4
+	vpaddd	zmm7, zmm22, zmm7
+	vextracti32x4	xmm20, zmm20, 3
+	vpmovzxbd	zmm20, xmm20
+	vpsrld	zmm22, zmm20, 3
+	vpmaxud	zmm22, zmm22, zmm9
+	vpaddd	zmm22, zmm22, zmm10
+	vpminud	zmm23, zmm20, zmm12
+	vpandd	zmm23, zmm23, zmm12
+	vpternlogd	zmm23, zmm20, zmm11, 248
+	vpsllvd	zmm20, zmm23, zmm22
+	vpsllvd	zmm23, zmm10, zmm22
+	vpaddd	zmm22, zmm7, zmm22
 	mov	edx, eax
 	and	edx, 7
-	vpbroadcastd	zmm19, edx
-	vpaddd	zmm15, zmm19, zmm15
-	vpsrld	zmm19, zmm15, 3
-	vpandd	zmm15, zmm15, zmm5
-	vpshufb	zmm19, zmm19, zmm8
-	vpaddb	zmm19, zmm19, zmm9
-	vpermb	zmm19, zmm19, zmmword ptr [r11]
-	vpsrlvd	zmm15, zmm19, zmm15
-	vpandnd	zmm15, zmm17, zmm15
-	vpaddd	zmm0, zmm15, zmm0
-	vptestmd	k3, zmm0, zmm0
-	vpord	zmm0 {k3} {z}, zmm0, zmm10
-	valignd	zmm15, zmm0, zmm7, 15
-	vpmaxud	zmm0, zmm0, zmm15
-	valignq	zmm15, zmm0, zmm7, 7
-	vpmaxud	zmm0, zmm0, zmm15
-	valignq	zmm15, zmm0, zmm7, 6
-	vpmaxud	zmm0, zmm0, zmm15
-	valignq	zmm15, zmm0, zmm7, 4
-	vpmaxud	zmm0, zmm0, zmm15
-	vptestmd	k3, zmm0, zmm0
-	vpandd	zmm16 {k3}, zmm0, zmm11
-	vpshufd	zmm0, zmm16, 255
-	vextracti32x4	xmm14, zmm14, 3
-	vpsrlw	xmm14, xmm14, 2
-	vpand	xmm14, xmm14, xmm12
-	vpminub	xmm14, xmm14, xmm13
-	vpmovzxbd	zmm14, xmm14
-	vpmaxud	zmm14, zmm16, zmm14
-	vshufi64x2	zmm16, zmm0, zmm0, 255
-	vextracti32x4	xmm0, zmm18, 3
-	vpextrd	edx, xmm0, 3
+	vpbroadcastd	zmm24, edx
+	vpaddd	zmm7, zmm24, zmm7
+	vpsrld	zmm24, zmm7, 3
+	vpandd	zmm7, zmm7, zmm11
+	vpshufb	zmm24, zmm24, zmm13
+	vpaddb	zmm24, zmm24, zmm14
+	vpermb	zmm24, zmm24, zmmword ptr [r11]
+	vpsrlvd	zmm7, zmm24, zmm7
+	vpandnd	zmm7, zmm23, zmm7
+	vpaddd	zmm7, zmm7, zmm20
+	vptestmd	k3, zmm7, zmm7
+	vpord	zmm7 {k3} {z}, zmm7, zmm15
+	valignd	zmm20, zmm7, zmm4, 15
+	vpmaxud	zmm7, zmm7, zmm20
+	valignq	zmm20, zmm7, zmm4, 7
+	vpmaxud	zmm7, zmm7, zmm20
+	valignq	zmm20, zmm7, zmm4, 6
+	vpmaxud	zmm7, zmm7, zmm20
+	valignq	zmm20, zmm7, zmm4, 4
+	vpmaxud	zmm7, zmm7, zmm20
+	vptestmd	k3, zmm7, zmm7
+	vpandd	zmm21 {k3}, zmm7, zmm16
+	vpshufd	zmm7, zmm21, 255
+	vextracti32x4	xmm19, zmm19, 3
+	vpsrlw	xmm19, xmm19, 2
+	vpandq	xmm19, xmm19, xmm17
+	vpminub	xmm19, xmm19, xmm18
+	vpmovzxbd	zmm19, xmm19
+	vpmaxud	zmm19, zmm21, zmm19
+	vshufi64x2	zmm21, zmm7, zmm7, 255
+	vextracti32x4	xmm7, zmm22, 3
+	vpextrd	edx, xmm7, 3
 	add	rax, rdx
 	mov	r9, qword ptr [rsp]
-	vmovdqu64	zmmword ptr [r9 + 448], zmm14
+	vmovdqu64	zmmword ptr [r9 + 448], zmm19
 442:
 	mov	r10, r14
 452:
@@ -776,7 +777,7 @@
 	kmovq	rsi, k1
 	popcnt	rsi, rsi
 	add	rsi, r8
-	vmovd	edi, xmm16
+	vmovd	edi, xmm21
 	mov	qword ptr [r9 + 72], rax
 	mov	qword ptr [r9 + 96], rdi
 	mov	qword ptr [r9 + 128], rsi
@@ -793,8 +794,8 @@
 	cmp	rbx, 33
 	mov	edx, dword ptr [r9 + 4*r8 + 256]
 	mov	r15, qword ptr [rsp + 40]
-	vmovdqu	ymm0, ymmword ptr [r15 + rbp]
-	vmovdqu	ymmword ptr [rcx + r13], ymm0
+	vmovdqu	ymm7, ymmword ptr [r15 + rbp]
+	vmovdqu	ymmword ptr [rcx + r13], ymm7
 	jae	552f
 472:
 	mov	qword ptr [rsp + 32], r13
@@ -803,8 +804,8 @@
 	sub	rsi, rdx
 	mov	edi, 0
 	cmovae	rdi, rsi
-	vmovdqu	ymm0, ymmword ptr [rcx + rdi]
-	vmovdqu	ymmword ptr [rcx + r13], ymm0
+	vmovdqu	ymm7, ymmword ptr [rcx + rdi]
+	vmovdqu	ymmword ptr [rcx + r13], ymm7
 	cmp	r12b, -124
 	jae	572f
 	shr	r12d, 2
@@ -817,8 +818,8 @@
 	movzx	ebx, byte ptr [r9 + rdx + 192]
 	cmp	rbx, 33
 	mov	edx, dword ptr [r9 + 4*rdx + 256]
-	vmovdqu	ymm0, ymmword ptr [r15 + r11]
-	vmovdqu	ymmword ptr [rcx + r13], ymm0
+	vmovdqu	ymm7, ymmword ptr [r15 + r11]
+	vmovdqu	ymmword ptr [rcx + r13], ymm7
 	jae	592f
 492:
 	add	r13, rbx
@@ -826,8 +827,8 @@
 	sub	rsi, rdx
 	mov	edi, 0
 	cmovae	rdi, rsi
-	vmovdqu	ymm0, ymmword ptr [rcx + rdi]
-	vmovdqu	ymmword ptr [rcx + r13], ymm0
+	vmovdqu	ymm7, ymmword ptr [rcx + rdi]
+	vmovdqu	ymmword ptr [rcx + r13], ymm7
 	cmp	r14b, -124
 	mov	qword ptr [rsp + 56], rbp
 	jae	612f
@@ -840,8 +841,8 @@
 	movzx	ebp, byte ptr [r9 + rsi + 192]
 	cmp	rbp, 33
 	mov	esi, dword ptr [r9 + 4*rsi + 256]
-	vmovdqu	ymm0, ymmword ptr [r15 + r11]
-	vmovdqu	ymmword ptr [rcx + r13], ymm0
+	vmovdqu	ymm7, ymmword ptr [r15 + r11]
+	vmovdqu	ymmword ptr [rcx + r13], ymm7
 	mov	qword ptr [rsp + 48], r12
 	jae	632f
 512:
@@ -850,8 +851,8 @@
 	sub	rdi, rsi
 	mov	r15d, 0
 	cmovae	r15, rdi
-	vmovdqu	ymm0, ymmword ptr [rcx + r15]
-	vmovdqu	ymmword ptr [rcx + r13], ymm0
+	vmovdqu	ymm7, ymmword ptr [rcx + r15]
+	vmovdqu	ymmword ptr [rcx + r13], ymm7
 	cmp	dl, -124
 	jae	652f
 	shr	edx, 2
@@ -865,8 +866,8 @@
 	cmp	rsi, 33
 	mov	edi, dword ptr [r9 + 4*rdi + 256]
 	mov	r10, qword ptr [rsp + 40]
-	vmovdqu	ymm0, ymmword ptr [r10 + r11]
-	vmovdqu	ymmword ptr [rcx + r13], ymm0
+	vmovdqu	ymm7, ymmword ptr [r10 + r11]
+	vmovdqu	ymmword ptr [rcx + r13], ymm7
 	jae	672f
 532:
 	add	r13, rsi
@@ -875,9 +876,9 @@
 	mov	ecx, 0
 	cmovae	rcx, r9
 	mov	r9, qword ptr [rsp + 8]
-	vmovdqu	ymm0, ymmword ptr [r9 + rcx]
+	vmovdqu	ymm7, ymmword ptr [r9 + rcx]
 	mov	rcx, qword ptr [rsp + 8]
-	vmovdqu	ymmword ptr [rcx + r13], ymm0
+	vmovdqu	ymmword ptr [rcx + r13], ymm7
 	cmp	r15b, -124
 	mov	r10, r12
 	jae	692f
@@ -905,8 +906,8 @@
 	mov	r9d, 32
 	.p2align	4
 562:
-	vmovdqu	ymm0, ymmword ptr [rsi + r9]
-	vmovdqu	ymmword ptr [rdi + r9], ymm0
+	vmovdqu	ymm7, ymmword ptr [rsi + r9]
+	vmovdqu	ymmword ptr [rdi + r9], ymm7
 	add	r9, 32
 	cmp	r9, rbx
 	jb	562b
@@ -928,8 +929,8 @@
 	mov	edx, 32
 	.p2align	4
 582:
-	vmovdqu	ymm0, ymmword ptr [rdi + rdx]
-	vmovdqu	ymmword ptr [rsi + rdx], ymm0
+	vmovdqu	ymm7, ymmword ptr [rdi + rdx]
+	vmovdqu	ymmword ptr [rsi + rdx], ymm7
 	add	rdx, 32
 	cmp	rdx, r12
 	jb	582b
@@ -946,8 +947,8 @@
 	mov	r15d, 32
 	.p2align	4
 602:
-	vmovdqu	ymm0, ymmword ptr [rsi + r15]
-	vmovdqu	ymmword ptr [rdi + r15], ymm0
+	vmovdqu	ymm7, ymmword ptr [rsi + r15]
+	vmovdqu	ymmword ptr [rdi + r15], ymm7
 	add	r15, 32
 	cmp	r15, rbx
 	jb	602b
@@ -973,8 +974,8 @@
 	mov	edx, 32
 	.p2align	4
 622:
-	vmovdqu	ymm0, ymmword ptr [rdi + rdx]
-	vmovdqu	ymmword ptr [rsi + rdx], ymm0
+	vmovdqu	ymm7, ymmword ptr [rdi + rdx]
+	vmovdqu	ymmword ptr [rsi + rdx], ymm7
 	add	rdx, 32
 	cmp	rdx, r14
 	jb	622b
@@ -999,8 +1000,8 @@
 	mov	r15d, 32
 	.p2align	4
 642:
-	vmovdqu	ymm0, ymmword ptr [r10 + r15]
-	vmovdqu	ymmword ptr [rdi + r15], ymm0
+	vmovdqu	ymm7, ymmword ptr [r10 + r15]
+	vmovdqu	ymmword ptr [rdi + r15], ymm7
 	add	r15, 32
 	cmp	r15, rbp
 	jb	642b
@@ -1029,8 +1030,8 @@
 	mov	esi, 32
 	.p2align	4
 662:
-	vmovdqu	ymm0, ymmword ptr [r15 + rsi]
-	vmovdqu	ymmword ptr [rdi + rsi], ymm0
+	vmovdqu	ymm7, ymmword ptr [r15 + rsi]
+	vmovdqu	ymmword ptr [rdi + rsi], ymm7
 	add	rsi, 32
 	cmp	rsi, rdx
 	jb	662b
@@ -1061,8 +1062,8 @@
 	mov	r10d, 32
 	.p2align	4
 682:
-	vmovdqu	ymm0, ymmword ptr [rcx + r10]
-	vmovdqu	ymmword ptr [r9 + r10], ymm0
+	vmovdqu	ymm7, ymmword ptr [rcx + r10]
+	vmovdqu	ymmword ptr [r9 + r10], ymm7
 	add	r10, 32
 	cmp	r10, rsi
 	jb	682b
@@ -1095,8 +1096,8 @@
 	mov	edx, 32
 	.p2align	4
 702:
-	vmovdqu	ymm0, ymmword ptr [rbp + rdx]
-	vmovdqu	ymmword ptr [rdi + rdx], ymm0
+	vmovdqu	ymm7, ymmword ptr [rbp + rdx]
+	vmovdqu	ymmword ptr [rdi + rdx], ymm7
 	add	rdx, 32
 	cmp	rdx, r15
 	jb	702b
@@ -1119,8 +1120,8 @@
 	movzx	esi, byte ptr [r9 + rax + 192]
 	cmp	rsi, 33
 	mov	edi, dword ptr [r9 + 4*rax + 256]
-	vmovdqu	ymm0, ymmword ptr [rbx + r12]
-	vmovdqu	ymmword ptr [rcx + r13], ymm0
+	vmovdqu	ymm7, ymmword ptr [rbx + r12]
+	vmovdqu	ymmword ptr [rcx + r13], ymm7
 	jae	762f
 742:
 	add	r13, rsi
@@ -1129,8 +1130,8 @@
 	mov	r8d, 0
 	cmovae	r8, rcx
 	mov	rcx, qword ptr [rsp + 8]
-	vmovdqu	ymm0, ymmword ptr [rcx + r8]
-	vmovdqu	ymmword ptr [rcx + r13], ymm0
+	vmovdqu	ymm7, ymmword ptr [rcx + r8]
+	vmovdqu	ymmword ptr [rcx + r13], ymm7
 	cmp	dl, -124
 	jae	782f
 	shr	edx, 2
@@ -1155,8 +1156,8 @@
 	mov	r10d, 32
 	.p2align	4
 772:
-	vmovdqu	ymm0, ymmword ptr [r8 + r10]
-	vmovdqu	ymmword ptr [r9 + r10], ymm0
+	vmovdqu	ymm7, ymmword ptr [r8 + r10]
+	vmovdqu	ymmword ptr [r9 + r10], ymm7
 	add	r10, 32
 	cmp	r10, rsi
 	jb	772b
@@ -1181,8 +1182,8 @@
 	mov	edi, 32
 	.p2align	4
 792:
-	vmovdqu	ymm0, ymmword ptr [r9 + rdi]
-	vmovdqu	ymmword ptr [r8 + rdi], ymm0
+	vmovdqu	ymm7, ymmword ptr [r9 + rdi]
+	vmovdqu	ymmword ptr [r8 + rdi], ymm7
 	add	rdi, 32
 	cmp	rdi, rdx
 	jb	792b
@@ -1274,17 +1275,284 @@
 	.p2align	6, 0x0
 832:
 	.byte	1
-	.p2align	2, 0x0
+	.p2align	6, 0x0
 842:
+	.byte	31
+	.p2align	6, 0x0
+852:
+	.byte	64
+	.byte	65
+	.byte	66
+	.byte	67
+	.byte	68
+	.byte	69
+	.byte	70
+	.byte	71
+	.byte	72
+	.byte	73
+	.byte	74
+	.byte	75
+	.byte	76
+	.byte	77
+	.byte	78
+	.byte	79
+	.byte	80
+	.byte	81
+	.byte	82
+	.byte	83
+	.byte	84
+	.byte	85
+	.byte	86
+	.byte	87
+	.byte	88
+	.byte	89
+	.byte	90
+	.byte	91
+	.byte	92
+	.byte	93
+	.byte	94
+	.byte	95
+	.byte	23
+	.byte	97
+	.byte	98
+	.byte	99
+	.byte	23
+	.byte	101
+	.byte	102
+	.byte	103
+	.byte	23
+	.byte	105
+	.byte	106
+	.byte	107
+	.byte	23
+	.byte	109
+	.byte	110
+	.byte	111
+	.byte	23
+	.byte	113
+	.byte	114
+	.byte	115
+	.byte	23
+	.byte	117
+	.byte	118
+	.byte	119
+	.byte	23
+	.byte	121
+	.byte	122
+	.byte	123
+	.byte	23
+	.byte	125
+	.byte	126
+	.byte	127
+	.p2align	6, 0x0
+862:
+	.byte	64
+	.byte	65
+	.byte	66
+	.byte	67
+	.byte	68
+	.byte	69
+	.byte	70
+	.byte	71
+	.byte	72
+	.byte	73
+	.byte	74
+	.byte	75
+	.byte	76
+	.byte	77
+	.byte	78
+	.byte	79
+	.byte	80
+	.byte	81
+	.byte	82
+	.byte	83
+	.byte	84
+	.byte	85
+	.byte	86
+	.byte	87
+	.byte	88
+	.byte	89
+	.byte	90
+	.byte	91
+	.byte	92
+	.byte	93
+	.byte	94
+	.byte	95
+	.byte	39
+	.byte	97
+	.byte	98
+	.byte	99
+	.byte	39
+	.byte	101
+	.byte	102
+	.byte	103
+	.byte	39
+	.byte	105
+	.byte	106
+	.byte	107
+	.byte	39
+	.byte	109
+	.byte	110
+	.byte	111
+	.byte	39
+	.byte	113
+	.byte	114
+	.byte	115
+	.byte	39
+	.byte	117
+	.byte	118
+	.byte	119
+	.byte	39
+	.byte	121
+	.byte	122
+	.byte	123
+	.byte	39
+	.byte	125
+	.byte	126
+	.byte	127
+	.p2align	6, 0x0
+872:
+	.byte	64
+	.byte	65
+	.byte	66
+	.byte	67
+	.byte	68
+	.byte	69
+	.byte	70
+	.byte	71
+	.byte	72
+	.byte	73
+	.byte	74
+	.byte	75
+	.byte	76
+	.byte	77
+	.byte	78
+	.byte	79
+	.byte	80
+	.byte	81
+	.byte	82
+	.byte	83
+	.byte	84
+	.byte	85
+	.byte	86
+	.byte	87
+	.byte	88
+	.byte	89
+	.byte	90
+	.byte	91
+	.byte	92
+	.byte	93
+	.byte	94
+	.byte	95
+	.byte	55
+	.byte	97
+	.byte	98
+	.byte	99
+	.byte	55
+	.byte	101
+	.byte	102
+	.byte	103
+	.byte	55
+	.byte	105
+	.byte	106
+	.byte	107
+	.byte	55
+	.byte	109
+	.byte	110
+	.byte	111
+	.byte	55
+	.byte	113
+	.byte	114
+	.byte	115
+	.byte	55
+	.byte	117
+	.byte	118
+	.byte	119
+	.byte	55
+	.byte	121
+	.byte	122
+	.byte	123
+	.byte	55
+	.byte	125
+	.byte	126
+	.byte	127
+	.p2align	6, 0x0
+882:
+	.byte	64
+	.byte	65
+	.byte	66
+	.byte	67
+	.byte	68
+	.byte	69
+	.byte	70
+	.byte	71
+	.byte	72
+	.byte	73
+	.byte	74
+	.byte	75
+	.byte	76
+	.byte	77
+	.byte	78
+	.byte	79
+	.byte	80
+	.byte	81
+	.byte	82
+	.byte	83
+	.byte	84
+	.byte	85
+	.byte	86
+	.byte	87
+	.byte	88
+	.byte	89
+	.byte	90
+	.byte	91
+	.byte	92
+	.byte	93
+	.byte	94
+	.byte	95
+	.byte	7
+	.byte	97
+	.byte	98
+	.byte	99
+	.byte	7
+	.byte	101
+	.byte	102
+	.byte	103
+	.byte	7
+	.byte	105
+	.byte	106
+	.byte	107
+	.byte	7
+	.byte	109
+	.byte	110
+	.byte	111
+	.byte	7
+	.byte	113
+	.byte	114
+	.byte	115
+	.byte	7
+	.byte	117
+	.byte	118
+	.byte	119
+	.byte	7
+	.byte	121
+	.byte	122
+	.byte	123
+	.byte	7
+	.byte	125
+	.byte	126
+	.byte	127
+	.p2align	2, 0x0
+892:
 	.long	1
 	.p2align	2, 0x0
-852:
+902:
 	.long	7
 	.p2align	2, 0x0
-862:
+912:
 	.long	8
 	.p2align	4, 0x0
-872:
+922:
 	.byte	0
 	.byte	0
 	.byte	0
@@ -1302,13 +1570,13 @@
 	.byte	12
 	.byte	12
 	.p2align	2, 0x0
-882:
+932:
 	.byte	0
 	.byte	1
 	.byte	2
 	.byte	3
 	.p2align	6, 0x0
-892:
+942:
 	.long	134217728
 	.long	268435456
 	.long	402653184
@@ -1326,11 +1594,11 @@
 	.long	2013265920
 	.long	2147483648
 	.p2align	2, 0x0
-902:
+952:
 	.long	134217727
 	.p2align	6, 0x0
-912:
+962:
 	.byte	63
 	.p2align	6, 0x0
-922:
+972:
 	.byte	32
