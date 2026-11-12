@@ -341,8 +341,8 @@ func.func private @expand_batch(%a: !p, %k: index, %m: index, %raise: i1) {
 }
 
 // copy_one runs operation j of the batch of 64 at tk; see @op.
-func.func private @copy_one(%a: !p, %dst: !p, %lits: !p, %tk: !p, %j: index, %delta: i1,
-    %flat: i1, %fd: i1, %d: index, %l: index, %x: index) -> (index, index, index) {
+func.func private @copy_one(%a: !p, %dst: !p, %tk: !p, %j: index, %delta: i1, %flat: i1,
+    %fd: i1, %dstP: !p, %litsP: !p, %x: index) -> (!p, !p, index) {
   %c4 = arith.constant 4 : index
   %lens = func.call @lens(%a) : (!p) -> !p
   %offs = func.call @offs(%a) : (!p) -> !p
@@ -352,17 +352,18 @@ func.func private @copy_one(%a: !p, %dst: !p, %lits: !p, %tk: !p, %j: index, %de
   %oq = func.call @at(%offs, %jo) : (!p, index) -> !p
   %o32 = ptr.load %oq alignment = 4 : !p -> i32
   %o = arith.index_castui %o32 : i32 to index
-  %s:2 = func.call @op(%a, %dst, %lits, %t, %len, %o, %delta, %flat, %fd, %d, %l, %x)
-      : (!p, !p, !p, index, index, index, i1, i1, i1, index, index, index) -> (index, index)
-  return %s#0, %s#1, %o : index, index, index
+  %s:2 = func.call @op(%a, %dst, %t, %len, %o, %delta, %flat, %fd, %dstP, %litsP, %x)
+      : (!p, !p, index, index, index, i1, i1, i1, !p, !p, index) -> (!p, !p)
+  return %s#0, %s#1, %o : !p, !p, index
 }
 
-// copy runs the m operations of the batch of 64 at tk, from output position d, literal position l
-// and the offset last before them, and returns d, l and last after them, 4 operations a loop trip.
-// With delta, the first 32 literals of each operation are added to their references, and the
-// batch holds the offsets unraised. With flat, the chunk has the no-overlap flag.
-func.func private @copy(%a: !p, %dst: !p, %lits: !p, %tk: !p, %m: index, %delta: i1,
-    %flat: i1, %d: index, %l: index, %last: index) -> (index, index, index) {
+// copy runs the m operations of the batch of 64 at tk, at the output cursor dstP and the literal
+// cursor litsP and after the offset last, and returns the cursors and last after them, 4
+// operations a loop trip. With delta, the first 32 literals of each operation are added to their
+// references, and the batch holds the offsets unraised. With flat, the chunk has the no-overlap
+// flag.
+func.func private @copy(%a: !p, %dst: !p, %tk: !p, %m: index, %delta: i1, %flat: i1,
+    %dstP: !p, %litsP: !p, %last: index) -> (!p, !p, index) {
   %c0 = arith.constant 0 : index
   %c1 = arith.constant 1 : index
   %c2 = arith.constant 2 : index
@@ -371,28 +372,28 @@ func.func private @copy(%a: !p, %dst: !p, %lits: !p, %tk: !p, %m: index, %delta:
   %fd = arith.andi %flat, %delta : i1
   %m3 = arith.andi %m, %c3 : index
   %m4 = arith.subi %m, %m3 : index
-  %r4:3 = scf.for %j = %c0 to %m4 step %c4 iter_args(%d0 = %d, %l0 = %l, %x = %last)
-      -> (index, index, index) {
+  %r4:3 = scf.for %j = %c0 to %m4 step %c4 iter_args(%dP = %dstP, %lP = %litsP, %x = %last)
+      -> (!p, !p, index) {
     %j1 = arith.addi %j, %c1 : index
     %j2 = arith.addi %j, %c2 : index
     %j3 = arith.addi %j, %c3 : index
-    %s0:3 = func.call @copy_one(%a, %dst, %lits, %tk, %j, %delta, %flat, %fd, %d0, %l0, %x)
-        : (!p, !p, !p, !p, index, i1, i1, i1, index, index, index) -> (index, index, index)
-    %s1:3 = func.call @copy_one(%a, %dst, %lits, %tk, %j1, %delta, %flat, %fd, %s0#0, %s0#1,
-        %s0#2) : (!p, !p, !p, !p, index, i1, i1, i1, index, index, index) -> (index, index, index)
-    %s2:3 = func.call @copy_one(%a, %dst, %lits, %tk, %j2, %delta, %flat, %fd, %s1#0, %s1#1,
-        %s1#2) : (!p, !p, !p, !p, index, i1, i1, i1, index, index, index) -> (index, index, index)
-    %s3:3 = func.call @copy_one(%a, %dst, %lits, %tk, %j3, %delta, %flat, %fd, %s2#0, %s2#1,
-        %s2#2) : (!p, !p, !p, !p, index, i1, i1, i1, index, index, index) -> (index, index, index)
-    scf.yield %s3#0, %s3#1, %s3#2 : index, index, index
+    %s0:3 = func.call @copy_one(%a, %dst, %tk, %j, %delta, %flat, %fd, %dP, %lP, %x)
+        : (!p, !p, !p, index, i1, i1, i1, !p, !p, index) -> (!p, !p, index)
+    %s1:3 = func.call @copy_one(%a, %dst, %tk, %j1, %delta, %flat, %fd, %s0#0, %s0#1, %s0#2)
+        : (!p, !p, !p, index, i1, i1, i1, !p, !p, index) -> (!p, !p, index)
+    %s2:3 = func.call @copy_one(%a, %dst, %tk, %j2, %delta, %flat, %fd, %s1#0, %s1#1, %s1#2)
+        : (!p, !p, !p, index, i1, i1, i1, !p, !p, index) -> (!p, !p, index)
+    %s3:3 = func.call @copy_one(%a, %dst, %tk, %j3, %delta, %flat, %fd, %s2#0, %s2#1, %s2#2)
+        : (!p, !p, !p, index, i1, i1, i1, !p, !p, index) -> (!p, !p, index)
+    scf.yield %s3#0, %s3#1, %s3#2 : !p, !p, index
   }
-  %r:3 = scf.for %j = %m4 to %m step %c1 iter_args(%d0 = %r4#0, %l0 = %r4#1, %x = %r4#2)
-      -> (index, index, index) {
-    %s:3 = func.call @copy_one(%a, %dst, %lits, %tk, %j, %delta, %flat, %fd, %d0, %l0, %x)
-        : (!p, !p, !p, !p, index, i1, i1, i1, index, index, index) -> (index, index, index)
-    scf.yield %s#0, %s#1, %s#2 : index, index, index
+  %r:3 = scf.for %j = %m4 to %m step %c1 iter_args(%dP = %r4#0, %lP = %r4#1, %x = %r4#2)
+      -> (!p, !p, index) {
+    %s:3 = func.call @copy_one(%a, %dst, %tk, %j, %delta, %flat, %fd, %dP, %lP, %x)
+        : (!p, !p, !p, index, i1, i1, i1, !p, !p, index) -> (!p, !p, index)
+    scf.yield %s#0, %s#1, %s#2 : !p, !p, index
   }
-  return %r#0, %r#1, %r#2 : index, index, index
+  return %r#0, %r#1, %r#2 : !p, !p, index
 }
 
 // run runs the operations of the kernel arguments a in batches of 64.
@@ -417,17 +418,21 @@ func.func private @run(%a: !p, %delta: i1, %flat: i1) {
   %last = func.call @arg(%a, %c12) : (!p, index) -> index
   // k is the index of the next token. The batch keeps the last offset in a; with delta, the copy
   // loop keeps it as well.
-  %s:3 = scf.for %k = %c0 to %n step %c64 iter_args(%d0 = %d, %l0 = %l, %x = %last)
-      -> (index, index, index) {
+  %dstP = func.call @at(%dst, %d) : (!p, index) -> !p
+  %litsP = func.call @at(%lits, %l) : (!p, index) -> !p
+  %s:3 = scf.for %k = %c0 to %n step %c64 iter_args(%dP = %dstP, %lP = %litsP, %x = %last)
+      -> (!p, !p, index) {
     %left = arith.subi %n, %k : index
     %m = arith.minui %left, %c64 : index
     func.call @expand_batch(%a, %k, %m, %raise) : (!p, index, index, i1) -> ()
     %tk = func.call @at(%tok, %k) : (!p, index) -> !p
-    %d2, %l2, %x2 = func.call @copy(%a, %dst, %lits, %tk, %m, %delta, %flat, %d0, %l0, %x)
-        : (!p, !p, !p, !p, index, i1, i1, index, index, index) -> (index, index, index)
-    scf.yield %d2, %l2, %x2 : index, index, index
+    %d2, %l2, %x2 = func.call @copy(%a, %dst, %tk, %m, %delta, %flat, %dP, %lP, %x)
+        : (!p, !p, !p, index, i1, i1, !p, !p, index) -> (!p, !p, index)
+    scf.yield %d2, %l2, %x2 : !p, !p, index
   }
-  func.call @set(%a, %c10, %s#0) : (!p, index, index) -> ()
-  func.call @set(%a, %c11, %s#1) : (!p, index, index) -> ()
+  %d3 = func.call @dist(%s#0, %dst) : (!p, !p) -> index
+  %l3 = func.call @dist(%s#1, %lits) : (!p, !p) -> index
+  func.call @set(%a, %c10, %d3) : (!p, index, index) -> ()
+  func.call @set(%a, %c11, %l3) : (!p, index, index) -> ()
   return
 }

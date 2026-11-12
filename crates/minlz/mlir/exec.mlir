@@ -124,12 +124,31 @@ func.func private @expand8(%p: !p, %o: index, %f: i64, %ones: i64) -> (i64, inde
   return %r, %o2 : i64, index
 }
 
-// op runs an operation with token t, literal length len (0 without literals) and offset o, from
-// output position d, literal position l and the offset x before it, and returns d and l after it.
-// With delta, its first 32 literals are added to their references. With flat, the chunk has the
-// no-overlap flag, and with fd the offset is raised here.
-func.func private @op(%a: !p, %dst: !p, %lits: !p, %t: index, %len: index, %o: index,
-    %delta: i1, %flat: i1, %fd: i1, %d: index, %l: index, %x: index) -> (index, index) {
+// back returns p - o.
+func.func private @back(%p: !p, %o: index) -> !p {
+  %c0 = arith.constant 0 : index
+  %n = arith.subi %c0, %o : index
+  %i = arith.index_cast %n : index to i64
+  %r = ptr.ptr_add %p, %i : !p, i64
+  return %r : !p
+}
+
+// dist returns the bytes from q up to p. User addresses are below 2^63, so the difference never
+// overflows.
+func.func private @dist(%p: !p, %q: !p) -> index {
+  %d = ptr.ptr_diff nsw %p, %q : !p -> i64
+  %r = arith.index_cast %d : i64 to index
+  return %r : index
+}
+
+// op runs an operation with token t, literal length len (0 without literals) and offset o, after
+// the offset x. It copies at the output cursor dstP and the literal cursor litsP, pointers into
+// dst and lits, and returns them after it; on aarch64 a load or store at a pointer needs no add
+// before it. With delta, its first 32 literals are added to their references. With flat, the
+// chunk has the no-overlap flag, and with fd the offset is raised here.
+func.func private @op(%a: !p, %dst: !p, %t: index, %len: index, %o: index, %delta: i1,
+    %flat: i1, %fd: i1, %dstP: !p, %litsP: !p, %x: index) -> (!p, !p) {
+  %c0 = arith.constant 0 : index
   %c1 = arith.constant 1 : index
   %c2 = arith.constant 2 : index
   %c13 = arith.constant 13 : index
@@ -137,24 +156,25 @@ func.func private @op(%a: !p, %dst: !p, %lits: !p, %t: index, %len: index, %o: i
   %c33 = arith.constant 33 : index
   %true = arith.constant true
   %notflat = arith.xori %flat, %true : i1
-
-  // The first 32 literals. Delta references use the offset from before the operation, clamped
-  // to the position; flat chunks raise it to 32 first, and start at position 32 or later, so
-  // their references never repeat.
-  %lv = func.call @ld(%lits, %l) : (!p, index) -> !v
+  // The first 32 literals, loaded at the literal cursor and stored at the output cursor. With
+  // delta they are added to their references, whose offset is clamped to the position and raised
+  // to 32 for a flat chunk, which starts at 32 or later so its references never repeat.
+  %lv = func.call @ld(%litsP, %c0) : (!p, index) -> !v
   %lv2 = scf.if %delta -> !v {
     %raised = arith.maxui %x, %c32 : index
     %dr0 = arith.select %flat, %raised, %x : index
+    %d = func.call @dist(%dstP, %dst) : (!p, !p) -> index
     %dr = arith.minui %dr0, %d : index
-    %rs = arith.subi %d, %dr : index
+    %refP = func.call @back(%dstP, %dr) : (!p, index) -> !p
     %near = arith.cmpi ult, %dr, %c32 : index
     %short0 = arith.andi %notflat, %near : i1
     %short = func.call @unlikely(%short0) : (i1) -> i1
     %rv = scf.if %short -> !v {
+      %rs = arith.subi %d, %dr : index
       %y = func.call @repeat(%a, %dst, %rs, %dr) : (!p, !p, index, index) -> !v
       scf.yield %y : !v
     } else {
-      %y = func.call @ld(%dst, %rs) : (!p, index) -> !v
+      %y = func.call @ld(%refP, %c0) : (!p, index) -> !v
       scf.yield %y : !v
     }
     %s = arith.addi %lv, %rv : !v
@@ -162,22 +182,18 @@ func.func private @op(%a: !p, %dst: !p, %lits: !p, %t: index, %len: index, %o: i
   } else {
     scf.yield %lv : !v
   }
-  func.call @st(%dst, %d, %lv2) : (!p, index, !v) -> ()
-  // Literal lengths from 33 on are 33 plus an escape.
+  func.call @st(%dstP, %c0, %lv2) : (!p, index, !v) -> ()
+  // Literal lengths from 33 on are 33 plus an escape, copied after the first 32 bytes.
   %llong0 = arith.cmpi uge, %len, %c33 : index
   %llong = func.call @unlikely(%llong0) : (i1) -> i1
   %n = scf.if %llong -> index {
-    %n = func.call @escape(%a) : (!p) -> index
-    %dp = func.call @at(%dst, %d) : (!p, index) -> !p
-    %lp = func.call @at(%lits, %l) : (!p, index) -> !p
-    func.call @long(%dp, %lp, %n) : (!p, !p, index) -> ()
-    scf.yield %n : index
+    %ne = func.call @escape(%a) : (!p) -> index
+    func.call @long(%dstP, %litsP, %ne) : (!p, !p, index) -> ()
+    scf.yield %ne : index
   } else {
     scf.yield %len : index
   }
-  %d1 = arith.addi %d, %n : index
-  %l1 = arith.addi %l, %n : index
-
+  %dstP1 = func.call @at(%dstP, %n) : (!p, index) -> !p
   // The match copies from the offset clamped to the position. Flat chunks raise it to
   // min(ml, 32) first, which the position covers, so their copies never overlap. Others take a
   // pattern for an offset below ml. Both the clamp and the pattern are rare, so they share a path
@@ -186,13 +202,17 @@ func.func private @op(%a: !p, %dst: !p, %lits: !p, %t: index, %len: index, %o: i
   %mlc = arith.minui %ml, %c32 : index
   %rr = arith.maxui %o, %mlc : index
   %r0 = arith.select %fd, %rr, %o : index
-  %src0 = arith.subi %d1, %r0 : index
-  %far = arith.cmpi ugt, %r0, %d1 : index
+  // The source cursor lies src0 bytes after the start of dst: below 0 when the offset reaches
+  // before dst, since the position is below 2^63 and the offset below 2^32.
+  %srcP0 = func.call @back(%dstP1, %r0) : (!p, index) -> !p
+  %src0 = func.call @dist(%srcP0, %dst) : (!p, !p) -> index
+  %far = arith.cmpi slt, %src0, %c0 : index
   %near = arith.cmpi ult, %r0, %ml : index
   %pat0 = arith.andi %notflat, %near : i1
   %slow0 = arith.ori %far, %pat0 : i1
   %slow = func.call @unlikely(%slow0) : (i1) -> i1
-  %r, %src, %mv = scf.if %slow -> (index, index, !v) {
+  %r, %srcP, %mv = scf.if %slow -> (index, !p, !v) {
+    %d1 = func.call @dist(%dstP1, %dst) : (!p, !p) -> index
     %rc = arith.minui %r0, %d1 : index
     %sc = arith.subi %d1, %rc : index
     %near2 = arith.cmpi ult, %rc, %ml : index
@@ -204,12 +224,13 @@ func.func private @op(%a: !p, %dst: !p, %lits: !p, %t: index, %len: index, %o: i
       %z = func.call @ld(%dst, %sc) : (!p, index) -> !v
       scf.yield %z : !v
     }
-    scf.yield %rc, %sc, %y : index, index, !v
+    %sp = func.call @at(%dst, %sc) : (!p, index) -> !p
+    scf.yield %rc, %sp, %y : index, !p, !v
   } else {
-    %y = func.call @ld(%dst, %src0) : (!p, index) -> !v
-    scf.yield %r0, %src0, %y : index, index, !v
+    %y = func.call @ld(%srcP0, %c0) : (!p, index) -> !v
+    scf.yield %r0, %srcP0, %y : index, !p, !v
   }
-  func.call @st(%dst, %d1, %mv) : (!p, index, !v) -> ()
+  func.call @st(%dstP1, %c0, %mv) : (!p, index, !v) -> ()
   // Match length codes from 33 on are 33 plus an escape. Such matches need an offset of at least
   // 32.
   %mlong0 = arith.cmpi uge, %ml, %c33 : index
@@ -221,15 +242,14 @@ func.func private @op(%a: !p, %dst: !p, %lits: !p, %t: index, %len: index, %o: i
       func.call @set(%a, %c13, %c1) : (!p, index, index) -> ()
     }
     %n2 = func.call @escape(%a) : (!p) -> index
-    %dp = func.call @at(%dst, %d1) : (!p, index) -> !p
-    %sp = func.call @at(%dst, %src) : (!p, index) -> !p
-    func.call @long(%dp, %sp, %n2) : (!p, !p, index) -> ()
+    func.call @long(%dstP1, %srcP, %n2) : (!p, !p, index) -> ()
     scf.yield %n2 : index
   } else {
     scf.yield %ml : index
   }
-  %d2 = arith.addi %d1, %mn : index
-  return %d2, %l1 : index, index
+  %dstP2 = func.call @at(%dstP1, %mn) : (!p, index) -> !p
+  %litsP1 = func.call @at(%litsP, %n) : (!p, index) -> !p
+  return %dstP2, %litsP1 : !p, !p
 }
 
 // minlz_exec_plain runs the operations of a chunk.

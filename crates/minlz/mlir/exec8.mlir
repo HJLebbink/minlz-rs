@@ -5,27 +5,6 @@
 // The literal lengths and offset symbols of a batch are expanded into a word each, and @op8
 // decodes each offset with a table lookup. The 8 operations of a batch are unrolled, and each
 // batch expands the next before it runs.
-//
-// @op8 copies at cursors that @run carries through the batch: the output cursor dstP and the
-// literal cursor litsP are pointers moved with ptr.ptr_add, so every copy loads or stores at a
-// pointer and needs no add before it. @op of exec.mlir copies at an index instead, for
-// exec64.mlir: x86-64 addressing modes take an index register, so cursors gain nothing there.
-
-// back returns p - o.
-func.func private @back(%p: !p, %o: index) -> !p {
-  %c0 = arith.constant 0 : index
-  %n = arith.subi %c0, %o : index
-  %i = arith.index_cast %n : index to i64
-  %r = ptr.ptr_add %p, %i : !p, i64
-  return %r : !p
-}
-
-// dist returns the bytes from q up to p.
-func.func private @dist(%p: !p, %q: !p) -> index {
-  %d = ptr.ptr_diff %p, %q : !p -> i64
-  %r = arith.index_cast %d : i64 to index
-  return %r : index
-}
 
 // expand2 returns the literal lengths and the offset symbols of the 8 operations at tok + k, a byte
 // each, and the offsets li and oi in ll and offc after them. Operations without literals get
@@ -76,19 +55,12 @@ func.func private @op8(%a: !p, %dst: !p, %raw: !p, %tab: !p, %k: i64, %tw: i64,
     %lw: i64, %sw: i64, %delta: i1, %flat: i1, %dstP: !p, %litsP: !p, %x: index, %p: index)
     -> (!p, !p, index, index) {
   %c0 = arith.constant 0 : index
-  %c1 = arith.constant 1 : index
-  %c2 = arith.constant 2 : index
   %c3 = arith.constant 3 : index
   %c7 = arith.constant 7 : index
   %c8 = arith.constant 8 : index
-  %c13 = arith.constant 13 : index
-  %c32 = arith.constant 32 : index
-  %c33 = arith.constant 33 : index
   %k32 = arith.constant 32 : i64
   %k40 = arith.constant 40 : i64
   %k255 = arith.constant 255 : i64
-  %true = arith.constant true
-  %notflat = arith.xori %flat, %true : i1
   %t = func.call @lane8(%tw, %k) : (i64, i64) -> index
   %len = func.call @lane8(%lw, %k) : (i64, i64) -> index
   %sym8 = func.call @lane8o(%sw, %k) : (i64, i64) -> i64
@@ -116,99 +88,9 @@ func.func private @op8(%a: !p, %dst: !p, %raw: !p, %tab: !p, %k: i64, %tw: i64,
   %on = arith.addi %base, %bits : index
   %new = arith.cmpi ne, %on, %c0 : index
   %o = arith.select %new, %on, %x : index
-  // The first 32 literals, loaded at the literal cursor and stored at the output cursor. With
-  // delta they are added to their references, whose offset is clamped to the position and raised
-  // to 32 for a flat chunk, which starts at 32 or later so its references never repeat.
-  %lv = func.call @ld(%litsP, %c0) : (!p, index) -> !v
-  %lv2 = scf.if %delta -> !v {
-    %raised = arith.maxui %x, %c32 : index
-    %dr0 = arith.select %flat, %raised, %x : index
-    %d = func.call @dist(%dstP, %dst) : (!p, !p) -> index
-    %dr = arith.minui %dr0, %d : index
-    %refP = func.call @back(%dstP, %dr) : (!p, index) -> !p
-    %near = arith.cmpi ult, %dr, %c32 : index
-    %short0 = arith.andi %notflat, %near : i1
-    %short = func.call @unlikely(%short0) : (i1) -> i1
-    %rv = scf.if %short -> !v {
-      %rs = arith.subi %d, %dr : index
-      %y = func.call @repeat(%a, %dst, %rs, %dr) : (!p, !p, index, index) -> !v
-      scf.yield %y : !v
-    } else {
-      %y = func.call @ld(%refP, %c0) : (!p, index) -> !v
-      scf.yield %y : !v
-    }
-    %s = arith.addi %lv, %rv : !v
-    scf.yield %s : !v
-  } else {
-    scf.yield %lv : !v
-  }
-  func.call @st(%dstP, %c0, %lv2) : (!p, index, !v) -> ()
-  // Literal lengths from 33 on are 33 plus an escape, copied after the first 32 bytes.
-  %llong0 = arith.cmpi uge, %len, %c33 : index
-  %llong = func.call @unlikely(%llong0) : (i1) -> i1
-  %n = scf.if %llong -> index {
-    %ne = func.call @escape(%a) : (!p) -> index
-    func.call @long(%dstP, %litsP, %ne) : (!p, !p, index) -> ()
-    scf.yield %ne : index
-  } else {
-    scf.yield %len : index
-  }
-  // The output cursor after the literals is where the match is stored, and its distance from the
-  // start of dst is the position the offset is clamped to.
-  %dstP1 = func.call @at(%dstP, %n) : (!p, index) -> !p
-  %d1 = func.call @dist(%dstP1, %dst) : (!p, !p) -> index
-  // The match copies from the offset clamped to the position. Flat chunks raise it to
-  // min(ml, 32) first, which the position covers, so their copies never overlap. Others take a
-  // pattern for an offset below ml. Both the clamp and the pattern are rare, so they share a path
-  // out of the loop.
-  %ml = arith.shrui %t, %c2 : index
-  %mlc = arith.minui %ml, %c32 : index
-  %rr = arith.maxui %o, %mlc : index
-  %r0 = arith.select %flat, %rr, %o : index
-  %far = arith.cmpi ugt, %r0, %d1 : index
-  %near2 = arith.cmpi ult, %r0, %ml : index
-  %pat0 = arith.andi %notflat, %near2 : i1
-  %slow0 = arith.ori %far, %pat0 : i1
-  %slow = func.call @unlikely(%slow0) : (i1) -> i1
-  %r, %srcP, %mv = scf.if %slow -> (index, !p, !v) {
-    %rc = arith.minui %r0, %d1 : index
-    %sc = arith.subi %d1, %rc : index
-    %near3 = arith.cmpi ult, %rc, %ml : index
-    %pat = arith.andi %notflat, %near3 : i1
-    %y = scf.if %pat -> !v {
-      %z = func.call @repeat(%a, %dst, %sc, %rc) : (!p, !p, index, index) -> !v
-      scf.yield %z : !v
-    } else {
-      %z = func.call @ld(%dst, %sc) : (!p, index) -> !v
-      scf.yield %z : !v
-    }
-    %sp = func.call @at(%dst, %sc) : (!p, index) -> !p
-    scf.yield %rc, %sp, %y : index, !p, !v
-  } else {
-    %sp = func.call @back(%dstP1, %r0) : (!p, index) -> !p
-    %y = func.call @ld(%sp, %c0) : (!p, index) -> !v
-    scf.yield %r0, %sp, %y : index, !p, !v
-  }
-  func.call @st(%dstP1, %c0, %mv) : (!p, index, !v) -> ()
-  // Match length codes from 33 on are 33 plus an escape. Such matches need an offset of at least
-  // 32.
-  %mlong0 = arith.cmpi uge, %ml, %c33 : index
-  %mlong = func.call @unlikely(%mlong0) : (i1) -> i1
-  %mn = scf.if %mlong -> index {
-    %close = arith.cmpi ult, %r, %c32 : index
-    %bad = arith.andi %notflat, %close : i1
-    scf.if %bad {
-      func.call @set(%a, %c13, %c1) : (!p, index, index) -> ()
-    }
-    %n2 = func.call @escape(%a) : (!p) -> index
-    func.call @long(%dstP1, %srcP, %n2) : (!p, !p, index) -> ()
-    scf.yield %n2 : index
-  } else {
-    scf.yield %ml : index
-  }
-  %dstP2 = func.call @at(%dstP1, %mn) : (!p, index) -> !p
-  %litsP1 = func.call @at(%litsP, %n) : (!p, index) -> !p
-  return %dstP2, %litsP1, %o, %p2 : !p, !p, index, index
+  %s:2 = func.call @op(%a, %dst, %t, %len, %o, %delta, %flat, %flat, %dstP, %litsP, %x)
+      : (!p, !p, index, index, index, i1, i1, i1, !p, !p, index) -> (!p, !p)
+  return %s#0, %s#1, %o, %p2 : !p, !p, index, index
 }
 
 // run runs the operations of the kernel arguments a in batches of 8. Each batch takes the words

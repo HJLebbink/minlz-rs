@@ -108,13 +108,12 @@
 42:
 	add	x24, x24, x21
 	ubfx	x27, x19, #2, #6
-	sub	x28, x24, x8
-	cmp	x25, x27
-	ccmp	x25, x28, #2, hs
-	b.hi	602f
 	sub	x28, x24, x25
-	mov	x29, x25
+	cmp	x25, x27
+	ccmp	x28, x8, #8, hs
+	b.lt	602f
 	ldp	q1, q0, [x28]
+	mov	x29, x25
 52:
 	stp	q1, q0, [x24]
 	cmp	x27, #33
@@ -152,13 +151,12 @@
 72:
 	add	x26, x26, x25
 	ubfx	x27, x19, #10, #6
-	sub	x28, x26, x8
-	cmp	x21, x27
-	ccmp	x21, x28, #2, hs
-	b.hi	612f
 	sub	x28, x26, x21
-	mov	x29, x21
+	cmp	x21, x27
+	ccmp	x28, x8, #8, hs
+	b.lt	612f
 	ldp	q1, q0, [x28]
+	mov	x29, x21
 82:
 	stp	q1, q0, [x26]
 	cmp	x27, #33
@@ -196,14 +194,13 @@
 102:
 	add	x26, x26, x21
 	ubfx	x27, x19, #18, #6
-	sub	x28, x26, x8
 	cmp	x22, x27
 	b.lo	622f
-	cmp	x22, x28
-	b.hi	622f
 	sub	x28, x26, x22
-	mov	x29, x22
+	cmp	x28, x8
+	b.lt	622f
 	ldp	q1, q0, [x28]
+	mov	x29, x22
 112:
 	stp	q1, q0, [x26]
 	cmp	x27, #33
@@ -241,14 +238,13 @@
 132:
 	add	x26, x26, x22
 	lsr	w27, w19, #26
-	sub	x28, x26, x8
 	cmp	x21, x27
 	b.lo	632f
-	cmp	x21, x28
-	b.hi	632f
 	sub	x28, x26, x21
-	mov	x29, x21
+	cmp	x28, x8
+	b.lt	632f
 	ldp	q1, q0, [x28]
+	mov	x29, x21
 142:
 	stp	q1, q0, [x26]
 	cmp	x27, #33
@@ -286,14 +282,13 @@
 162:
 	add	x26, x26, x21
 	ubfx	x27, x19, #34, #6
-	sub	x28, x26, x8
 	cmp	x22, x27
 	b.lo	642f
-	cmp	x22, x28
-	b.hi	642f
 	sub	x28, x26, x22
-	mov	x29, x22
+	cmp	x28, x8
+	b.lt	642f
 	ldp	q1, q0, [x28]
+	mov	x29, x22
 172:
 	stp	q1, q0, [x26]
 	cmp	x27, #33
@@ -331,14 +326,13 @@
 192:
 	add	x26, x26, x22
 	ubfx	x27, x19, #42, #6
-	sub	x28, x26, x8
 	cmp	x21, x27
 	b.lo	652f
-	cmp	x21, x28
-	b.hi	652f
 	sub	x28, x26, x21
-	mov	x29, x21
+	cmp	x28, x8
+	b.lt	652f
 	ldp	q1, q0, [x28]
+	mov	x29, x21
 202:
 	stp	q1, q0, [x26]
 	cmp	x27, #33
@@ -376,14 +370,13 @@
 222:
 	add	x26, x26, x21
 	ubfx	x27, x19, #50, #6
-	sub	x28, x26, x8
 	cmp	x22, x27
 	b.lo	662f
-	cmp	x22, x28
-	b.hi	662f
 	sub	x28, x26, x22
-	mov	x29, x22
+	cmp	x28, x8
+	b.lt	662f
 	ldp	q1, q0, [x28]
+	mov	x29, x22
 232:
 	stp	q1, q0, [x26]
 	cmp	x27, #33
@@ -421,14 +414,13 @@
 252:
 	add	x22, x26, x7
 	lsr	x19, x19, #58
-	sub	x24, x22, x8
 	cmp	x21, x19
 	b.lo	672f
-	cmp	x21, x24
-	b.hi	672f
 	sub	x24, x22, x21
-	mov	x26, x21
+	cmp	x24, x8
+	b.lt	672f
 	ldp	q1, q0, [x24]
+	mov	x26, x21
 262:
 	stp	q1, q0, [x22]
 	cmp	x19, #33
@@ -1191,6 +1183,7 @@
 	stp	q0, q1, [x22, #256]
 	b	272b
 602:
+	sub	x28, x24, x8
 	cmp	x25, x28
 	csel	x29, x25, x28, lo
 	sub	x28, x28, x29
@@ -1207,6 +1200,7 @@
 	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
 	b	52b
 612:
+	sub	x28, x26, x8
 	cmp	x21, x28
 	csel	x29, x21, x28, lo
 	sub	x28, x28, x29
@@ -1223,6 +1217,7 @@
 	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
 	b	82b
 622:
+	sub	x28, x26, x8
 	cmp	x22, x28
 	csel	x29, x22, x28, lo
 	sub	x28, x28, x29
@@ -1239,6 +1234,7 @@
 	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
 	b	112b
 632:
+	sub	x28, x26, x8
 	cmp	x21, x28
 	csel	x29, x21, x28, lo
 	sub	x28, x28, x29
@@ -1255,6 +1251,7 @@
 	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
 	b	142b
 642:
+	sub	x28, x26, x8
 	cmp	x22, x28
 	csel	x29, x22, x28, lo
 	sub	x28, x28, x29
@@ -1271,6 +1268,7 @@
 	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
 	b	172b
 652:
+	sub	x28, x26, x8
 	cmp	x21, x28
 	csel	x29, x21, x28, lo
 	sub	x28, x28, x29
@@ -1287,6 +1285,7 @@
 	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
 	b	202b
 662:
+	sub	x28, x26, x8
 	cmp	x22, x28
 	csel	x29, x22, x28, lo
 	sub	x28, x28, x29
@@ -1303,6 +1302,7 @@
 	tbl	v0.16b, { v2.16b, v3.16b }, v0.16b
 	b	232b
 672:
+	sub	x24, x22, x8
 	cmp	x21, x24
 	csel	x26, x21, x24, lo
 	sub	x24, x24, x26
@@ -1399,13 +1399,12 @@
 812:
 	add	x2, x24, x1
 	ubfx	x3, x15, #2, #6
-	sub	x4, x2, x8
-	cmp	x21, x3
-	ccmp	x21, x4, #2, hs
-	b.hi	882f
 	sub	x4, x2, x21
-	mov	x5, x21
+	cmp	x21, x3
+	ccmp	x4, x8, #8, hs
+	b.lt	882f
 	ldp	q1, q0, [x4]
+	mov	x5, x21
 822:
 	stp	q1, q0, [x2]
 	cmp	x3, #33
@@ -1511,6 +1510,7 @@
 	stp	q0, q1, [x2, #256]
 	b	832b
 882:
+	sub	x4, x2, x8
 	cmp	x21, x4
 	csel	x5, x21, x4, lo
 	sub	x4, x4, x5

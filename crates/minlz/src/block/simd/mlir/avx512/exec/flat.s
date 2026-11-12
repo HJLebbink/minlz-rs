@@ -7,179 +7,178 @@
 	push	r12
 	push	rbx
 	sub	rsp, 160
-	mov	r9, rdi
-	mov	rax, qword ptr [rdi + 64]
-	mov	r13, qword ptr [rdi + 80]
-	mov	r12, qword ptr [rdi + 88]
-	test	rax, rax
-	jle	802f
-	mov	rcx, qword ptr [r9]
-	mov	qword ptr [rsp + 8], rcx
-	mov	rbx, qword ptr [r9 + 8]
-	mov	rcx, qword ptr [r9 + 16]
-	mov	qword ptr [rsp + 136], rcx
-	lea	rcx, [r9 + 512]
-	lea	r14, [r9 + 576]
-	mov	edx, 192
-	mov	qword ptr [rsp + 104], rdx
-	mov	edx, 7
-	mov	qword ptr [rsp + 88], rdx
-	mov	qword ptr [rsp + 120], 0
-	vmovdqa64	zmm22, zmmword ptr [rip + 812f]
-	vpbroadcastb	zmm1, byte ptr [rip + 822f]
-	vpbroadcastb	zmm2, byte ptr [rip + 832f]
-	vpbroadcastd	zmm3, dword ptr [rip + 842f]
+	mov	r13, qword ptr [rdi]
+	mov	rax, qword ptr [rdi + 8]
+	mov	rcx, qword ptr [rdi + 64]
+	mov	r10, qword ptr [rdi + 80]
+	add	r10, r13
+	mov	rbx, qword ptr [rdi + 88]
+	mov	qword ptr [rsp + 128], rax
+	add	rbx, rax
+	test	rcx, rcx
+	jle	892f
+	mov	rax, qword ptr [rdi + 16]
+	mov	qword ptr [rsp + 136], rax
+	lea	rax, [rdi + 512]
+	lea	rdx, [rdi + 576]
+	mov	esi, 192
+	mov	qword ptr [rsp + 96], rsi
+	mov	esi, 7
+	mov	qword ptr [rsp + 56], rsi
+	mov	qword ptr [rsp + 104], 0
+	vmovdqa64	zmm22, zmmword ptr [rip + 902f]
+	vpbroadcastb	zmm1, byte ptr [rip + 912f]
+	vpbroadcastb	zmm2, byte ptr [rip + 922f]
+	vpbroadcastd	zmm3, dword ptr [rip + 932f]
 	vpternlogd	zmm4, zmm4, zmm4, 255
-	vpbroadcastd	zmm5, dword ptr [rip + 852f]
-	vpbroadcastd	zmm6, dword ptr [rip + 862f]
+	vpbroadcastd	zmm5, dword ptr [rip + 942f]
+	vpbroadcastd	zmm6, dword ptr [rip + 952f]
 	vpxor	xmm7, xmm7, xmm7
-	vbroadcasti32x4	zmm8, xmmword ptr [rip + 872f]
-	vpbroadcastd	zmm9, dword ptr [rip + 882f]
-	vmovdqa64	zmm10, zmmword ptr [rip + 892f]
-	vpbroadcastd	zmm11, dword ptr [rip + 902f]
-	vpbroadcastb	xmm12, byte ptr [rip + 912f]
-	vpbroadcastb	xmm13, byte ptr [rip + 922f]
-	mov	rdx, rcx
+	vbroadcasti32x4	zmm8, xmmword ptr [rip + 962f]
+	vpbroadcastd	zmm9, dword ptr [rip + 972f]
+	vmovdqa64	zmm10, zmmword ptr [rip + 982f]
+	vpbroadcastd	zmm11, dword ptr [rip + 992f]
+	vpbroadcastb	xmm12, byte ptr [rip + 1002f]
+	vpbroadcastb	xmm13, byte ptr [rip + 1012f]
+	mov	qword ptr [rsp + 88], rax
 	xor	esi, esi
-	mov	qword ptr [rsp + 112], rcx
-	mov	qword ptr [rsp], r9
-	mov	qword ptr [rsp + 144], rax
-	mov	qword ptr [rsp + 40], rbx
-	mov	qword ptr [rsp + 96], r14
+	mov	qword ptr [rsp + 24], rdi
+	mov	qword ptr [rsp + 32], r13
+	mov	qword ptr [rsp + 144], rcx
+	mov	qword ptr [rsp], rdx
 	jmp	12f
 	.p2align	4
 2:
-	inc	qword ptr [rsp + 120]
-	add	qword ptr [rsp + 104], 64
-	add	qword ptr [rsp + 88], -64
-	mov	rdx, qword ptr [rsp + 128]
-	add	rdx, -64
-	mov	rax, qword ptr [rsp + 144]
+	inc	qword ptr [rsp + 104]
+	add	qword ptr [rsp + 96], 64
+	add	qword ptr [rsp + 56], -64
+	mov	rax, qword ptr [rsp + 112]
+	add	rax, -64
+	mov	rcx, qword ptr [rsp + 144]
 	mov	rsi, qword ptr [rsp + 152]
-	cmp	rsi, rax
-	mov	rcx, qword ptr [rsp + 112]
-	jge	802f
+	cmp	rsi, rcx
+	jge	892f
 12:
-	mov	qword ptr [rsp + 56], r12
-	mov	qword ptr [rsp + 128], rdx
-	mov	r10, rsi
-	mov	rdx, rax
-	sub	rdx, rsi
-	cmp	rdx, 64
+	mov	qword ptr [rsp + 40], rbx
+	mov	qword ptr [rsp + 16], r10
+	mov	qword ptr [rsp + 112], rax
+	sub	rcx, rsi
+	cmp	rcx, 64
 	mov	eax, 64
-	mov	qword ptr [rsp + 24], rdx
-	cmovb	rax, rdx
+	mov	qword ptr [rsp + 48], rcx
+	cmovb	rax, rcx
 	mov	qword ptr [rsp + 72], rax
-	mov	rsi, qword ptr [r9 + 16]
-	mov	r11, qword ptr [r9 + 24]
-	mov	rdx, qword ptr [r9 + 32]
-	mov	rax, r9
-	mov	r9, qword ptr [r9 + 40]
-	mov	r14, qword ptr [rax + 64]
-	mov	rdi, qword ptr [rax + 72]
-	mov	qword ptr [rsp + 48], rdi
-	mov	rdi, qword ptr [rax + 96]
-	mov	qword ptr [rsp + 64], rdi
-	mov	r12, qword ptr [rax + 112]
-	mov	r8, qword ptr [rax + 128]
-	mov	rax, qword ptr [rax + 136]
-	mov	qword ptr [rsp + 32], rax
-	lea	rbx, [r14 + 7]
-	lea	rax, [r10 + 64]
+	mov	r15, qword ptr [rdi + 16]
+	mov	rbx, qword ptr [rdi + 24]
+	mov	r11, qword ptr [rdi + 32]
+	mov	rdx, qword ptr [rdi + 40]
+	mov	r13, qword ptr [rdi + 64]
+	mov	r10, qword ptr [rdi + 72]
+	mov	rax, qword ptr [rdi + 96]
+	mov	qword ptr [rsp + 64], rax
+	mov	r9, qword ptr [rdi + 112]
+	mov	r12, qword ptr [rdi + 128]
+	mov	rax, qword ptr [rdi + 136]
+	mov	qword ptr [rsp + 8], rax
+	lea	rcx, [r13 + 7]
+	lea	rax, [rsi + 64]
 	mov	qword ptr [rsp + 152], rax
-	cmp	rax, rbx
+	mov	r14, rsi
+	cmp	rax, rcx
 	jbe	22f
-	cmp	r10, rbx
-	mov	rax, rcx
+	cmp	rsi, rcx
+	mov	rdi, qword ptr [rsp + 88]
+	mov	rax, rdi
 	jge	92f
-	mov	rax, qword ptr [rsp + 120]
+	mov	rax, qword ptr [rsp + 104]
 	shl	rax, 6
-	mov	edi, 7
-	sub	rdi, rax
-	add	rdi, r14
-	cmp	rdi, 16
-	mov	r15, r10
+	mov	esi, 7
+	sub	rsi, rax
+	add	rsi, r13
+	cmp	rsi, 16
+	mov	r8, r14
 	jb	72f
-	add	rax, rsi
-	mov	qword ptr [rsp + 16], r8
-	mov	r8, qword ptr [rsp]
+	add	rax, r15
+	mov	r8, qword ptr [rsp + 24]
 	sub	r8, rax
 	add	r8, 511
 	cmp	r8, 255
-	mov	r8, qword ptr [rsp + 16]
-	mov	r15, r10
+	mov	r8, r14
 	jb	72f
-	cmp	rdi, 256
+	cmp	rsi, 256
+	mov	qword ptr [rsp + 80], r12
 	jae	32f
 	xor	ebp, ebp
 	jmp	52f
 	.p2align	4
 22:
-	add	rsi, r10
-	mov	rax, rsi
+	add	r15, rsi
+	mov	rax, r15
 	jmp	92f
 32:
-	mov	rbp, rdi
+	mov	qword ptr [rsp + 120], r10
+	mov	rbp, rsi
 	and	rbp, -256
-	mov	qword ptr [rsp + 80], r10
-	lea	r15, [r10 + rbp]
-	mov	rax, qword ptr [rsp + 104]
-	add	rax, rsi
-	mov	rcx, qword ptr [rsp + 88]
-	lea	r8, [r14 + rcx]
-	and	r8, -256
-	xor	r10d, r10d
-	mov	rcx, qword ptr [rsp]
+	lea	r8, [r14 + rbp]
+	mov	rax, qword ptr [rsp + 96]
+	lea	r10, [r15 + rax]
+	mov	rax, qword ptr [rsp + 56]
+	lea	r12, [r13 + rax]
+	and	r12, -256
+	xor	eax, eax
+	mov	rdi, qword ptr [rsp + 24]
 	.p2align	4
 42:
-	vmovdqu64	zmm14, zmmword ptr [rax + r10 - 192]
-	vmovdqu64	zmm15, zmmword ptr [rax + r10 - 128]
-	vmovdqu64	zmm16, zmmword ptr [rax + r10 - 64]
-	vmovdqu64	zmm17, zmmword ptr [rax + r10]
-	vmovdqu64	zmmword ptr [rcx + r10 + 512], zmm14
-	vmovdqu64	zmmword ptr [rcx + r10 + 576], zmm15
-	vmovdqu64	zmmword ptr [rcx + r10 + 640], zmm16
-	vmovdqu64	zmmword ptr [rcx + r10 + 704], zmm17
-	add	r10, 256
-	cmp	r8, r10
+	vmovdqu64	zmm14, zmmword ptr [r10 + rax - 192]
+	vmovdqu64	zmm15, zmmword ptr [r10 + rax - 128]
+	vmovdqu64	zmm16, zmmword ptr [r10 + rax - 64]
+	vmovdqu64	zmm17, zmmword ptr [r10 + rax]
+	vmovdqu64	zmmword ptr [rdi + rax + 512], zmm14
+	vmovdqu64	zmmword ptr [rdi + rax + 576], zmm15
+	vmovdqu64	zmmword ptr [rdi + rax + 640], zmm16
+	vmovdqu64	zmmword ptr [rdi + rax + 704], zmm17
+	add	rax, 256
+	cmp	r12, rax
 	jne	42b
-	cmp	rdi, rbp
-	mov	rcx, qword ptr [rsp + 112]
-	mov	rax, rcx
-	mov	r10, qword ptr [rsp + 80]
-	mov	r8, qword ptr [rsp + 16]
+	cmp	rsi, rbp
+	mov	rdi, qword ptr [rsp + 88]
+	mov	rax, rdi
+	mov	r12, qword ptr [rsp + 80]
+	mov	r10, qword ptr [rsp + 120]
 	je	92f
-	test	dil, -16
+	test	sil, -16
 	je	72f
 52:
-	mov	rax, rdi
-	and	rax, -16
-	lea	r15, [r10 + rax]
-	lea	r8, [rsi + r10]
-	add	r14, qword ptr [rsp + 88]
-	and	r14, -16
+	mov	r12, r10
+	mov	r10, rsi
+	and	r10, -16
+	lea	r8, [r14 + r10]
+	lea	rax, [r15 + r14]
+	add	r13, qword ptr [rsp + 56]
+	and	r13, -16
 	.p2align	4
 62:
-	vmovdqu	xmm14, xmmword ptr [r8 + rbp]
-	vmovdqu	xmmword ptr [rcx + rbp], xmm14
+	vmovdqu	xmm14, xmmword ptr [rax + rbp]
+	vmovdqu	xmmword ptr [rdi + rbp], xmm14
 	add	rbp, 16
-	cmp	r14, rbp
+	cmp	r13, rbp
 	jne	62b
-	cmp	rdi, rax
-	mov	rax, rcx
-	mov	r8, qword ptr [rsp + 16]
+	cmp	rsi, r10
+	mov	rax, rdi
+	mov	r10, r12
+	mov	r12, qword ptr [rsp + 80]
 	je	92f
 	.p2align	4
 72:
-	mov	rdi, qword ptr [rsp + 128]
+	mov	rsi, qword ptr [rsp + 112]
 	.p2align	4
 82:
-	movzx	eax, byte ptr [rsi + r15]
-	mov	byte ptr [rdi + r15], al
-	inc	r15
-	cmp	rbx, r15
+	movzx	eax, byte ptr [r15 + r8]
+	mov	byte ptr [rsi + r8], al
+	inc	r8
+	cmp	rcx, r8
 	jne	82b
-	mov	rax, rcx
+	mov	rax, rdi
 92:
 	vmovdqu64	zmm14, zmmword ptr [rax]
 	mov	rax, qword ptr [rsp + 72]
@@ -187,98 +186,97 @@
 	vpcmpnleub	k2, zmm15, zmm22
 	vptestmb	k1 {k2}, zmm14, zmm1
 	vptestnmb	k2 {k2}, zmm14, zmm2
-	vpexpandb	zmm15 {k1} {z}, zmmword ptr [r11 + r8]
-	mov	rax, qword ptr [rsp]
-	vmovdqu64	zmmword ptr [rax + 192], zmm15
-	mov	rax, qword ptr [rsp + 32]
-	vpexpandb	zmm15 {k2} {z}, zmmword ptr [rdx + rax]
-	mov	rcx, qword ptr [rsp + 48]
-	mov	rdx, rcx
-	shr	rdx, 3
-	lea	rax, [rdx + 64]
-	cmp	rax, r12
+	mov	r15, r12
+	vpexpandb	zmm15 {k1} {z}, zmmword ptr [rbx + r12]
+	mov	rdi, qword ptr [rsp + 24]
+	vmovdqu64	zmmword ptr [rdi + 192], zmm15
+	mov	rax, qword ptr [rsp + 8]
+	vpexpandb	zmm15 {k2} {z}, zmmword ptr [r11 + rax]
+	mov	r12, r10
+	mov	rcx, r10
+	shr	rcx, 3
+	lea	rax, [rcx + 64]
+	cmp	rax, r9
 	jbe	102f
-	mov	rsi, r12
-	sub	rsi, rdx
-	mov	r15, qword ptr [rsp + 96]
-	mov	r14, r15
-	mov	rbp, qword ptr [rsp + 56]
+	mov	r11, r9
+	sub	r11, rcx
+	mov	r10, qword ptr [rsp]
+	mov	r13, qword ptr [rsp + 32]
+	mov	rbp, r14
+	mov	r14, qword ptr [rsp + 40]
 	jbe	172f
-	cmp	rsi, 16
-	mov	rdi, rdx
+	cmp	r11, 16
+	mov	r8, rcx
 	jb	152f
-	lea	r11, [rdx + r9]
-	mov	rax, qword ptr [rsp]
-	sub	rax, r11
+	lea	rbx, [rcx + rdx]
+	mov	rax, rdi
+	sub	rax, rbx
 	add	rax, 575
 	cmp	rax, 255
-	mov	rdi, rdx
+	mov	r8, rcx
 	jb	152f
-	cmp	rsi, 256
+	cmp	r11, 256
 	jae	112f
-	xor	ebx, ebx
+	xor	esi, esi
 	jmp	132f
 	.p2align	4
 102:
-	add	rdx, r9
-	mov	r14, rdx
-	mov	r15, qword ptr [rsp + 96]
-	mov	rbp, qword ptr [rsp + 56]
+	add	rcx, rdx
+	mov	r10, rcx
+	mov	r13, qword ptr [rsp + 32]
+	mov	rbp, r14
+	mov	r14, qword ptr [rsp + 40]
 	jmp	172f
 112:
-	mov	qword ptr [rsp + 16], r8
-	mov	rbx, rsi
-	and	rbx, -256
-	lea	rdi, [rdx + rbx]
-	lea	rax, [r9 + rdx + 192]
-	xor	r8d, r8d
-	mov	rcx, qword ptr [rsp]
+	mov	rsi, r11
+	and	rsi, -256
+	lea	r8, [rcx + rsi]
+	lea	r10, [rdx + rcx + 192]
+	xor	eax, eax
 	.p2align	4
 122:
-	vmovdqu64	zmm16, zmmword ptr [rax + r8 - 192]
-	vmovdqu64	zmm17, zmmword ptr [rax + r8 - 128]
-	vmovdqu64	zmm18, zmmword ptr [rax + r8 - 64]
-	vmovdqu64	zmm19, zmmword ptr [rax + r8]
-	vmovdqu64	zmmword ptr [rcx + r8 + 576], zmm16
-	vmovdqu64	zmmword ptr [rcx + r8 + 640], zmm17
-	vmovdqu64	zmmword ptr [rcx + r8 + 704], zmm18
-	vmovdqu64	zmmword ptr [rcx + r8 + 768], zmm19
-	add	r8, 256
-	cmp	rbx, r8
+	vmovdqu64	zmm16, zmmword ptr [r10 + rax - 192]
+	vmovdqu64	zmm17, zmmword ptr [r10 + rax - 128]
+	vmovdqu64	zmm18, zmmword ptr [r10 + rax - 64]
+	vmovdqu64	zmm19, zmmword ptr [r10 + rax]
+	vmovdqu64	zmmword ptr [rdi + rax + 576], zmm16
+	vmovdqu64	zmmword ptr [rdi + rax + 640], zmm17
+	vmovdqu64	zmmword ptr [rdi + rax + 704], zmm18
+	vmovdqu64	zmmword ptr [rdi + rax + 768], zmm19
+	add	rax, 256
+	cmp	rsi, rax
 	jne	122b
-	cmp	rsi, rbx
-	mov	r14, r15
-	mov	r8, qword ptr [rsp + 16]
-	mov	rcx, qword ptr [rsp + 48]
+	cmp	r11, rsi
+	mov	r10, qword ptr [rsp]
 	je	172f
-	test	sil, -16
+	test	r11b, -16
 	je	152f
 132:
-	mov	rax, rsi
+	mov	rax, r11
 	and	rax, -16
-	lea	rdi, [rdx + rax]
+	lea	r8, [rcx + rax]
+	mov	r10, qword ptr [rsp]
 	.p2align	4
 142:
-	vmovdqu64	xmm16, xmmword ptr [r11 + rbx]
-	vmovdqu64	xmmword ptr [r15 + rbx], xmm16
-	add	rbx, 16
-	cmp	rax, rbx
+	vmovdqu64	xmm16, xmmword ptr [rbx + rsi]
+	vmovdqu64	xmmword ptr [r10 + rsi], xmm16
+	add	rsi, 16
+	cmp	rax, rsi
 	jne	142b
-	cmp	rsi, rax
-	mov	r14, r15
+	cmp	r11, rax
 	je	172f
 	.p2align	4
 152:
-	mov	rax, r15
-	sub	rax, rdx
+	mov	r10, qword ptr [rsp]
+	mov	rax, r10
+	sub	rax, rcx
 	.p2align	4
 162:
-	movzx	edx, byte ptr [r9 + rdi]
-	mov	byte ptr [rax + rdi], dl
-	inc	rdi
-	cmp	r12, rdi
+	movzx	ecx, byte ptr [rdx + r8]
+	mov	byte ptr [rax + r8], cl
+	inc	r8
+	cmp	r9, r8
 	jne	162b
-	mov	r14, r15
 172:
 	mov	rax, qword ptr [rsp + 64]
 	vpbroadcastd	zmm17, eax
@@ -300,7 +298,7 @@
 	valignq	zmm21, zmm20, zmm7, 4
 	vpaddd	zmm20, zmm21, zmm20
 	vpsubd	zmm18, zmm20, zmm18
-	mov	eax, ecx
+	mov	eax, r12d
 	and	eax, 7
 	vpbroadcastd	zmm21, eax
 	vpaddd	zmm18, zmm18, zmm21
@@ -308,7 +306,7 @@
 	vpandd	zmm18, zmm18, zmm5
 	vpshufb	zmm21, zmm21, zmm8
 	vpaddb	zmm21, zmm21, zmm9
-	vpermb	zmm21, zmm21, zmmword ptr [r14]
+	vpermb	zmm21, zmm21, zmmword ptr [r10]
 	vpsrlvd	zmm18, zmm21, zmm18
 	vpandnd	zmm18, zmm19, zmm18
 	vpaddd	zmm16, zmm18, zmm16
@@ -332,100 +330,100 @@
 	vpmovzxbd	zmm18, xmm18
 	vpmaxud	zmm17, zmm17, zmm18
 	vextracti32x4	xmm0, zmm20, 3
-	vpextrd	eax, xmm0, 3
-	add	rax, rcx
-	mov	rcx, qword ptr [rsp]
-	vmovdqu64	zmmword ptr [rcx + 256], zmm17
-	cmp	qword ptr [rsp + 24], 17
+	vpextrd	esi, xmm0, 3
+	add	rsi, r12
+	vmovdqu64	zmmword ptr [rdi + 256], zmm17
+	cmp	qword ptr [rsp + 48], 17
 	jb	182f
-	mov	r14, r10
-	mov	rdx, rax
-	shr	rdx, 3
-	lea	rsi, [rdx + 64]
-	cmp	rsi, r12
+	mov	rax, rsi
+	shr	rax, 3
+	lea	rcx, [rax + 64]
+	cmp	rcx, r9
+	mov	r12, r15
 	jbe	192f
-	mov	rsi, r12
-	sub	rsi, rdx
-	mov	rbx, r15
+	mov	rcx, r9
+	sub	rcx, rax
+	mov	rbx, qword ptr [rsp]
+	mov	r15, qword ptr [rsp + 8]
 	jbe	262f
-	cmp	rsi, 16
-	mov	rdi, rdx
+	cmp	rcx, 16
+	mov	r8, rax
 	jb	242f
-	lea	r10, [rdx + r9]
-	mov	rdi, qword ptr [rsp]
-	sub	rdi, r10
-	add	rdi, 575
-	cmp	rdi, 255
-	mov	rdi, rdx
+	lea	r11, [rax + rdx]
+	mov	r8, rdi
+	sub	r8, r11
+	add	r8, 575
+	cmp	r8, 255
+	mov	r8, rax
 	jb	242f
-	cmp	rsi, 256
+	cmp	rcx, 256
 	jae	202f
-	xor	r11d, r11d
+	xor	r10d, r10d
 	jmp	222f
 	.p2align	4
 182:
-	mov	r9, qword ptr [rsp]
-	mov	rcx, qword ptr [rsp + 8]
-	jmp	452f
+	mov	r11, qword ptr [rsp + 16]
+	mov	r12, r15
+	mov	r15, qword ptr [rsp + 8]
+	jmp	442f
 	.p2align	4
 192:
-	add	rdx, r9
-	mov	rbx, rdx
+	add	rax, rdx
+	mov	rbx, rax
+	mov	r15, qword ptr [rsp + 8]
 	jmp	262f
 202:
-	mov	qword ptr [rsp + 16], r8
-	mov	r11, rsi
-	and	r11, -256
-	lea	rdi, [rdx + r11]
-	lea	r8, [r9 + rdx + 192]
-	xor	ebx, ebx
-	mov	rcx, qword ptr [rsp]
+	mov	r10, rcx
+	and	r10, -256
+	lea	r8, [rax + r10]
+	lea	rbx, [rdx + rax + 192]
+	xor	r15d, r15d
 	.p2align	4
 212:
-	vmovdqu64	zmm0, zmmword ptr [r8 + rbx - 192]
-	vmovdqu64	zmm17, zmmword ptr [r8 + rbx - 128]
-	vmovdqu64	zmm18, zmmword ptr [r8 + rbx - 64]
-	vmovdqu64	zmm19, zmmword ptr [r8 + rbx]
-	vmovdqu64	zmmword ptr [rcx + rbx + 576], zmm0
-	vmovdqu64	zmmword ptr [rcx + rbx + 640], zmm17
-	vmovdqu64	zmmword ptr [rcx + rbx + 704], zmm18
-	vmovdqu64	zmmword ptr [rcx + rbx + 768], zmm19
-	add	rbx, 256
-	cmp	r11, rbx
+	vmovdqu64	zmm0, zmmword ptr [rbx + r15 - 192]
+	vmovdqu64	zmm17, zmmword ptr [rbx + r15 - 128]
+	vmovdqu64	zmm18, zmmword ptr [rbx + r15 - 64]
+	vmovdqu64	zmm19, zmmword ptr [rbx + r15]
+	vmovdqu64	zmmword ptr [rdi + r15 + 576], zmm0
+	vmovdqu64	zmmword ptr [rdi + r15 + 640], zmm17
+	vmovdqu64	zmmword ptr [rdi + r15 + 704], zmm18
+	vmovdqu64	zmmword ptr [rdi + r15 + 768], zmm19
+	add	r15, 256
+	cmp	r10, r15
 	jne	212b
-	cmp	rsi, r11
-	mov	rbx, r15
-	mov	r8, qword ptr [rsp + 16]
+	cmp	rcx, r10
+	mov	rbx, qword ptr [rsp]
+	mov	r15, qword ptr [rsp + 8]
 	je	262f
-	test	sil, -16
+	test	cl, -16
 	je	242f
 222:
-	mov	rcx, r8
-	mov	r8, rsi
-	and	r8, -16
-	lea	rdi, [rdx + r8]
+	mov	rbx, rcx
+	and	rbx, -16
+	lea	r8, [rax + rbx]
+	mov	r15, qword ptr [rsp]
 	.p2align	4
 232:
-	vmovdqu	xmm0, xmmword ptr [r10 + r11]
-	vmovdqu	xmmword ptr [r15 + r11], xmm0
-	add	r11, 16
-	cmp	r8, r11
+	vmovdqu	xmm0, xmmword ptr [r11 + r10]
+	vmovdqu	xmmword ptr [r15 + r10], xmm0
+	add	r10, 16
+	cmp	rbx, r10
 	jne	232b
-	cmp	rsi, r8
+	cmp	rcx, rbx
 	mov	rbx, r15
-	mov	r8, rcx
+	mov	r15, qword ptr [rsp + 8]
 	je	262f
 242:
-	mov	rsi, r15
-	sub	rsi, rdx
+	mov	rcx, qword ptr [rsp]
+	sub	rcx, rax
 	.p2align	4
 252:
-	movzx	edx, byte ptr [r9 + rdi]
-	mov	byte ptr [rsi + rdi], dl
-	inc	rdi
-	cmp	r12, rdi
+	movzx	eax, byte ptr [rdx + r8]
+	mov	byte ptr [rcx + r8], al
+	inc	r8
+	cmp	r9, r8
 	jne	252b
-	mov	rbx, r15
+	mov	rbx, qword ptr [rsp]
 262:
 	vextracti128	xmm0, ymm15, 1
 	vpmovzxbd	zmm0, xmm0
@@ -446,9 +444,9 @@
 	valignq	zmm20, zmm19, zmm7, 4
 	vpaddd	zmm19, zmm20, zmm19
 	vpsubd	zmm17, zmm19, zmm17
-	mov	edx, eax
-	and	edx, 7
-	vpbroadcastd	zmm20, edx
+	mov	eax, esi
+	and	eax, 7
+	vpbroadcastd	zmm20, eax
 	vpaddd	zmm17, zmm20, zmm17
 	vpsrld	zmm20, zmm17, 3
 	vpandd	zmm17, zmm17, zmm5
@@ -479,93 +477,90 @@
 	vpmaxud	zmm17, zmm16, zmm17
 	vshufi64x2	zmm16, zmm0, zmm0, 255
 	vextracti32x4	xmm0, zmm19, 3
-	vpextrd	edx, xmm0, 3
-	add	rax, rdx
-	mov	rcx, qword ptr [rsp]
-	vmovdqu64	zmmword ptr [rcx + 320], zmm17
-	cmp	qword ptr [rsp + 24], 33
-	jb	352f
-	mov	rdx, rax
-	shr	rdx, 3
-	lea	rsi, [rdx + 64]
-	cmp	rsi, r12
+	vpextrd	eax, xmm0, 3
+	add	rsi, rax
+	vmovdqu64	zmmword ptr [rdi + 320], zmm17
+	cmp	qword ptr [rsp + 48], 33
+	jb	432f
+	mov	rax, rsi
+	shr	rax, 3
+	lea	rcx, [rax + 64]
+	cmp	rcx, r9
 	jbe	272f
-	mov	rsi, r12
-	sub	rsi, rdx
-	mov	rbx, r15
+	mov	rcx, r9
+	sub	rcx, rax
+	mov	rbx, qword ptr [rsp]
 	jbe	342f
-	cmp	rsi, 16
-	mov	rdi, rdx
+	cmp	rcx, 16
+	mov	r8, rax
 	jb	322f
-	lea	r10, [rdx + r9]
-	mov	rdi, qword ptr [rsp]
-	sub	rdi, r10
-	add	rdi, 575
-	cmp	rdi, 255
-	mov	rdi, rdx
+	lea	r11, [rax + rdx]
+	mov	r8, rdi
+	sub	r8, r11
+	add	r8, 575
+	cmp	r8, 255
+	mov	r8, rax
 	jb	322f
-	cmp	rsi, 256
+	cmp	rcx, 256
 	jae	282f
-	xor	r11d, r11d
+	xor	r10d, r10d
 	jmp	302f
 272:
-	add	rdx, r9
-	mov	rbx, rdx
+	add	rax, rdx
+	mov	rbx, rax
 	jmp	342f
 282:
-	mov	qword ptr [rsp + 16], r8
-	mov	r11, rsi
-	and	r11, -256
-	lea	rdi, [rdx + r11]
-	lea	r8, [r9 + rdx + 192]
-	xor	ebx, ebx
-	mov	rcx, qword ptr [rsp]
+	mov	r10, rcx
+	and	r10, -256
+	lea	r8, [rax + r10]
+	lea	rbx, [rdx + rax + 192]
+	xor	r15d, r15d
 	.p2align	4
 292:
-	vmovdqu64	zmm0, zmmword ptr [r8 + rbx - 192]
-	vmovdqu64	zmm17, zmmword ptr [r8 + rbx - 128]
-	vmovdqu64	zmm18, zmmword ptr [r8 + rbx - 64]
-	vmovdqu64	zmm19, zmmword ptr [r8 + rbx]
-	vmovdqu64	zmmword ptr [rcx + rbx + 576], zmm0
-	vmovdqu64	zmmword ptr [rcx + rbx + 640], zmm17
-	vmovdqu64	zmmword ptr [rcx + rbx + 704], zmm18
-	vmovdqu64	zmmword ptr [rcx + rbx + 768], zmm19
-	add	rbx, 256
-	cmp	r11, rbx
+	vmovdqu64	zmm0, zmmword ptr [rbx + r15 - 192]
+	vmovdqu64	zmm17, zmmword ptr [rbx + r15 - 128]
+	vmovdqu64	zmm18, zmmword ptr [rbx + r15 - 64]
+	vmovdqu64	zmm19, zmmword ptr [rbx + r15]
+	vmovdqu64	zmmword ptr [rdi + r15 + 576], zmm0
+	vmovdqu64	zmmword ptr [rdi + r15 + 640], zmm17
+	vmovdqu64	zmmword ptr [rdi + r15 + 704], zmm18
+	vmovdqu64	zmmword ptr [rdi + r15 + 768], zmm19
+	add	r15, 256
+	cmp	r10, r15
 	jne	292b
-	cmp	rsi, r11
-	mov	rbx, r15
-	mov	r8, qword ptr [rsp + 16]
+	cmp	rcx, r10
+	mov	rbx, qword ptr [rsp]
+	mov	r15, qword ptr [rsp + 8]
 	je	342f
-	test	sil, -16
+	test	cl, -16
 	je	322f
 302:
-	mov	rcx, r8
-	mov	r8, rsi
-	and	r8, -16
-	lea	rdi, [rdx + r8]
+	mov	rbx, rcx
+	and	rbx, -16
+	lea	r8, [rax + rbx]
+	mov	r15, qword ptr [rsp]
 	.p2align	4
 312:
-	vmovdqu	xmm0, xmmword ptr [r10 + r11]
-	vmovdqu	xmmword ptr [r15 + r11], xmm0
-	add	r11, 16
-	cmp	r8, r11
+	vmovdqu	xmm0, xmmword ptr [r11 + r10]
+	vmovdqu	xmmword ptr [r15 + r10], xmm0
+	add	r10, 16
+	cmp	rbx, r10
 	jne	312b
-	cmp	rsi, r8
+	cmp	rcx, rbx
 	mov	rbx, r15
-	mov	r8, rcx
+	mov	r15, qword ptr [rsp + 8]
 	je	342f
 322:
-	mov	rsi, r15
-	sub	rsi, rdx
+	mov	rcx, qword ptr [rsp]
+	sub	rcx, rax
 	.p2align	4
 332:
-	movzx	edx, byte ptr [r9 + rdi]
-	mov	byte ptr [rsi + rdi], dl
-	inc	rdi
-	cmp	r12, rdi
+	movzx	eax, byte ptr [rdx + r8]
+	mov	byte ptr [rcx + r8], al
+	inc	r8
+	cmp	r9, r8
 	jne	332b
-	mov	rbx, r15
+	mov	rbx, qword ptr [rsp]
 342:
 	vextracti32x4	xmm0, zmm15, 2
 	vpmovzxbd	zmm0, xmm0
@@ -586,9 +581,9 @@
 	valignq	zmm20, zmm19, zmm7, 4
 	vpaddd	zmm19, zmm20, zmm19
 	vpsubd	zmm17, zmm19, zmm17
-	mov	edx, eax
-	and	edx, 7
-	vpbroadcastd	zmm20, edx
+	mov	eax, esi
+	and	eax, 7
+	vpbroadcastd	zmm20, eax
 	vpaddd	zmm17, zmm20, zmm17
 	vpsrld	zmm20, zmm17, 3
 	vpandd	zmm17, zmm17, zmm5
@@ -619,98 +614,91 @@
 	vpmaxud	zmm17, zmm16, zmm17
 	vshufi64x2	zmm16, zmm0, zmm0, 255
 	vextracti32x4	xmm0, zmm19, 3
-	vpextrd	edx, xmm0, 3
-	add	rax, rdx
-	mov	rcx, qword ptr [rsp]
-	vmovdqu64	zmmword ptr [rcx + 384], zmm17
-	cmp	qword ptr [rsp + 24], 49
-	jb	352f
-	mov	rdx, rax
-	shr	rdx, 3
-	lea	rsi, [rdx + 64]
-	cmp	rsi, r12
-	mov	rcx, qword ptr [rsp + 8]
-	jbe	362f
-	mov	rsi, r12
-	sub	rsi, rdx
-	mov	r11, r15
-	jbe	432f
-	cmp	rsi, 16
-	mov	rdi, rdx
-	jb	412f
-	lea	rbx, [rdx + r9]
-	mov	rdi, qword ptr [rsp]
-	sub	rdi, rbx
-	add	rdi, 575
-	cmp	rdi, 255
-	mov	rdi, rdx
-	jb	412f
-	cmp	rsi, 256
-	jae	372f
+	vpextrd	eax, xmm0, 3
+	add	rsi, rax
+	vmovdqu64	zmmword ptr [rdi + 384], zmm17
+	cmp	qword ptr [rsp + 48], 49
+	jb	432f
+	mov	rax, rsi
+	shr	rax, 3
+	lea	rcx, [rax + 64]
+	cmp	rcx, r9
+	jbe	352f
+	mov	rcx, r9
+	sub	rcx, rax
+	mov	rbx, qword ptr [rsp]
+	jbe	422f
+	cmp	rcx, 16
+	mov	r8, rax
+	jb	402f
+	lea	r11, [rax + rdx]
+	mov	r8, rdi
+	sub	r8, r11
+	add	r8, 575
+	cmp	r8, 255
+	mov	r8, rax
+	jb	402f
+	cmp	rcx, 256
+	jae	362f
 	xor	r10d, r10d
-	jmp	392f
-	.p2align	4
+	jmp	382f
 352:
-	mov	r9, qword ptr [rsp]
-	mov	rcx, qword ptr [rsp + 8]
-	jmp	442f
+	add	rdx, rax
+	mov	rbx, rdx
+	jmp	422f
 362:
-	add	r9, rdx
-	mov	r11, r9
-	jmp	432f
-372:
-	mov	r10, rsi
+	mov	r10, rcx
 	and	r10, -256
-	lea	rdi, [rdx + r10]
-	lea	r11, [r9 + rdx + 192]
-	xor	ebx, ebx
-	mov	rcx, qword ptr [rsp]
+	lea	r8, [rax + r10]
+	lea	rbx, [rdx + rax + 192]
+	xor	r15d, r15d
 	.p2align	4
+372:
+	vmovdqu64	zmm0, zmmword ptr [rbx + r15 - 192]
+	vmovdqu64	zmm17, zmmword ptr [rbx + r15 - 128]
+	vmovdqu64	zmm18, zmmword ptr [rbx + r15 - 64]
+	vmovdqu64	zmm19, zmmword ptr [rbx + r15]
+	vmovdqu64	zmmword ptr [rdi + r15 + 576], zmm0
+	vmovdqu64	zmmword ptr [rdi + r15 + 640], zmm17
+	vmovdqu64	zmmword ptr [rdi + r15 + 704], zmm18
+	vmovdqu64	zmmword ptr [rdi + r15 + 768], zmm19
+	add	r15, 256
+	cmp	r10, r15
+	jne	372b
+	cmp	rcx, r10
+	mov	rbx, qword ptr [rsp]
+	mov	r15, qword ptr [rsp + 8]
+	je	422f
+	test	cl, -16
+	je	402f
 382:
-	vmovdqu64	zmm0, zmmword ptr [r11 + rbx - 192]
-	vmovdqu64	zmm17, zmmword ptr [r11 + rbx - 128]
-	vmovdqu64	zmm18, zmmword ptr [r11 + rbx - 64]
-	vmovdqu64	zmm19, zmmword ptr [r11 + rbx]
-	vmovdqu64	zmmword ptr [rcx + rbx + 576], zmm0
-	vmovdqu64	zmmword ptr [rcx + rbx + 640], zmm17
-	vmovdqu64	zmmword ptr [rcx + rbx + 704], zmm18
-	vmovdqu64	zmmword ptr [rcx + rbx + 768], zmm19
-	add	rbx, 256
-	cmp	r10, rbx
-	jne	382b
-	cmp	rsi, r10
-	mov	r11, r15
-	mov	rcx, qword ptr [rsp + 8]
-	lea	rbx, [rdx + r9]
-	je	432f
-	test	sil, -16
-	je	412f
-392:
-	mov	r11, rsi
-	and	r11, -16
-	lea	rdi, [rdx + r11]
+	mov	rbx, rcx
+	and	rbx, -16
+	lea	r8, [rax + rbx]
+	mov	r15, qword ptr [rsp]
 	.p2align	4
-402:
-	vmovdqu	xmm0, xmmword ptr [rbx + r10]
+392:
+	vmovdqu	xmm0, xmmword ptr [r11 + r10]
 	vmovdqu	xmmword ptr [r15 + r10], xmm0
 	add	r10, 16
-	cmp	r11, r10
-	jne	402b
-	cmp	rsi, r11
-	mov	r11, r15
-	je	432f
-412:
-	mov	rsi, r15
-	sub	rsi, rdx
+	cmp	rbx, r10
+	jne	392b
+	cmp	rcx, rbx
+	mov	rbx, r15
+	mov	r15, qword ptr [rsp + 8]
+	je	422f
+402:
+	mov	rcx, qword ptr [rsp]
+	sub	rcx, rax
 	.p2align	4
+412:
+	movzx	eax, byte ptr [rdx + r8]
+	mov	byte ptr [rcx + r8], al
+	inc	r8
+	cmp	r9, r8
+	jne	412b
+	mov	rbx, qword ptr [rsp]
 422:
-	movzx	edx, byte ptr [r9 + rdi]
-	mov	byte ptr [rsi + rdi], dl
-	inc	rdi
-	cmp	r12, rdi
-	jne	422b
-	mov	r11, r15
-432:
 	vextracti32x4	xmm0, zmm15, 3
 	vpmovzxbd	zmm0, xmm0
 	vpsrld	zmm15, zmm0, 3
@@ -730,15 +718,15 @@
 	valignq	zmm19, zmm18, zmm7, 4
 	vpaddd	zmm18, zmm19, zmm18
 	vpsubd	zmm15, zmm18, zmm15
-	mov	edx, eax
-	and	edx, 7
-	vpbroadcastd	zmm19, edx
+	mov	eax, esi
+	and	eax, 7
+	vpbroadcastd	zmm19, eax
 	vpaddd	zmm15, zmm19, zmm15
 	vpsrld	zmm19, zmm15, 3
 	vpandd	zmm15, zmm15, zmm5
 	vpshufb	zmm19, zmm19, zmm8
 	vpaddb	zmm19, zmm19, zmm9
-	vpermb	zmm19, zmm19, zmmword ptr [r11]
+	vpermb	zmm19, zmm19, zmmword ptr [rbx]
 	vpsrlvd	zmm15, zmm19, zmm15
 	vpandnd	zmm15, zmm17, zmm15
 	vpaddd	zmm0, zmm15, zmm0
@@ -763,436 +751,436 @@
 	vpmaxud	zmm14, zmm16, zmm14
 	vshufi64x2	zmm16, zmm0, zmm0, 255
 	vextracti32x4	xmm0, zmm18, 3
-	vpextrd	edx, xmm0, 3
-	add	rax, rdx
-	mov	r9, qword ptr [rsp]
-	vmovdqu64	zmmword ptr [r9 + 448], zmm14
+	vpextrd	eax, xmm0, 3
+	add	rsi, rax
+	vmovdqu64	zmmword ptr [rdi + 448], zmm14
+432:
+	mov	r11, qword ptr [rsp + 16]
 442:
-	mov	r10, r14
+	kmovq	rax, k2
+	popcnt	rax, rax
+	add	rax, r15
+	kmovq	rcx, k1
+	popcnt	rcx, rcx
+	add	rcx, r12
+	vmovd	edx, xmm16
+	mov	qword ptr [rdi + 72], rsi
+	mov	qword ptr [rdi + 96], rdx
+	mov	qword ptr [rdi + 128], rcx
+	mov	qword ptr [rdi + 136], rax
+	add	rbp, qword ptr [rsp + 136]
+	mov	rdx, qword ptr [rsp + 72]
+	and	rdx, 124
+	je	782f
+	xor	esi, esi
+	mov	qword ptr [rsp + 8], rbp
+	.p2align	4
 452:
-	kmovq	rdx, k2
-	popcnt	rdx, rdx
-	add	rdx, qword ptr [rsp + 32]
-	kmovq	rsi, k1
-	popcnt	rsi, rsi
-	add	rsi, r8
-	vmovd	edi, xmm16
-	mov	qword ptr [r9 + 72], rax
-	mov	qword ptr [r9 + 96], rdi
-	mov	qword ptr [r9 + 128], rsi
-	mov	qword ptr [r9 + 136], rdx
-	add	r10, qword ptr [rsp + 136]
-	mov	rax, qword ptr [rsp + 72]
-	and	rax, 124
-	je	712f
-	xor	r8d, r8d
-	.p2align	4
+	movzx	r9d, byte ptr [rbp + rsi]
+	movzx	r12d, byte ptr [rdi + rsi + 192]
+	cmp	r12, 33
+	mov	eax, dword ptr [rdi + 4*rsi + 256]
+	vmovdqu	ymm0, ymmword ptr [r14]
+	vmovdqu	ymmword ptr [r11], ymm0
+	jae	582f
 462:
-	movzx	r12d, byte ptr [r10 + r8]
-	movzx	ebx, byte ptr [r9 + r8 + 192]
-	cmp	rbx, 33
-	mov	edx, dword ptr [r9 + 4*r8 + 256]
-	mov	r15, qword ptr [rsp + 40]
-	vmovdqu	ymm0, ymmword ptr [r15 + rbp]
-	vmovdqu	ymmword ptr [rcx + r13], ymm0
-	jae	552f
+	lea	r8, [r11 + r12]
+	mov	rcx, r8
+	sub	rcx, rax
+	cmp	rcx, r13
+	jl	602f
 472:
-	mov	qword ptr [rsp + 32], r13
-	add	r13, rbx
-	mov	rsi, r13
-	sub	rsi, rdx
-	mov	edi, 0
-	cmovae	rdi, rsi
-	vmovdqu	ymm0, ymmword ptr [rcx + rdi]
-	vmovdqu	ymmword ptr [rcx + r13], ymm0
-	cmp	r12b, -124
-	jae	572f
-	shr	r12d, 2
-482:
-	lea	rdx, [r8 + 1]
-	mov	qword ptr [rsp + 24], rbx
-	lea	r11, [rbx + rbp]
-	add	r13, r12
-	movzx	r14d, byte ptr [r10 + rdx]
-	movzx	ebx, byte ptr [r9 + rdx + 192]
-	cmp	rbx, 33
-	mov	edx, dword ptr [r9 + 4*rdx + 256]
-	vmovdqu	ymm0, ymmword ptr [r15 + r11]
-	vmovdqu	ymmword ptr [rcx + r13], ymm0
-	jae	592f
-492:
-	add	r13, rbx
-	mov	rsi, r13
-	sub	rsi, rdx
-	mov	edi, 0
-	cmovae	rdi, rsi
-	vmovdqu	ymm0, ymmword ptr [rcx + rdi]
-	vmovdqu	ymmword ptr [rcx + r13], ymm0
-	cmp	r14b, -124
-	mov	qword ptr [rsp + 56], rbp
+	vmovdqu	ymm0, ymmword ptr [rcx]
+	vmovdqu	ymmword ptr [r8], ymm0
+	cmp	r9b, -124
+	mov	qword ptr [rsp + 16], r11
 	jae	612f
-	shr	r14d, 2
-502:
-	lea	rsi, [r8 + 2]
-	add	r11, rbx
-	add	r13, r14
-	movzx	edx, byte ptr [r10 + rsi]
-	movzx	ebp, byte ptr [r9 + rsi + 192]
-	cmp	rbp, 33
-	mov	esi, dword ptr [r9 + 4*rsi + 256]
-	vmovdqu	ymm0, ymmword ptr [r15 + r11]
-	vmovdqu	ymmword ptr [rcx + r13], ymm0
-	mov	qword ptr [rsp + 48], r12
+	shr	r9d, 2
+482:
+	lea	rcx, [rsi + 1]
+	lea	rax, [r14 + r12]
+	movzx	r11d, byte ptr [rbp + rcx]
+	movzx	ebx, byte ptr [rdi + rcx + 192]
+	cmp	rbx, 33
+	mov	ecx, dword ptr [rdi + 4*rcx + 256]
+	vmovdqu	ymm0, ymmword ptr [r14 + r12]
+	vmovdqu	ymmword ptr [r8 + r9], ymm0
 	jae	632f
+492:
+	add	r8, r9
+	add	r8, rbx
+	mov	r10, r8
+	sub	r10, rcx
+	cmp	r10, r13
+	jl	652f
+502:
+	mov	qword ptr [rsp + 40], r14
+	vmovdqu	ymm0, ymmword ptr [r10]
+	vmovdqu	ymmword ptr [r8], ymm0
+	cmp	r11b, -124
+	jae	662f
+	shr	r11d, 2
 512:
-	add	r13, rbp
-	mov	rdi, r13
-	sub	rdi, rsi
-	mov	r15d, 0
-	cmovae	r15, rdi
-	vmovdqu	ymm0, ymmword ptr [rcx + r15]
-	vmovdqu	ymmword ptr [rcx + r13], ymm0
-	cmp	dl, -124
-	jae	652f
-	shr	edx, 2
+	lea	rcx, [rsi + 2]
+	movzx	ebp, byte ptr [rbp + rcx]
+	movzx	r15d, byte ptr [rdi + rcx + 192]
+	cmp	r15, 33
+	mov	ecx, dword ptr [rdi + 4*rcx + 256]
+	vmovdqu	ymm0, ymmword ptr [rax + rbx]
+	vmovdqu	ymmword ptr [r8 + r11], ymm0
+	jae	682f
 522:
-	lea	rdi, [r8 + 3]
-	add	r11, rbp
-	add	r13, rdx
-	mov	r12, r10
-	movzx	r15d, byte ptr [r10 + rdi]
-	movzx	esi, byte ptr [r9 + rdi + 192]
-	cmp	rsi, 33
-	mov	edi, dword ptr [r9 + 4*rdi + 256]
-	mov	r10, qword ptr [rsp + 40]
-	vmovdqu	ymm0, ymmword ptr [r10 + r11]
-	vmovdqu	ymmword ptr [rcx + r13], ymm0
-	jae	672f
+	add	r8, r11
+	add	r8, r15
+	mov	r10, r8
+	sub	r10, rcx
+	cmp	r10, r13
+	jl	702f
+	vmovdqu	ymm0, ymmword ptr [r10]
+	vmovdqu	ymmword ptr [r8], ymm0
+	cmp	bpl, -124
+	jae	712f
 532:
-	add	r13, rsi
-	mov	r9, r13
-	sub	r9, rdi
-	mov	ecx, 0
-	cmovae	rcx, r9
-	mov	r9, qword ptr [rsp + 8]
-	vmovdqu	ymm0, ymmword ptr [r9 + rcx]
-	mov	rcx, qword ptr [rsp + 8]
-	vmovdqu	ymmword ptr [rcx + r13], ymm0
-	cmp	r15b, -124
-	mov	r10, r12
-	jae	692f
-	shr	r15d, 2
-	mov	r9, qword ptr [rsp]
+	shr	ebp, 2
 542:
-	add	rsi, r11
-	add	r15, r13
-	add	r8, 4
-	cmp	r8, rax
-	mov	rbp, rsi
-	mov	r13, r15
-	jb	462b
-	jmp	722f
-552:
-	lea	rsi, [r15 + rbp]
-	lea	rdi, [rcx + r13]
-	mov	rcx, r9
-	mov	r9, qword ptr [r9 + 48]
-	mov	r11, qword ptr [rcx + 120]
-	movzx	ebx, byte ptr [r9 + r11]
-	inc	r11
-	mov	qword ptr [rcx + 120], r11
-	add	rbx, 33
-	mov	r9d, 32
-	.p2align	4
-562:
-	vmovdqu	ymm0, ymmword ptr [rsi + r9]
-	vmovdqu	ymmword ptr [rdi + r9], ymm0
-	add	r9, 32
-	cmp	r9, rbx
-	jb	562b
-	mov	r9, qword ptr [rsp]
+	lea	r10, [rsi + 3]
+	add	rax, rbx
 	mov	rcx, qword ptr [rsp + 8]
-	jmp	472b
-572:
-	lea	rsi, [rcx + r13]
-	mov	rdi, qword ptr [r9 + 48]
-	mov	r11, qword ptr [r9 + 120]
-	movzx	r12d, byte ptr [rdi + r11]
-	inc	r11
-	mov	qword ptr [r9 + 120], r11
-	add	r12, 33
-	cmp	r13, rdx
-	cmovb	rdx, r13
-	mov	rdi, rsi
-	sub	rdi, rdx
-	mov	edx, 32
-	.p2align	4
-582:
-	vmovdqu	ymm0, ymmword ptr [rdi + rdx]
-	vmovdqu	ymmword ptr [rsi + rdx], ymm0
-	add	rdx, 32
-	cmp	rdx, r12
-	jb	582b
-	jmp	482b
-592:
-	lea	rsi, [r15 + r11]
-	mov	rdi, qword ptr [r9 + 48]
-	mov	r15, qword ptr [r9 + 120]
-	movzx	ebx, byte ptr [rdi + r15]
-	inc	r15
-	mov	qword ptr [r9 + 120], r15
-	add	rbx, 33
-	lea	rdi, [rcx + r13]
-	mov	r15d, 32
-	.p2align	4
-602:
-	vmovdqu	ymm0, ymmword ptr [rsi + r15]
-	vmovdqu	ymmword ptr [rdi + r15], ymm0
-	add	r15, 32
-	cmp	r15, rbx
-	jb	602b
-	mov	r15, qword ptr [rsp + 40]
-	jmp	492b
-612:
-	lea	rsi, [rcx + r13]
-	mov	rdi, qword ptr [r9 + 48]
-	mov	r15, qword ptr [r9 + 120]
-	movzx	r14d, byte ptr [rdi + r15]
-	inc	r15
-	mov	qword ptr [r9 + 120], r15
-	add	r14, 33
+	movzx	r13d, byte ptr [rcx + r10]
 	mov	rdi, qword ptr [rsp + 24]
-	lea	r15, [r12 + rdi]
-	mov	rdi, qword ptr [rsp + 32]
-	add	rdi, rbx
-	add	rdi, r15
-	cmp	r13, rdx
-	cmovb	rdx, r13
-	sub	rdi, rdx
-	add	rdi, rcx
-	mov	edx, 32
+	movzx	ecx, byte ptr [rdi + r10 + 192]
+	cmp	rcx, 33
+	mov	r10d, dword ptr [rdi + 4*r10 + 256]
+	vmovdqu	ymm0, ymmword ptr [rax + r15]
+	vmovdqu	ymmword ptr [r8 + rbp], ymm0
+	jae	732f
+552:
+	add	r8, rbp
+	add	r8, rcx
+	mov	rdi, r8
+	sub	rdi, r10
+	cmp	rdi, qword ptr [rsp + 32]
+	jl	752f
+	vmovdqu	ymm0, ymmword ptr [rdi]
+	vmovdqu	ymmword ptr [r8], ymm0
+	cmp	r13b, -124
+	jae	762f
+562:
+	shr	r13d, 2
+572:
+	mov	rbp, qword ptr [rsp + 8]
+	add	rax, r15
+	add	r8, r13
+	add	rax, rcx
+	add	rsi, 4
+	cmp	rsi, rdx
+	mov	r14, rax
+	mov	r11, r8
+	mov	rdi, qword ptr [rsp + 24]
+	mov	r13, qword ptr [rsp + 32]
+	jb	452b
+	jmp	792f
+582:
+	mov	rcx, qword ptr [rdi + 48]
+	mov	r8, qword ptr [rdi + 120]
+	movzx	r12d, byte ptr [rcx + r8]
+	inc	r8
+	mov	qword ptr [rdi + 120], r8
+	add	r12, 33
+	mov	ecx, 32
+	.p2align	4
+592:
+	vmovdqu	ymm0, ymmword ptr [r14 + rcx]
+	vmovdqu	ymmword ptr [r11 + rcx], ymm0
+	add	rcx, 32
+	cmp	rcx, r12
+	jb	592b
+	jmp	462b
+602:
+	mov	r10, r8
+	sub	r10, r13
+	sub	r10, rax
+	mov	ecx, 0
+	cmovae	rcx, r10
+	add	rcx, r13
+	jmp	472b
+612:
+	mov	rax, qword ptr [rdi + 48]
+	mov	r10, qword ptr [rdi + 120]
+	movzx	r9d, byte ptr [rax + r10]
+	inc	r10
+	mov	qword ptr [rdi + 120], r10
+	add	r9, 33
+	mov	eax, 32
 	.p2align	4
 622:
-	vmovdqu	ymm0, ymmword ptr [rdi + rdx]
-	vmovdqu	ymmword ptr [rsi + rdx], ymm0
-	add	rdx, 32
-	cmp	rdx, r14
+	vmovdqu	ymm0, ymmword ptr [rcx + rax]
+	vmovdqu	ymmword ptr [r8 + rax], ymm0
+	add	rax, 32
+	cmp	rax, r9
 	jb	622b
-	mov	r15, qword ptr [rsp + 40]
-	jmp	502b
+	jmp	482b
 632:
-	mov	qword ptr [rsp + 80], r10
-	mov	rdi, qword ptr [r9 + 48]
-	mov	r15, qword ptr [r9 + 120]
-	movzx	ebp, byte ptr [rdi + r15]
+	mov	r10, qword ptr [rdi + 48]
+	mov	r15, qword ptr [rdi + 120]
+	movzx	ebx, byte ptr [r10 + r15]
 	inc	r15
-	mov	qword ptr [r9 + 120], r15
-	add	rbp, 33
-	mov	rdi, qword ptr [rsp + 24]
-	lea	r15, [r12 + rdi]
-	lea	rdi, [r14 + rbx]
-	add	rdi, r15
-	add	rdi, qword ptr [rsp + 32]
-	add	rdi, rcx
-	mov	r10, qword ptr [rsp + 40]
-	add	r10, r11
+	mov	qword ptr [rdi + 120], r15
+	add	rbx, 33
+	lea	r10, [r12 + r9]
+	add	r10, qword ptr [rsp + 16]
 	mov	r15d, 32
 	.p2align	4
 642:
-	vmovdqu	ymm0, ymmword ptr [r10 + r15]
-	vmovdqu	ymmword ptr [rdi + r15], ymm0
+	vmovdqu	ymm0, ymmword ptr [rax + r15]
+	vmovdqu	ymmword ptr [r10 + r15], ymm0
 	add	r15, 32
-	cmp	r15, rbp
+	cmp	r15, rbx
 	jb	642b
-	mov	r10, qword ptr [rsp + 80]
-	mov	r12, qword ptr [rsp + 48]
-	jmp	512b
+	jmp	492b
 652:
-	mov	rdx, qword ptr [r9 + 48]
-	mov	r15, qword ptr [r9 + 120]
-	movzx	edx, byte ptr [rdx + r15]
-	inc	r15
-	mov	qword ptr [r9 + 120], r15
-	add	rdx, 33
-	mov	rdi, qword ptr [rsp + 24]
-	add	rdi, r12
-	lea	r15, [rbp + r14]
-	add	r15, rdi
-	mov	rdi, qword ptr [rsp + 32]
-	add	rdi, rbx
-	add	r15, rdi
-	lea	rdi, [rcx + r13]
-	cmp	r13, rsi
-	cmovb	rsi, r13
-	sub	r15, rsi
-	add	r15, rcx
-	mov	esi, 32
-	.p2align	4
+	mov	r15, r8
+	sub	r15, r13
+	sub	r15, rcx
+	mov	r10d, 0
+	cmovae	r10, r15
+	add	r10, r13
+	jmp	502b
 662:
-	vmovdqu	ymm0, ymmword ptr [r15 + rsi]
-	vmovdqu	ymmword ptr [rdi + rsi], ymm0
-	add	rsi, 32
-	cmp	rsi, rdx
-	jb	662b
-	jmp	522b
+	mov	rcx, qword ptr [rdi + 48]
+	mov	r15, qword ptr [rdi + 120]
+	movzx	r11d, byte ptr [rcx + r15]
+	inc	r15
+	mov	qword ptr [rdi + 120], r15
+	add	r11, 33
+	lea	rcx, [r12 + rbx]
+	mov	r14, qword ptr [rsp + 16]
+	add	rcx, r14
+	add	rcx, r9
+	mov	r15d, 32
+	.p2align	4
 672:
-	mov	rsi, qword ptr [r9 + 48]
-	mov	r10, qword ptr [r9 + 120]
-	movzx	esi, byte ptr [rsi + r10]
-	inc	r10
-	mov	qword ptr [r9 + 120], r10
-	add	rsi, 33
-	mov	r9, qword ptr [rsp + 48]
-	mov	r10, qword ptr [rsp + 24]
-	add	r9, r10
-	mov	qword ptr [rsp + 64], r9
-	lea	r9, [rdx + rbp]
-	add	r9, qword ptr [rsp + 64]
-	mov	qword ptr [rsp + 64], r9
-	lea	r9, [r14 + rbx]
-	add	r9, qword ptr [rsp + 32]
-	add	r9, qword ptr [rsp + 64]
-	add	r9, rcx
-	add	r10, rbx
-	mov	rcx, qword ptr [rsp + 56]
-	add	rcx, rbp
-	add	rcx, r10
-	add	rcx, qword ptr [rsp + 40]
-	mov	r10d, 32
-	.p2align	4
+	vmovdqu	ymm0, ymmword ptr [r10 + r15]
+	vmovdqu	ymmword ptr [rcx + r15], ymm0
+	add	r15, 32
+	cmp	r15, r11
+	jb	672b
+	jmp	512b
 682:
-	vmovdqu	ymm0, ymmword ptr [rcx + r10]
-	vmovdqu	ymmword ptr [r9 + r10], ymm0
-	add	r10, 32
-	cmp	r10, rsi
-	jb	682b
-	jmp	532b
-692:
-	add	rcx, r13
-	mov	qword ptr [rsp + 56], rcx
-	mov	rcx, qword ptr [rsp]
-	mov	r15, qword ptr [rcx + 48]
-	mov	r9, qword ptr [rcx + 120]
-	movzx	r15d, byte ptr [r15 + r9]
-	inc	r9
-	mov	qword ptr [rcx + 120], r9
-	mov	r9, rcx
-	mov	rcx, qword ptr [rsp + 8]
+	mov	r10, qword ptr [rdi + 48]
+	mov	r13, qword ptr [rdi + 120]
+	movzx	r15d, byte ptr [r10 + r13]
+	inc	r13
+	mov	qword ptr [rdi + 120], r13
 	add	r15, 33
-	mov	r12, qword ptr [rsp + 48]
-	add	r12, qword ptr [rsp + 24]
-	add	rdx, rsi
-	add	rdx, r12
-	add	rbp, r14
-	add	rbp, rbx
-	add	rbp, rdx
-	add	rbp, qword ptr [rsp + 32]
-	cmp	r13, rdi
-	cmovb	rdi, r13
-	sub	rbp, rdi
-	mov	rdi, qword ptr [rsp + 56]
-	add	rbp, rcx
-	mov	edx, 32
-	.p2align	4
-702:
-	vmovdqu	ymm0, ymmword ptr [rbp + rdx]
-	vmovdqu	ymmword ptr [rdi + rdx], ymm0
-	add	rdx, 32
-	cmp	rdx, r15
-	jb	702b
-	jmp	542b
-	.p2align	4
-712:
-	mov	r15, r13
-	mov	rsi, rbp
-722:
-	mov	rdx, qword ptr [rsp + 72]
-	cmp	rax, rdx
-	mov	r13, r15
-	mov	r15, rdx
-	mov	r12, rsi
-	mov	rbx, qword ptr [rsp + 40]
-	je	2b
-	.p2align	4
-732:
-	movzx	edx, byte ptr [r10 + rax]
-	movzx	esi, byte ptr [r9 + rax + 192]
-	cmp	rsi, 33
-	mov	edi, dword ptr [r9 + 4*rax + 256]
-	vmovdqu	ymm0, ymmword ptr [rbx + r12]
-	vmovdqu	ymmword ptr [rcx + r13], ymm0
-	jae	762f
-742:
-	add	r13, rsi
-	mov	rcx, r13
-	sub	rcx, rdi
-	mov	r8d, 0
-	cmovae	r8, rcx
-	mov	rcx, qword ptr [rsp + 8]
-	vmovdqu	ymm0, ymmword ptr [rcx + r8]
-	vmovdqu	ymmword ptr [rcx + r13], ymm0
-	cmp	dl, -124
-	jae	782f
-	shr	edx, 2
-752:
-	add	r12, rsi
-	add	r13, rdx
-	inc	rax
-	cmp	rax, r15
-	jb	732b
-	jmp	2b
-762:
-	mov	r15, r10
-	lea	r8, [rbx + r12]
-	mov	r11, r9
-	lea	r9, [rcx + r13]
-	mov	rcx, qword ptr [r11 + 48]
-	mov	r10, qword ptr [r11 + 120]
-	movzx	esi, byte ptr [rcx + r10]
-	inc	r10
-	mov	qword ptr [r11 + 120], r10
-	add	rsi, 33
+	lea	rdi, [r12 + rbx]
+	lea	r13, [r11 + r9]
+	add	r13, rdi
+	add	r13, qword ptr [rsp + 16]
+	add	rdi, qword ptr [rsp + 40]
 	mov	r10d, 32
+	.p2align	4
+692:
+	vmovdqu	ymm0, ymmword ptr [rdi + r10]
+	vmovdqu	ymmword ptr [r13 + r10], ymm0
+	add	r10, 32
+	cmp	r10, r15
+	jb	692b
+	mov	rdi, qword ptr [rsp + 24]
+	mov	r13, qword ptr [rsp + 32]
+	jmp	522b
+702:
+	mov	r13, r8
+	sub	r13, qword ptr [rsp + 32]
+	sub	r13, rcx
+	mov	r10d, 0
+	cmovae	r10, r13
+	mov	rdi, qword ptr [rsp + 24]
+	add	r10, qword ptr [rsp + 32]
+	vmovdqu	ymm0, ymmword ptr [r10]
+	vmovdqu	ymmword ptr [r8], ymm0
+	cmp	bpl, -124
+	jb	532b
+712:
+	mov	rcx, qword ptr [rdi + 48]
+	mov	r13, qword ptr [rdi + 120]
+	movzx	ebp, byte ptr [rcx + r13]
+	inc	r13
+	mov	qword ptr [rdi + 120], r13
+	add	rbp, 33
+	lea	rcx, [r11 + rbx]
+	add	rcx, r12
+	add	rcx, r15
+	mov	rdi, qword ptr [rsp + 16]
+	add	rcx, rdi
+	add	rcx, r9
+	mov	r13d, 32
+	.p2align	4
+722:
+	vmovdqu	ymm0, ymmword ptr [r10 + r13]
+	vmovdqu	ymmword ptr [rcx + r13], ymm0
+	add	r13, 32
+	cmp	r13, rbp
+	jb	722b
+	jmp	542b
+732:
+	mov	rdi, qword ptr [rsp + 24]
+	mov	rcx, qword ptr [rdi + 48]
+	mov	r14, qword ptr [rdi + 120]
+	movzx	ecx, byte ptr [rcx + r14]
+	inc	r14
+	mov	qword ptr [rdi + 120], r14
+	add	rcx, 33
+	lea	r14, [rbp + r11]
+	add	r14, r12
+	add	r14, r15
+	lea	rdi, [rbx + r9]
+	add	rdi, qword ptr [rsp + 16]
+	add	rdi, r14
+	mov	qword ptr [rsp + 64], rdi
+	mov	rdi, qword ptr [rsp + 40]
+	add	rdi, rbx
+	add	rdi, r12
+	add	rdi, r15
+	mov	qword ptr [rsp + 40], rdi
+	mov	edi, 32
+	mov	qword ptr [rsp + 48], rdi
+	.p2align	4
+742:
+	mov	rdi, qword ptr [rsp + 40]
+	mov	r14, qword ptr [rsp + 48]
+	vmovdqu	ymm0, ymmword ptr [rdi + r14]
+	mov	rdi, qword ptr [rsp + 64]
+	vmovdqu	ymmword ptr [rdi + r14], ymm0
+	add	r14, 32
+	mov	qword ptr [rsp + 48], r14
+	cmp	r14, rcx
+	jb	742b
+	jmp	552b
+752:
+	mov	rdi, r8
+	mov	r14, qword ptr [rsp + 32]
+	sub	rdi, r14
+	sub	rdi, r10
+	mov	r10, rdi
+	mov	edi, 0
+	cmovae	rdi, r10
+	add	rdi, r14
+	vmovdqu	ymm0, ymmword ptr [rdi]
+	vmovdqu	ymmword ptr [r8], ymm0
+	cmp	r13b, -124
+	jb	562b
+762:
+	mov	r14, qword ptr [rsp + 24]
+	mov	r13, qword ptr [r14 + 48]
+	mov	r10, qword ptr [r14 + 120]
+	movzx	r13d, byte ptr [r13 + r10]
+	inc	r10
+	mov	qword ptr [r14 + 120], r10
+	add	r13, 33
+	add	r12, rcx
+	add	rbp, r15
+	add	rbp, r12
+	add	r11, rbx
+	add	r11, r9
+	add	r11, rbp
+	mov	r10, qword ptr [rsp + 16]
+	add	r10, r11
+	mov	r9d, 32
 	.p2align	4
 772:
-	vmovdqu	ymm0, ymmword ptr [r8 + r10]
-	vmovdqu	ymmword ptr [r9 + r10], ymm0
-	add	r10, 32
-	cmp	r10, rsi
+	vmovdqu	ymm0, ymmword ptr [rdi + r9]
+	vmovdqu	ymmword ptr [r10 + r9], ymm0
+	add	r9, 32
+	cmp	r9, r13
 	jb	772b
-	mov	r9, qword ptr [rsp]
-	mov	r10, r15
-	mov	r15, qword ptr [rsp + 72]
-	jmp	742b
-782:
-	mov	r11, r10
-	lea	r8, [rcx + r13]
-	mov	rcx, qword ptr [r9 + 48]
-	mov	r10, r9
-	mov	r9, qword ptr [r9 + 120]
-	movzx	edx, byte ptr [rcx + r9]
-	inc	r9
-	mov	qword ptr [r10 + 120], r9
-	add	rdx, 33
-	cmp	r13, rdi
-	cmovb	rdi, r13
-	mov	r9, r8
-	sub	r9, rdi
-	mov	edi, 32
+	jmp	572b
 	.p2align	4
+782:
+	mov	r8, r11
+	mov	rax, r14
 792:
-	vmovdqu	ymm0, ymmword ptr [r9 + rdi]
-	vmovdqu	ymmword ptr [r8 + rdi], ymm0
-	add	rdi, 32
-	cmp	rdi, rdx
-	jb	792b
-	mov	r9, qword ptr [rsp]
-	mov	rcx, qword ptr [rsp + 8]
-	mov	r10, r11
-	jmp	752b
+	mov	r11, qword ptr [rsp + 72]
+	cmp	rdx, r11
+	mov	r10, r8
+	mov	rbx, rax
+	je	2b
+	.p2align	4
 802:
-	mov	qword ptr [r9 + 80], r13
-	mov	qword ptr [r9 + 88], r12
+	movzx	ecx, byte ptr [rbp + rdx]
+	movzx	eax, byte ptr [rdi + rdx + 192]
+	cmp	rax, 33
+	mov	esi, dword ptr [rdi + 4*rdx + 256]
+	vmovdqu	ymm0, ymmword ptr [rbx]
+	vmovdqu	ymmword ptr [r10], ymm0
+	jae	842f
+812:
+	add	r10, rax
+	mov	r8, r10
+	sub	r8, rsi
+	cmp	r8, r13
+	jl	862f
+	vmovdqu	ymm0, ymmword ptr [r8]
+	vmovdqu	ymmword ptr [r10], ymm0
+	cmp	cl, -124
+	jae	872f
+822:
+	shr	ecx, 2
+832:
+	add	r10, rcx
+	add	rbx, rax
+	inc	rdx
+	cmp	rdx, r11
+	jb	802b
+	jmp	2b
+842:
+	mov	rax, qword ptr [rdi + 48]
+	mov	r8, qword ptr [rdi + 120]
+	movzx	eax, byte ptr [rax + r8]
+	inc	r8
+	mov	qword ptr [rdi + 120], r8
+	add	rax, 33
+	mov	r8d, 32
+	.p2align	4
+852:
+	vmovdqu	ymm0, ymmword ptr [rbx + r8]
+	vmovdqu	ymmword ptr [r10 + r8], ymm0
+	add	r8, 32
+	cmp	r8, rax
+	jb	852b
+	jmp	812b
+862:
+	mov	r9, r10
+	sub	r9, r13
+	sub	r9, rsi
+	mov	r8d, 0
+	cmovae	r8, r9
+	add	r8, r13
+	vmovdqu	ymm0, ymmword ptr [r8]
+	vmovdqu	ymmword ptr [r10], ymm0
+	cmp	cl, -124
+	jb	822b
+872:
+	mov	rcx, qword ptr [rdi + 48]
+	mov	rsi, qword ptr [rdi + 120]
+	movzx	ecx, byte ptr [rcx + rsi]
+	inc	rsi
+	mov	qword ptr [rdi + 120], rsi
+	add	rcx, 33
+	mov	esi, 32
+	.p2align	4
+882:
+	vmovdqu	ymm0, ymmword ptr [r8 + rsi]
+	vmovdqu	ymmword ptr [r10 + rsi], ymm0
+	add	rsi, 32
+	cmp	rsi, rcx
+	jb	882b
+	jmp	832b
+892:
+	sub	r10, r13
+	sub	rbx, qword ptr [rsp + 128]
+	mov	qword ptr [rdi + 80], r10
+	mov	qword ptr [rdi + 88], rbx
 	add	rsp, 160
 	pop	rbx
 	pop	r12
@@ -1203,7 +1191,7 @@
 	vzeroupper
 	ret
 	.p2align	6, 0x0
-812:
+902:
 	.byte	0
 	.byte	1
 	.byte	2
@@ -1269,22 +1257,22 @@
 	.byte	62
 	.byte	63
 	.p2align	6, 0x0
-822:
+912:
 	.byte	2
 	.p2align	6, 0x0
-832:
+922:
 	.byte	1
 	.p2align	2, 0x0
-842:
+932:
 	.long	1
 	.p2align	2, 0x0
-852:
+942:
 	.long	7
 	.p2align	2, 0x0
-862:
+952:
 	.long	8
 	.p2align	4, 0x0
-872:
+962:
 	.byte	0
 	.byte	0
 	.byte	0
@@ -1302,13 +1290,13 @@
 	.byte	12
 	.byte	12
 	.p2align	2, 0x0
-882:
+972:
 	.byte	0
 	.byte	1
 	.byte	2
 	.byte	3
 	.p2align	6, 0x0
-892:
+982:
 	.long	134217728
 	.long	268435456
 	.long	402653184
@@ -1326,11 +1314,11 @@
 	.long	2013265920
 	.long	2147483648
 	.p2align	2, 0x0
-902:
+992:
 	.long	134217727
 	.p2align	6, 0x0
-912:
+1002:
 	.byte	63
 	.p2align	6, 0x0
-922:
+1012:
 	.byte	32
