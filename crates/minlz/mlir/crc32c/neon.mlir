@@ -139,6 +139,13 @@ func.func private @clmul(%a: i64, %b: i64) -> vector<2xi64> {
   return %r : vector<2xi64>
 }
 
+// clmul2_xor is clmul2 with d added to each lane's product.
+func.func private @clmul2_xor(%x: !st, %k: !st, %d: !st) -> !st {
+  %f = func.call @clmul2(%x, %k) : (!st, !st) -> !st
+  %r = arith.xori %f, %d : !st
+  return %r : !st
+}
+
 // crc32 returns the CRC state c, low 32 bits, after the word w: CRC32CX.
 func.func private @crc32(%c: i64, %w: i64) -> i64 {
   %c32 = arith.trunci %c : i64 to i32

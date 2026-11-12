@@ -29,13 +29,16 @@ use crate::Arch;
 pub enum Kind {
     /// `crc32c_fold.mlir`: folding with carry-less multiplies on `lanes` lanes of 128 bits in
     /// vectors of `bits` bits, beside three CRC32 chains of k words per fold, in blocks of
-    /// `iters` folds. Inputs below `min_len` bytes take one CRC32 chain.
+    /// `iters` folds. Inputs below `min_len` bytes take one CRC32 chain. `sve2` is the target's
+    /// SVE2 tier: its comment names SVE2, and at `true` its carry-less multiplies are
+    /// `pmullb` and `pmullt`.
     Fold {
         bits: u32,
         lanes: u32,
         k: u32,
         iters: u32,
         min_len: u32,
+        sve2: bool,
     },
     /// `crc32c_chains.mlir`: three CRC32 chains over neighboring regions of `bytes` bytes.
     Chains { bytes: u32 },
@@ -61,7 +64,7 @@ pub struct Target {
 /// and reducing them costs more than folding saves. With PCLMULQDQ and PMULL it is also a whole
 /// block: Neoverse N-class cores multiply on one pipe, so folding alone is no faster there than
 /// CRC32, and only the block's CRC32 chains gain.
-pub const TARGETS: [Target; 6] = [
+pub const TARGETS: [Target; 7] = [
     Target {
         dir: "sse42",
         file: "sse42",
@@ -79,6 +82,7 @@ pub const TARGETS: [Target; 6] = [
             k: 4,
             iters: 8,
             min_len: 2048,
+            sve2: false,
         },
         mattr: "-mattr=+sse4.2,+crc32,+pclmul",
     },
@@ -92,6 +96,7 @@ pub const TARGETS: [Target; 6] = [
             k: 4,
             iters: 8,
             min_len: 1024,
+            sve2: false,
         },
         mattr: "-mattr=+avx2,+crc32,+pclmul,+vpclmulqdq",
     },
@@ -105,6 +110,7 @@ pub const TARGETS: [Target; 6] = [
             k: 2,
             iters: 16,
             min_len: 1024,
+            sve2: false,
         },
         mattr: "-mattr=+avx512f,+crc32,+pclmul,+vpclmulqdq,-prefer-256-bit",
     },
@@ -125,8 +131,23 @@ pub const TARGETS: [Target; 6] = [
             k: 4,
             iters: 8,
             min_len: 2048,
+            sve2: false,
         },
         mattr: "-mattr=+v8a,+neon,+aes,+crc",
+    },
+    Target {
+        dir: "sve2",
+        file: "sve2",
+        arch: Arch::Arm,
+        kind: Kind::Fold {
+            bits: 128,
+            lanes: 8,
+            k: 4,
+            iters: 8,
+            min_len: 2048,
+            sve2: true,
+        },
+        mattr: "-mattr=+v8a,+neon,+aes,+crc,+sve2,+sve2-aes",
     },
 ];
 
@@ -233,14 +254,27 @@ impl Target {
                 };
                 let title = format!("x86-64 with {insn} on {bits}-bit vectors");
                 let mut s = self.fold(&title, &format!("{reg} registers"));
-                s += &halves(2 * lanes, bits / 64);
+                s += &halves(2 * lanes, bits / 64, false);
                 s += &x86_clmul(bits, insn);
+                s += PLAIN_CLMUL2_XOR;
                 s
             }
-            (Kind::Fold { lanes, .. }, Arch::Arm) => {
-                let mut s = self.fold("NEON with PMULL from the AES extension", "q registers");
-                s += &halves(2 * lanes, 2);
-                s += NEON_CLMUL;
+            (Kind::Fold { lanes, sve2, .. }, Arch::Arm) => {
+                let (title, clmul_reg) = if sve2 {
+                    ("SVE2 with PMULLB, PMULLT and EOR3", SVE2_CLMUL_REG)
+                } else {
+                    ("NEON with PMULL from the AES extension", NEON_CLMUL_REG)
+                };
+                let mut s = self.fold(title, "q registers");
+                s += &halves(2 * lanes, 2, false);
+                s += clmul_reg;
+                s += ARM_CLMUL;
+                if sve2 {
+                    s += &halves(2 * lanes, 2, true);
+                    s += SVE2_CLMUL_REG_XOR;
+                } else {
+                    s += PLAIN_CLMUL2_XOR;
+                }
                 s
             }
             (Kind::Chains { bytes }, arch) => chains(arch, bytes),
@@ -392,16 +426,18 @@ func.func private @shift_key() -> i64 {{
 }
 
 /// Returns clmul2 on `vector<n x i64>` as the same on each half, down to one register of `leaf`
-/// words.
-fn halves(n: u32, leaf: u32) -> String {
+/// words. With `data` the chain is `clmul2_xor`, `clmul8_xor` and so on: the same functions with
+/// the words to add to each lane carried down to `clmul_reg_xor`.
+fn halves(n: u32, leaf: u32, data: bool) -> String {
     let mut s = String::new();
-    let (mut size, mut name) = (n, "clmul2".to_string());
+    let suffix = if data { "_xor" } else { "" };
+    let (mut size, mut name) = (n, format!("clmul2{suffix}"));
     while size > leaf {
         let h = size / 2;
         let sub = if h > leaf {
-            format!("clmul{h}")
+            format!("clmul{h}{suffix}")
         } else {
-            "clmul_reg".to_string()
+            format!("clmul_reg{suffix}")
         };
         let t = if size == n {
             "!st".to_string()
@@ -410,21 +446,43 @@ fn halves(n: u32, leaf: u32) -> String {
         };
         let ht = format!("vector<{h}xi64>");
         let idx = rows(&(0..i64::from(size)).collect::<Vec<_>>(), 16, ",\n      ");
+        let split = |o: char, from: &str| -> String {
+            [(0, 'a'), (h, 'b')]
+                .iter()
+                .map(|(off, i)| {
+                    format!(
+                        "  %{o}{i} = vector.extract_strided_slice %{o} {{offsets = [{off}], \
+                         sizes = [{h}], strides = [1]}}\n      : {from} to {ht}\n"
+                    )
+                })
+                .collect()
+        };
+        // The third operand only fits by starting a new line.
+        let (dsig, ret, csig, with) = if data {
+            (
+                format!(", %d: {t}"),
+                format!("\n    -> {t} {{"),
+                format!("\n      : ({ht}, {ht}, {ht}) -> {ht}"),
+                " with the words added to each lane",
+            )
+        } else {
+            (
+                String::new(),
+                format!(" -> {t} {{"),
+                format!(" : ({ht}, {ht}) -> {ht}"),
+                "",
+            )
+        };
+        let (da, db) = if data { (", %da", ", %db") } else { ("", "") };
+        let dpart = if data { split('d', &t) } else { String::new() };
+        let (xa, ka) = (split('x', &t), split('k', &t));
         write!(
             s,
             r#"
-// {name} is clmul2 on {size} words, as {sub} on each half.
-func.func private @{name}(%x: {t}, %k: {t}) -> {t} {{
-  %xa = vector.extract_strided_slice %x {{offsets = [0], sizes = [{h}], strides = [1]}}
-      : {t} to {ht}
-  %xb = vector.extract_strided_slice %x {{offsets = [{h}], sizes = [{h}], strides = [1]}}
-      : {t} to {ht}
-  %ka = vector.extract_strided_slice %k {{offsets = [0], sizes = [{h}], strides = [1]}}
-      : {t} to {ht}
-  %kb = vector.extract_strided_slice %k {{offsets = [{h}], sizes = [{h}], strides = [1]}}
-      : {t} to {ht}
-  %ra = func.call @{sub}(%xa, %ka) : ({ht}, {ht}) -> {ht}
-  %rb = func.call @{sub}(%xb, %kb) : ({ht}, {ht}) -> {ht}
+// {name} is clmul2 on {size} words{with}, as {sub} on each half.
+func.func private @{name}(%x: {t}, %k: {t}{dsig}){ret}
+{xa}{ka}{dpart}  %ra = func.call @{sub}(%xa, %ka{da}){csig}
+  %rb = func.call @{sub}(%xb, %kb{db}){csig}
   %r = vector.shuffle %ra, %rb [
       {idx}
     ] : {ht}, {ht}
@@ -474,8 +532,8 @@ func.func private @clmul(%a: i64, %b: i64) -> vector<2xi64> {{
     )
 }
 
-/// The NEON carry-less multiplies: clmul2 on one register, and clmul.
-const NEON_CLMUL: &str = r#"
+/// The NEON `clmul_reg`, the fold's carry-less multiply on one register.
+const NEON_CLMUL_REG: &str = r#"
 // clmul_reg is clmul2 on one register: PMULL multiplies the low words, PMULL2 the high words.
 func.func private @clmul_reg(%x: vector<2xi64>, %k: vector<2xi64>) -> vector<2xi64> {
   %x0 = vector.extract %x[0] : i64 from vector<2xi64>
@@ -487,12 +545,72 @@ func.func private @clmul_reg(%x: vector<2xi64>, %k: vector<2xi64>) -> vector<2xi
   %r = arith.xori %a, %b : vector<2xi64>
   return %r : vector<2xi64>
 }
+"#;
 
+/// The SVE2 `clmul_reg`, the fold's carry-less multiply on one register.
+const SVE2_CLMUL_REG: &str = r#"
+// clmul_reg is clmul2 on one register: pmullb multiplies the low words, pmullt the high words. At
+// a 16-byte vector length a register is the two words, so pmullb takes element 0 of each operand
+// and pmullt element 1, each into the whole register.
+func.func private @clmul_reg(%x: vector<2xi64>, %k: vector<2xi64>) -> vector<2xi64> {
+  %z = ub.poison : vector<[2]xi64>
+  %sx = vector.scalable.insert %x, %z[0] : vector<2xi64> into vector<[2]xi64>
+  %sk = vector.scalable.insert %k, %z[0] : vector<2xi64> into vector<[2]xi64>
+  %a = llvm.call_intrinsic "llvm.aarch64.sve.pmullb.pair"(%sx, %sk)
+      : (vector<[2]xi64>, vector<[2]xi64>) -> vector<[2]xi64>
+  %b = llvm.call_intrinsic "llvm.aarch64.sve.pmullt.pair"(%sx, %sk)
+      : (vector<[2]xi64>, vector<[2]xi64>) -> vector<[2]xi64>
+  %r = arith.xori %a, %b : vector<[2]xi64>
+  %f = vector.scalable.extract %r[0] : vector<2xi64> from vector<[2]xi64>
+  return %f : vector<2xi64>
+}
+"#;
+
+/// The aarch64 `clmul`, which both aarch64 folds use for one 128-bit product.
+const ARM_CLMUL: &str = r#"
 // clmul returns the 128-bit carry-less product of a and b.
 func.func private @clmul(%a: i64, %b: i64) -> vector<2xi64> {
   %p = llvm.call_intrinsic "llvm.aarch64.neon.pmull64"(%a, %b) : (i64, i64) -> vector<16xi8>
   %r = vector.bitcast %p : vector<16xi8> to vector<2xi64>
   return %r : vector<2xi64>
+}
+"#;
+
+/// `clmul2_xor` for the targets that add the words to the products with a plain xor.
+const PLAIN_CLMUL2_XOR: &str = r#"
+// clmul2_xor is clmul2 with d added to each lane's product.
+func.func private @clmul2_xor(%x: !st, %k: !st, %d: !st) -> !st {
+  %f = func.call @clmul2(%x, %k) : (!st, !st) -> !st
+  %r = arith.xori %f, %d : !st
+  return %r : !st
+}
+"#;
+
+/// The SVE2 leaf of the `clmul2_xor` chain.
+const SVE2_CLMUL_REG_XOR: &str = r#"
+// clmul_reg_xor is clmul_reg with d added to the product: eor3 takes the two products and d in
+// one instruction. eor3 also writes its last operand, so that is the product of the low words:
+// its register is the one the next fold reads as the state, and with either other operand last
+// the loop needs a copy of the state per lane.
+func.func private @clmul_reg_xor(%x: vector<2xi64>, %k: vector<2xi64>, %d: vector<2xi64>)
+    -> vector<2xi64> {
+  %z = ub.poison : vector<[2]xi64>
+  %z8 = ub.poison : vector<[16]xi8>
+  %sx = vector.scalable.insert %x, %z[0] : vector<2xi64> into vector<[2]xi64>
+  %sk = vector.scalable.insert %k, %z[0] : vector<2xi64> into vector<[2]xi64>
+  %a = llvm.call_intrinsic "llvm.aarch64.sve.pmullb.pair"(%sx, %sk)
+      : (vector<[2]xi64>, vector<[2]xi64>) -> vector<[2]xi64>
+  %b = llvm.call_intrinsic "llvm.aarch64.sve.pmullt.pair"(%sx, %sk)
+      : (vector<[2]xi64>, vector<[2]xi64>) -> vector<[2]xi64>
+  %sa = vector.bitcast %a : vector<[2]xi64> to vector<[16]xi8>
+  %sb = vector.bitcast %b : vector<[2]xi64> to vector<[16]xi8>
+  %d8 = vector.bitcast %d : vector<2xi64> to vector<16xi8>
+  %sd = vector.scalable.insert %d8, %z8[0] : vector<16xi8> into vector<[16]xi8>
+  %r = llvm.call_intrinsic "llvm.aarch64.sve.eor3"(%sb, %sd, %sa)
+      : (vector<[16]xi8>, vector<[16]xi8>, vector<[16]xi8>) -> vector<[16]xi8>
+  %w = vector.bitcast %r : vector<[16]xi8> to vector<[2]xi64>
+  %f = vector.scalable.extract %w[0] : vector<2xi64> from vector<[2]xi64>
+  return %f : vector<2xi64>
 }
 "#;
 

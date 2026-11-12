@@ -213,7 +213,7 @@ fn sve2_kernels(vl: usize) -> Option<(Kernel, Kernel)> {
 /// The CPU has SVE.
 #[cfg(target_arch = "aarch64")]
 #[inline]
-unsafe fn vl_bytes() -> usize {
+pub(crate) unsafe fn vl_bytes() -> usize {
     let n: usize;
     // SAFETY: the caller checked SVE. The asm is not `pure`: the vector length can change between
     // calls, so the compiler must not merge two reads.

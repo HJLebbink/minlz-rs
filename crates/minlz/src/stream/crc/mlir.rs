@@ -15,9 +15,9 @@
 //! CRC32C written once in MLIR and lowered by `cargo xtask mlir` for each target into the assembly
 //! in `mlir/`, which the naked functions below hold. Targets with a carry-less multiply fold with
 //! it beside three CRC32-instruction chains (`crates/minlz/mlir/crc32c_fold.mlir`): PCLMULQDQ, and
-//! VPCLMULQDQ on 256 and 512 bits, on x86-64, and PMULL on aarch64. Targets with the CRC32
-//! instruction alone run three chains (`crates/minlz/mlir/crc32c_chains.mlir`): SSE 4.2 on x86-64
-//! and the CRC extension on aarch64.
+//! VPCLMULQDQ on 256 and 512 bits, on x86-64, and PMULL on aarch64, where SVE2 adds `pmullb`,
+//! `pmullt` and `eor3`. Targets with the CRC32 instruction alone run three chains
+//! (`crates/minlz/mlir/crc32c_chains.mlir`): SSE 4.2 on x86-64 and the CRC extension on aarch64.
 //!
 //! A kernel takes `(state, p, n)` for any n and returns the CRC state after the n bytes at p, the
 //! state being the CRC without its final inversion.
@@ -45,6 +45,9 @@ pub(super) enum Isa {
     /// PMULL from the AES extension.
     #[cfg(target_arch = "aarch64")]
     Neon,
+    /// SVE2: `pmullb`, `pmullt` and `eor3`, at a 16-byte vector length.
+    #[cfg(target_arch = "aarch64")]
+    Sve2,
 }
 
 #[cfg(target_arch = "x86_64")]
@@ -78,9 +81,33 @@ kernel!(
     update_neon,
     "neon"
 );
+#[cfg(target_arch = "aarch64")]
+kernel!(
+    ".arch_extension aes\n.arch_extension crc\n.arch_extension sve2\n.arch_extension sve2-aes",
+    update_sve2,
+    "sve2"
+);
+
+/// The SVE vector length the SVE2 kernel is built for: 16 bytes, so its scalable vectors are the
+/// NEON kernel's q registers and `pmullb` and `pmullt` multiply the two words of one lane.
+#[cfg(target_arch = "aarch64")]
+const SVE2_BYTES: usize = 16;
+
+/// Reports whether the CPU has the features of the SVE2 kernel at the vector length it is built
+/// for.
+#[cfg(target_arch = "aarch64")]
+fn sve2_available() -> bool {
+    use std::arch::is_aarch64_feature_detected as has;
+    has!("sve2")
+        && has!("sve2-aes")
+        // SAFETY: SVE2 includes SVE, which is what rdvl needs.
+        && unsafe { crate::xxh3::mlir::vl_bytes() } == SVE2_BYTES
+}
 
 impl Isa {
-    /// Returns the targets the CPU has, slowest first.
+    /// Returns the targets the CPU has, slowest first. SVE2 ranks above NEON, so a CPU that has it
+    /// at the vector length the kernel is built for folds with the SVE2 instructions. The tests
+    /// run every tier.
     pub(super) fn available() -> Vec<Isa> {
         let mut v = Vec::new();
         #[cfg(target_arch = "x86_64")]
@@ -106,6 +133,9 @@ impl Isa {
                 v.push(Isa::Crc);
                 if has!("aes") {
                     v.push(Isa::Neon);
+                    if sve2_available() {
+                        v.push(Isa::Sve2);
+                    }
                 }
             }
         }
@@ -126,6 +156,16 @@ impl Isa {
             Isa::Crc => update_crc,
             #[cfg(target_arch = "aarch64")]
             Isa::Neon => update_neon,
+            #[cfg(target_arch = "aarch64")]
+            Isa::Sve2 => {
+                // SAFETY: the caller checked isa's features. The SVE2 kernel is only correct at
+                // the vector length it is built for, so at any other the NEON kernel runs.
+                if unsafe { crate::xxh3::mlir::vl_bytes() } == SVE2_BYTES {
+                    update_sve2
+                } else {
+                    update_neon
+                }
+            }
         }
     }
 }
@@ -148,6 +188,8 @@ pub(super) fn best() -> Option<CrcFn> {
         Isa::Crc => |c, d| unsafe { update(Isa::Crc, c, d) },
         #[cfg(target_arch = "aarch64")]
         Isa::Neon => |c, d| unsafe { update(Isa::Neon, c, d) },
+        #[cfg(target_arch = "aarch64")]
+        Isa::Sve2 => |c, d| unsafe { update(Isa::Sve2, c, d) },
     };
     Some(f)
 }

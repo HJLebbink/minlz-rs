@@ -32,14 +32,15 @@
 //   third also places the starting CRC there;
 // - @clmul2(!st, !st) -> !st, per lane the 128-bit product of the low words xor that of the high
 //   words;
+// - @clmul2_xor(!st, !st, !st) -> !st, @clmul2 with the words of the third argument added to each
+//   lane's product, which one instruction can do where the target has a three-way xor;
 // - @clmul(i64, i64) -> vector<2xi64>, the 128-bit carry-less product of two words.
 
 // fold returns s moved one stride on, with the stride at p + o added.
 func.func private @fold(%s: !st, %k: !st, %p: !p, %o: index) -> !st {
   %q = func.call @at(%p, %o) : (!p, index) -> !p
   %d = ptr.load %q alignment = 1 : !p -> !st
-  %f = func.call @clmul2(%s, %k) : (!st, !st) -> !st
-  %r = arith.xori %f, %d : !st
+  %r = func.call @clmul2_xor(%s, %k, %d) : (!st, !st, !st) -> !st
   return %r : !st
 }
 

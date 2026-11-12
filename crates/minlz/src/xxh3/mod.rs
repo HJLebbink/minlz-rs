@@ -30,7 +30,7 @@ use std::sync::OnceLock;
     ),
     not(miri)
 ))]
-mod mlir;
+pub(crate) mod mlir;
 #[cfg(test)]
 mod tests;
 
