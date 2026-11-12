@@ -100,13 +100,20 @@ const SPLIT: &str = "xxh3_split.mlir";
 const WHOLE: &str = "xxh3_whole.mlir";
 
 /// The XXH3 targets: the output folder, the target file in `mlir/target/`, the lane layout, the
-/// architecture and the features. aarch64 code uses base SVE only: Graviton 3 has 256-bit SVE but
-/// no SVE2. AVX-512 code takes no feature beyond AVX-512F, which is all that `xxh3::tiers`
-/// checks, and keeps 512-bit vectors whole.
-const XXH3: [(&str, &str, &str, Arch, &str); 6] = [
+/// architecture and the features. Base SVE uses no SVE2 feature: Graviton 3 has 256-bit SVE but no
+/// SVE2, and the `sve2` row builds the NEON target file with SVE2 on. AVX-512 code takes no feature
+/// beyond AVX-512F, which is all that `xxh3::tiers` checks, and keeps 512-bit vectors whole.
+const XXH3: [(&str, &str, &str, Arch, &str); 7] = [
     ("sve128", "sve128", SPLIT, Arch::Arm, "-mattr=+v8.2a,+sve"),
     ("sve256", "sve256", SPLIT, Arch::Arm, "-mattr=+v8.2a,+sve"),
     ("neon", "neon", WHOLE, Arch::Arm, "-mattr=+v8a,+neon"),
+    (
+        "sve2",
+        "neon",
+        WHOLE,
+        Arch::Arm,
+        "-mattr=+v8.2a,+neon,+sve2",
+    ),
     ("sse2", "x86", WHOLE, Arch::X86, "-mattr=+sse2"),
     ("avx2", "x86", WHOLE, Arch::X86, "-mattr=+avx2"),
     (

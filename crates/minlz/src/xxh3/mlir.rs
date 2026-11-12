@@ -14,7 +14,8 @@
 
 //! The stripe loop written once in MLIR (`crates/minlz/mlir/xxh3.mlir`) and lowered by
 //! `cargo xtask mlir` for each target into the assembly in `mlir/`, which the naked functions
-//! below hold: NEON, and SVE at 128 and 256 bits, on aarch64; SSE2, AVX2 and AVX-512 on x86-64.
+//! below hold: NEON, base SVE at 128 and 256 bits, and SVE2 at 128 bits, on aarch64; SSE2, AVX2 and
+//! AVX-512 on x86-64.
 //!
 //! A kernel takes `(acc, p, len, keys)` for [`accum`] or `(acc, p, n, keys)` for [`blocks`] and
 //! works on the 8 lanes at acc, with keys pointing at [`KEYS`]. An SVE kernel
@@ -32,6 +33,9 @@ pub(super) enum Isa {
     /// SVE with 128-bit or 256-bit vectors.
     #[cfg(target_arch = "aarch64")]
     Sve,
+    /// SVE2 with 128-bit vectors.
+    #[cfg(target_arch = "aarch64")]
+    Sve2,
     #[cfg(target_arch = "x86_64")]
     Sse2,
     #[cfg(target_arch = "x86_64")]
@@ -66,6 +70,8 @@ kernels!(accum_neon, blocks_neon, "neon");
 kernels!(".arch_extension sve", accum_sve128, blocks_sve128, "sve128");
 #[cfg(target_arch = "aarch64")]
 kernels!(".arch_extension sve", accum_sve256, blocks_sve256, "sve256");
+#[cfg(target_arch = "aarch64")]
+kernels!(".arch_extension sve2", accum_sve2, blocks_sve2, "sve2");
 #[cfg(target_arch = "x86_64")]
 kernels!(accum_sse2, blocks_sse2, "sse2");
 #[cfg(target_arch = "x86_64")]
@@ -74,10 +80,11 @@ kernels!(accum_avx2, blocks_avx2, "avx2");
 kernels!(accum_avx512, blocks_avx512, "avx512");
 
 impl Isa {
-    /// Returns the targets the CPU has, slowest first. SVE ranks below NEON: base SVE multiplies
-    /// only 64-bit lanes, while NEON's `umlal` multiplies 32-bit halves into 64 bits, and the SVE
-    /// kernels took about twice the cycles of NEON on every core measured or modeled. The tests
-    /// still run them.
+    /// Returns the targets the CPU has, slowest first. Base SVE ranks below NEON: base SVE
+    /// multiplies only 64-bit lanes, while NEON's `umlal` multiplies 32-bit halves into 64 bits,
+    /// and the SVE kernels took about twice the cycles of NEON on every core measured or modeled.
+    /// The SVE2 tier builds the NEON kernels with SVE2 on, where LLVM takes `eor3` and a 64-bit
+    /// `mul` for some fixed 128-bit operations, and ranks above NEON. The tests run every tier.
     pub(super) fn available() -> Vec<Isa> {
         let mut v = Vec::new();
         #[cfg(target_arch = "x86_64")]
@@ -96,6 +103,9 @@ impl Isa {
                 v.push(Isa::Sve);
             }
             v.push(Isa::Neon);
+            if sve2_available() {
+                v.push(Isa::Sve2);
+            }
         }
         v
     }
@@ -113,6 +123,11 @@ impl Isa {
             Isa::Sve => {
                 // SAFETY: the caller checked SVE.
                 sve_kernels(unsafe { vl_bytes() }).unwrap_or((accum_neon, blocks_neon))
+            }
+            #[cfg(target_arch = "aarch64")]
+            Isa::Sve2 => {
+                // SAFETY: the caller checked SVE2.
+                sve2_kernels(unsafe { vl_bytes() }).unwrap_or((accum_neon, blocks_neon))
             }
             #[cfg(target_arch = "x86_64")]
             Isa::Sse2 => (accum_sse2, blocks_sse2),
@@ -169,6 +184,24 @@ fn sve_kernels(vl: usize) -> Option<(Kernel, Kernel)> {
     match vl {
         16 => Some((accum_sve128, blocks_sve128)),
         32 => Some((accum_sve256, blocks_sve256)),
+        _ => None,
+    }
+}
+
+/// Reports whether the CPU has SVE2 with the one vector length the SVE2 kernels are correct at.
+#[cfg(target_arch = "aarch64")]
+fn sve2_available() -> bool {
+    // SAFETY: vl_bytes runs only once SVE2 is detected, and SVE2 implies SVE.
+    std::arch::is_aarch64_feature_detected!("sve2") && sve2_kernels(unsafe { vl_bytes() }).is_some()
+}
+
+/// Returns the (accum, blocks) SVE2 kernels for a vector length of vl bytes, if it has them. Every
+/// SVE2 kernel holds the eight lanes in one vector each, so only a 16-byte vector length gives 8
+/// lanes.
+#[cfg(target_arch = "aarch64")]
+fn sve2_kernels(vl: usize) -> Option<(Kernel, Kernel)> {
+    match vl {
+        16 => Some((accum_sve2, blocks_sve2)),
         _ => None,
     }
 }
