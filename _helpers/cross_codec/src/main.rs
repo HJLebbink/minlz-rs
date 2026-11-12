@@ -71,6 +71,8 @@ impl Codec {
                 Level::SuperFastSimdDelta => "minlz-simd-xfast+delta",
                 Level::FastestSimdDelta => "minlz-simd-1+delta",
                 Level::BalancedSimdDelta => "minlz-simd-2+delta",
+                // Level is non_exhaustive.
+                _ => "minlz-other",
             },
             Codec::Snappy => "snappy",
             Codec::Lz4 => "lz4_flex",
