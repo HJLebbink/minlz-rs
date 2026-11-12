@@ -132,12 +132,11 @@ func.func private @shift(%fill: !w, %x: !w, %k: index) -> !w {
 // decode returns the offsets of operations 16g to 16g + 15 of the batch, with tokens tv and offset
 // symbols sv, 0 for repeats, after the offset in every lane of lastv, their raw bits from bit pos
 // of raw: the offset each match copies from, raised to min(ml, 32) if raise. Also returns pos and
-// the offset after them, not raised, in every lane. Lane i of rel0 holds the raw bits of the
-// group's operations before operation i. A new offset is the base of its symbol plus its raw
-// bits; a repeat takes the offset before it. Symbols above 175, which the decoder rejects before
-// it runs a chunk, decode to offsets other than OFF_TAB's, but their reads stay within raw.
+// the offset after them, not raised, in every lane. A new offset is the base of its symbol plus
+// its raw bits; a repeat takes the offset before it. Symbols above 175, which the decoder rejects
+// before it runs a chunk, decode to offsets other than OFF_TAB's, but their reads stay within raw.
 func.func private @decode(%a: !p, %raw: !p, %nraw: index, %tv: !b, %sv: !b, %g: index,
-    %rel0: !w, %pos: index, %lastv: !w, %raise: i1) -> (!w, index, !w) {
+    %pos: index, %lastv: !w, %raise: i1) -> (!w, index, !w) {
   %c1 = arith.constant 1 : index
   %c2 = arith.constant 2 : index
   %c3 = arith.constant 3 : index
@@ -164,13 +163,21 @@ func.func private @decode(%a: !p, %raw: !p, %nraw: index, %tv: !b, %sv: !b, %g: 
   %base = arith.shli %b0, %nb : !w
   %one = arith.shli %v1, %nb : !w
   %mask = arith.subi %one, %v1 : !w
-  // The bit position of each operation from byte pos >> 3: rel0 plus pos & 7. Lane 15 of
-  // rel0 + nb is the group's total of raw bits.
-  %incl = arith.addi %rel0, %nb : !w
+  // The bit position of each operation from byte pos >> 3: the raw bits before it, summed over
+  // the lanes in four steps, plus pos & 7.
+  %x1 = func.call @shift(%v0, %nb, %c1) : (!w, !w, index) -> !w
+  %y1 = arith.addi %nb, %x1 : !w
+  %x2 = func.call @shift(%v0, %y1, %c2) : (!w, !w, index) -> !w
+  %y2 = arith.addi %y1, %x2 : !w
+  %x4 = func.call @shift(%v0, %y2, %c4) : (!w, !w, index) -> !w
+  %y4 = arith.addi %y2, %x4 : !w
+  %x8 = func.call @shift(%v0, %y4, %c8) : (!w, !w, index) -> !w
+  %incl = arith.addi %y4, %x8 : !w
+  %excl = arith.subi %incl, %nb : !w
   %p7 = arith.andi %pos, %c7 : index
   %p7i = arith.index_castui %p7 : index to i32
   %p7v = vector.broadcast %p7i : i32 to !w
-  %bp = arith.addi %rel0, %p7v : !w
+  %bp = arith.addi %excl, %p7v : !w
   // The 4 bytes from the byte of each bit position, which hold its at most 20 bits after a
   // shift of at most 7. The 16 positions span at most 15 · 20 + 7 bits, so the bytes lie within
   // 64 bytes.
@@ -238,16 +245,15 @@ func.func private @decode(%a: !p, %raw: !p, %nraw: index, %tv: !b, %sv: !b, %g: 
 
 // group decodes operations 16g to 16g + 15 of the batch if the batch has more than 16g, writes
 // their offsets to the buffer, and returns pos and the last offset, in every lane, after them.
-// rel0 is decode's argument of the same name.
 func.func private @group(%a: !p, %raw: !p, %nraw: index, %m: index, %tv: !b, %sv: !b,
-    %g: index, %rel0: !w, %pos: index, %lastv: !w, %raise: i1) -> (index, !w) {
+    %g: index, %pos: index, %lastv: !w, %raise: i1) -> (index, !w) {
   %c4 = arith.constant 4 : index
   %c16 = arith.constant 16 : index
   %start = arith.muli %g, %c16 : index
   %any = arith.cmpi ugt, %m, %start : index
   %r:2 = scf.if %any -> (index, !w) {
-    %o, %p2, %x2 = func.call @decode(%a, %raw, %nraw, %tv, %sv, %g, %rel0, %pos, %lastv, %raise)
-        : (!p, !p, index, !b, !b, index, !w, index, !w, i1) -> (!w, index, !w)
+    %o, %p2, %x2 = func.call @decode(%a, %raw, %nraw, %tv, %sv, %g, %pos, %lastv, %raise)
+        : (!p, !p, index, !b, !b, index, index, !w, i1) -> (!w, index, !w)
     %offs = func.call @offs(%a) : (!p) -> !p
     %bo = arith.muli %start, %c4 : index
     %q = func.call @at(%offs, %bo) : (!p, index) -> !p
@@ -315,63 +321,16 @@ func.func private @expand_batch(%a: !p, %k: index, %m: index, %raise: i1) {
   ptr.store %lv, %lens alignment = 8 : !b, !p
   %sv, %oi2 = func.call @expand64(%offc, %oi, %fo, %a)
       : (!p, index, vector<64xi1>, !p) -> (!b, index)
-  // nb8 is the raw bit count of each symbol, and excl8 the raw bits of the symbols before it in
-  // its 8-symbol word: a prefix sum in three shift-and-add steps, each shift within a 64-bit word.
-  // A word holds at most 8 · 30 raw bits, so no byte sum carries into the next byte.
-  %sb3 = arith.constant dense<3> : !b
-  %n3 = arith.shrui %sv, %sb3 : !b
-  %n31 = arith.maxui %n3, %b1 : !b
-  %nb8 = arith.subi %n31, %b1 : !b
-  %q8 = arith.constant dense<8> : vector<8xi64>
-  %q16 = arith.constant dense<16> : vector<8xi64>
-  %q32 = arith.constant dense<32> : vector<8xi64>
-  %q56 = arith.constant dense<56> : vector<8xi64>
-  %w0 = vector.bitcast %nb8 : !b to vector<8xi64>
-  %x8b = arith.shli %w0, %q8 : vector<8xi64>
-  %b8 = vector.bitcast %x8b : vector<8xi64> to !b
-  %y1 = arith.addi %nb8, %b8 : !b
-  %w1 = vector.bitcast %y1 : !b to vector<8xi64>
-  %x16b = arith.shli %w1, %q16 : vector<8xi64>
-  %b16 = vector.bitcast %x16b : vector<8xi64> to !b
-  %y2 = arith.addi %y1, %b16 : !b
-  %w2 = vector.bitcast %y2 : !b to vector<8xi64>
-  %x32b = arith.shli %w2, %q32 : vector<8xi64>
-  %b32 = vector.bitcast %x32b : vector<8xi64> to !b
-  %y3 = arith.addi %y2, %b32 : !b
-  %excl8 = arith.subi %y3, %nb8 : !b
-  // The raw bits of each word, word w in lane 2w of a vector of 32-bit lanes and 0 in lane 2w + 1.
-  %w3 = vector.bitcast %y3 : !b to vector<8xi64>
-  %t64 = arith.shrui %w3, %q56 : vector<8xi64>
-  %totw = vector.bitcast %t64 : vector<8xi64> to !w
-  %v0w = arith.constant dense<0> : !w
-  // Group g holds words 2g and 2g + 1, so its rel0 is excl8 plus, in lanes 8 to 15, the total of
-  // word 2g.
-  %e0 = func.call @slice16(%excl8, %c0) : (!b, index) -> !w
-  %e1 = func.call @slice16(%excl8, %c1) : (!b, index) -> !w
-  %e2 = func.call @slice16(%excl8, %c2) : (!b, index) -> !w
-  %e3 = func.call @slice16(%excl8, %c3) : (!b, index) -> !w
-  %g0 = vector.shuffle %totw, %v0w [16, 16, 16, 16, 16, 16, 16, 16, 0, 0, 0, 0, 0, 0, 0, 0]
-      : !w, !w
-  %g1 = vector.shuffle %totw, %v0w [16, 16, 16, 16, 16, 16, 16, 16, 4, 4, 4, 4, 4, 4, 4, 4]
-      : !w, !w
-  %g2 = vector.shuffle %totw, %v0w [16, 16, 16, 16, 16, 16, 16, 16, 8, 8, 8, 8, 8, 8, 8, 8]
-      : !w, !w
-  %g3 = vector.shuffle %totw, %v0w [16, 16, 16, 16, 16, 16, 16, 16, 12, 12, 12, 12, 12, 12, 12, 12]
-      : !w, !w
-  %rel00 = arith.addi %e0, %g0 : !w
-  %rel01 = arith.addi %e1, %g1 : !w
-  %rel02 = arith.addi %e2, %g2 : !w
-  %rel03 = arith.addi %e3, %g3 : !w
   %l32 = arith.index_castui %last : index to i32
   %lastv = vector.broadcast %l32 : i32 to !w
-  %p1, %x1 = func.call @group(%a, %raw, %nraw, %m, %tv, %sv, %c0, %rel00, %pos, %lastv, %raise)
-      : (!p, !p, index, index, !b, !b, index, !w, index, !w, i1) -> (index, !w)
-  %p2, %x2 = func.call @group(%a, %raw, %nraw, %m, %tv, %sv, %c1, %rel01, %p1, %x1, %raise)
-      : (!p, !p, index, index, !b, !b, index, !w, index, !w, i1) -> (index, !w)
-  %p3, %x3 = func.call @group(%a, %raw, %nraw, %m, %tv, %sv, %c2, %rel02, %p2, %x2, %raise)
-      : (!p, !p, index, index, !b, !b, index, !w, index, !w, i1) -> (index, !w)
-  %p4, %x4 = func.call @group(%a, %raw, %nraw, %m, %tv, %sv, %c3, %rel03, %p3, %x3, %raise)
-      : (!p, !p, index, index, !b, !b, index, !w, index, !w, i1) -> (index, !w)
+  %p1, %x1 = func.call @group(%a, %raw, %nraw, %m, %tv, %sv, %c0, %pos, %lastv, %raise)
+      : (!p, !p, index, index, !b, !b, index, index, !w, i1) -> (index, !w)
+  %p2, %x2 = func.call @group(%a, %raw, %nraw, %m, %tv, %sv, %c1, %p1, %x1, %raise)
+      : (!p, !p, index, index, !b, !b, index, index, !w, i1) -> (index, !w)
+  %p3, %x3 = func.call @group(%a, %raw, %nraw, %m, %tv, %sv, %c2, %p2, %x2, %raise)
+      : (!p, !p, index, index, !b, !b, index, index, !w, i1) -> (index, !w)
+  %p4, %x4 = func.call @group(%a, %raw, %nraw, %m, %tv, %sv, %c3, %p3, %x3, %raise)
+      : (!p, !p, index, index, !b, !b, index, index, !w, i1) -> (index, !w)
   %x40 = vector.extract %x4[0] : i32 from !w
   %last2 = arith.index_castui %x40 : i32 to index
   func.call @set(%a, %c9, %p4) : (!p, index, index) -> ()
