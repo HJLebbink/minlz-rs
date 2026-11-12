@@ -163,18 +163,33 @@ func.func private @op(%a: !p, %dst: !p, %t: index, %len: index, %o: index, %delt
   %lv2 = scf.if %delta -> !v {
     %raised = arith.maxui %x, %c32 : index
     %dr0 = arith.select %flat, %raised, %x : index
-    %d = func.call @dist(%dstP, %dst) : (!p, !p) -> index
-    %dr = arith.minui %dr0, %d : index
-    %refP = func.call @back(%dstP, %dr) : (!p, index) -> !p
-    %near = arith.cmpi ult, %dr, %c32 : index
-    %short0 = arith.andi %notflat, %near : i1
-    %short = func.call @unlikely(%short0) : (i1) -> i1
-    %rv = scf.if %short -> !v {
+    // The references copy from dr0 bytes back. Two cases are rare and share a path out of the
+    // loop: dr0 reaching before the start of dst, which the first operations of a chunk do, and,
+    // for a chunk without the flag, dr0 below 32, where the references repeat and need a pattern.
+    %refP0 = func.call @back(%dstP, %dr0) : (!p, index) -> !p
+    %rd = func.call @dist(%refP0, %dst) : (!p, !p) -> index
+    %under = arith.cmpi slt, %rd, %c0 : index
+    %near0 = arith.cmpi ult, %dr0, %c32 : index
+    %short0 = arith.andi %notflat, %near0 : i1
+    %cold0 = arith.ori %under, %short0 : i1
+    %cold = func.call @unlikely(%cold0) : (i1) -> i1
+    %rv = scf.if %cold -> !v {
+      %d = func.call @dist(%dstP, %dst) : (!p, !p) -> index
+      %dr = arith.minui %dr0, %d : index
       %rs = arith.subi %d, %dr : index
-      %y = func.call @repeat(%a, %dst, %rs, %dr) : (!p, !p, index, index) -> !v
+      %near = arith.cmpi ult, %dr, %c32 : index
+      %short = arith.andi %notflat, %near : i1
+      %y = scf.if %short -> !v {
+        %z = func.call @repeat(%a, %dst, %rs, %dr) : (!p, !p, index, index) -> !v
+        scf.yield %z : !v
+      } else {
+        %sp = func.call @at(%dst, %rs) : (!p, index) -> !p
+        %z = func.call @ld(%sp, %c0) : (!p, index) -> !v
+        scf.yield %z : !v
+      }
       scf.yield %y : !v
     } else {
-      %y = func.call @ld(%refP, %c0) : (!p, index) -> !v
+      %y = func.call @ld(%refP0, %c0) : (!p, index) -> !v
       scf.yield %y : !v
     }
     %s = arith.addi %lv, %rv : !v
