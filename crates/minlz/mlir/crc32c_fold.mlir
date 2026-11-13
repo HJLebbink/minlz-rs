@@ -1,6 +1,7 @@
 // CRC32C (Castagnoli) by folding with carry-less multiplies, with three CRC32-instruction chains
-// beside it, for the targets that have a carry-less multiply. `cargo xtask mlir` puts
-// common.mlir, a target file (crc32c/*.mlir) and crc32c.mlir in front of this file and lowers the
+// beside it, for the targets that have a carry-less multiply. `cargo xtask mlir` puts common.mlir,
+// the target file (crc32c/*.mlir), its architecture file (crc32c_x86.mlir or crc32c_arm.mlir), its
+// halving chain steps (crc32c/halves_*.mlir) and crc32c.mlir in front of this file and lowers the
 // result once per target. The naked functions in crates/minlz/src/stream/crc/mlir.rs hold the
 // output.
 //
@@ -19,7 +20,12 @@
 // through each chain. At the end of the block the lanes move on past the scalar regions, and each
 // chain's CRC joins lane 0 times the power of x that places it.
 //
-// The target file gives, besides the CRC32 instructions that crc32c.mlir lists:
+// What this kernel calls comes from three of those files, beside the CRC32 instructions that
+// crc32c.mlir lists. The architecture file gives @clmul(i64, i64) -> vector<2xi64>, the 128-bit
+// carry-less product of two words. The step files, with the target file where a step belongs to
+// one target only, give @clmul_state(!st, !st, !st) -> !st, which breaks the state into the
+// registers of the target, multiplies each of them by the keys and xors in the third argument.
+// The target file gives the state, the sizes, the keys and the leaf of the chain:
 // - !st = vector<2L x i64>, lane j being elements 2j (the low word) and 2j+1 (the high word), and
 //   !w = vector<L x 2 x i64>, the same words with one lane to a row;
 // - @stride() -> index, the 16·L bytes that one fold takes; @words() -> index, k; @iters() ->
@@ -30,15 +36,14 @@
 //   to one (the last lane's keys multiply by x^0);
 // - @chain_keys() -> vector<3xi64>, for each chain the key that places its CRC in lane 0; the
 //   third also places the starting CRC there;
-// - @clmul2_xor(!st, !st, !st) -> !st, per lane the 128-bit product of the low words xor that of
-//   the high words, with the words of the third argument added, which one instruction can do
-//   where the target has a three-way xor;
-// - @clmul(i64, i64) -> vector<2xi64>, the 128-bit carry-less product of two words.
+// - @clmul2_xor, @clmul4_xor or @clmul8_xor, named for its words: the same on one register of
+//   the target, the two words of a 128-bit lane or the whole register where the target
+//   multiplies wider.
 
-// clmul2 is clmul2_xor with nothing added.
+// clmul2 is clmul_state with nothing added.
 func.func private @clmul2(%x: !st, %k: !st) -> !st {
   %z = arith.constant dense<0> : !st
-  %r = func.call @clmul2_xor(%x, %k, %z) : (!st, !st, !st) -> !st
+  %r = func.call @clmul_state(%x, %k, %z) : (!st, !st, !st) -> !st
   return %r : !st
 }
 
@@ -46,7 +51,7 @@ func.func private @clmul2(%x: !st, %k: !st) -> !st {
 func.func private @fold(%s: !st, %k: !st, %p: !p, %o: index) -> !st {
   %q = func.call @at(%p, %o) : (!p, index) -> !p
   %d = ptr.load %q alignment = 1 : !p -> !st
-  %r = func.call @clmul2_xor(%s, %k, %d) : (!st, !st, !st) -> !st
+  %r = func.call @clmul_state(%s, %k, %d) : (!st, !st, !st) -> !st
   return %r : !st
 }
 

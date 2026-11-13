@@ -13,7 +13,12 @@
 // limitations under the License.
 
 //! The CRC32C target files, in `crates/minlz/mlir/crc32c/`: per target, how it computes the CRC,
-//! the sizes and keys that implies, and its instructions.
+//! the sizes and keys that implies, and the carry-less multiply of its register. The instructions
+//! that the targets of an architecture share are in the hand-written `crc32c_x86.mlir` and
+//! `crc32c_arm.mlir`. The steps of the halving chain of `crc32c_fold.mlir` are generated too: one
+//! file `crc32c/halves_*.mlir` holds each step, shared by every target that uses it, and the
+//! steps of one target only are in that target's file. A step is named for the words it halves,
+//! and so is the register leaf, which the target file holds.
 //!
 //! A key multiplies by x^d modulo P, the CRC32C polynomial. For a 64-bit word it is x^(d-1) mod P,
 //! reflected into 64 bits (`crc32c_fold.mlir` says why); `crc32c_chains.mlir` uses a 32-bit form.
@@ -54,6 +59,9 @@ pub struct Target {
     pub kind: Kind,
     /// The features of the target, as an `-mattr` flag.
     pub mattr: &'static str,
+    /// The hand-written file of `mlir/` that holds the instructions of the architecture: the CRC32
+    /// instructions and `@clmul`.
+    pub arch_file: &'static str,
 }
 
 /// The targets, each with only the features that `stream::crc` checks for it.
@@ -71,6 +79,7 @@ pub const TARGETS: [Target; 7] = [
         arch: Arch::X86,
         kind: Kind::Chains { bytes: 1024 },
         mattr: "-mattr=+sse4.2,+crc32",
+        arch_file: "crc32c_x86.mlir",
     },
     Target {
         dir: "pclmul",
@@ -85,6 +94,7 @@ pub const TARGETS: [Target; 7] = [
             sve2: false,
         },
         mattr: "-mattr=+sse4.2,+crc32,+pclmul",
+        arch_file: "crc32c_x86.mlir",
     },
     Target {
         dir: "avx2",
@@ -99,6 +109,7 @@ pub const TARGETS: [Target; 7] = [
             sve2: false,
         },
         mattr: "-mattr=+avx2,+crc32,+pclmul,+vpclmulqdq",
+        arch_file: "crc32c_x86.mlir",
     },
     Target {
         dir: "avx512",
@@ -113,6 +124,7 @@ pub const TARGETS: [Target; 7] = [
             sve2: false,
         },
         mattr: "-mattr=+avx512f,+crc32,+pclmul,+vpclmulqdq,-prefer-256-bit",
+        arch_file: "crc32c_x86.mlir",
     },
     Target {
         dir: "crc",
@@ -120,6 +132,7 @@ pub const TARGETS: [Target; 7] = [
         arch: Arch::Arm,
         kind: Kind::Chains { bytes: 1024 },
         mattr: "-mattr=+v8a,+crc",
+        arch_file: "crc32c_arm.mlir",
     },
     Target {
         dir: "neon",
@@ -134,6 +147,7 @@ pub const TARGETS: [Target; 7] = [
             sve2: false,
         },
         mattr: "-mattr=+v8a,+neon,+aes,+crc",
+        arch_file: "crc32c_arm.mlir",
     },
     Target {
         dir: "sve2",
@@ -148,6 +162,7 @@ pub const TARGETS: [Target; 7] = [
             sve2: true,
         },
         mattr: "-mattr=+v8a,+neon,+aes,+crc,+sve2,+sve2-aes",
+        arch_file: "crc32c_arm.mlir",
     },
 ];
 
@@ -229,6 +244,14 @@ fn dense(vals: &[i64]) -> String {
     format!("[\n    {}\n  ]", rows(vals, 4, ",\n    "))
 }
 
+/// A step of a folding target's halving chain: the words its vector holds, and whether it is the
+/// first step, which `crc32c_fold.mlir` calls on the state.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub struct Step {
+    words: u32,
+    first: bool,
+}
+
 impl Target {
     /// Returns the kernel file that the target file goes with.
     pub fn kernel(&self) -> &'static str {
@@ -238,10 +261,51 @@ impl Target {
         }
     }
 
+    /// Returns the steps of the halving chain of `crc32c_fold.mlir` that this target needs,
+    /// outermost first. A step halves its words and calls the next, until a half is one register
+    /// of the target; the leaf that multiplies a whole register is in the target file.
+    fn steps(&self) -> Vec<Step> {
+        let Kind::Fold { bits, lanes, .. } = self.kind else {
+            return Vec::new();
+        };
+        let (reg, state) = (bits / 64, 2 * lanes); // the words of one register, of the state
+        let mut steps = Vec::new();
+        let mut words = state;
+        while words > reg {
+            steps.push(Step {
+                words,
+                first: words == state,
+            });
+            words /= 2;
+        }
+        steps
+    }
+
+    /// Returns the files of the generated steps of this target's halving chain, in `crc32c/` and
+    /// outermost first. A step that only this target uses is written into its target file and is
+    /// not in the list.
+    pub fn step_files(&self) -> Vec<String> {
+        self.steps()
+            .iter()
+            .filter(|s| users(**s) > 1)
+            .map(|s| format!("crc32c/{}.mlir", step_name(*s)))
+            .collect()
+    }
+
+    /// Returns the steps of this target's halving chain that no other target uses, outermost
+    /// first, for its own target file.
+    fn own_steps(&self) -> String {
+        self.steps()
+            .iter()
+            .filter(|s| users(**s) == 1)
+            .map(|s| half(*s))
+            .collect()
+    }
+
     /// Returns the target file.
     pub fn generate(&self) -> String {
-        let mut s = match (self.kind, self.arch) {
-            (Kind::Fold { bits, lanes, .. }, Arch::X86) => {
+        match (self.kind, self.arch) {
+            (Kind::Fold { bits, .. }, Arch::X86) => {
                 let insn = if bits == 128 {
                     "PCLMULQDQ"
                 } else {
@@ -254,29 +318,23 @@ impl Target {
                 };
                 let title = format!("x86-64 with {insn} on {bits}-bit vectors");
                 let mut s = self.fold(&title, &format!("{reg} registers"));
-                s += &halves(2 * lanes, bits / 64);
+                s += &self.own_steps();
                 s += &x86_clmul(bits, insn);
                 s
             }
-            (Kind::Fold { lanes, sve2, .. }, Arch::Arm) => {
-                let (title, clmul_reg_xor) = if sve2 {
-                    ("SVE2 with PMULLB, PMULLT and EOR3", SVE2_CLMUL_REG_XOR)
+            (Kind::Fold { sve2, .. }, Arch::Arm) => {
+                let (title, clmul2) = if sve2 {
+                    ("SVE2 with PMULLB, PMULLT and EOR3", SVE2_CLMUL2)
                 } else {
-                    ("NEON with PMULL from the AES extension", NEON_CLMUL_REG_XOR)
+                    ("NEON with PMULL from the AES extension", NEON_CLMUL2)
                 };
                 let mut s = self.fold(title, "q registers");
-                s += &halves(2 * lanes, 2);
-                s += clmul_reg_xor;
-                s += ARM_CLMUL;
+                s += &self.own_steps();
+                s += clmul2;
                 s
             }
             (Kind::Chains { bytes }, arch) => chains(arch, bytes),
-        };
-        s += match self.arch {
-            Arch::X86 => X86_CRC32,
-            Arch::Arm => ARM_CRC32,
-        };
-        s
+        }
     }
 
     /// Returns the head of a folding target's file: its comment, its types, its sizes and its
@@ -385,6 +443,131 @@ func.func private @chain_keys() -> vector<3xi64> {{
     }
 }
 
+/// Returns how many targets use one halving chain step.
+fn users(step: Step) -> usize {
+    TARGETS.iter().filter(|t| t.steps().contains(&step)).count()
+}
+
+/// Returns the file name of the generated file of a halving chain step, without its suffix: the
+/// words it halves, with `state` for the first step.
+fn step_name(step: Step) -> String {
+    if step.first {
+        format!("halves_state_{}", step.words)
+    } else {
+        format!("halves_{}", step.words)
+    }
+}
+
+/// Returns the files `cargo xtask mlir` writes to `crc32c/` for the halving chains: one per step
+/// that at least two targets use, as a file name without its folder and suffix and the file's
+/// text. The steps of a chain that no other target uses are in that target's own file.
+pub fn shared_steps() -> Vec<(String, String)> {
+    let mut seen: Vec<Step> = Vec::new();
+    let mut files = Vec::new();
+    for t in &TARGETS {
+        for step in t.steps() {
+            if seen.contains(&step) || users(step) < 2 {
+                continue;
+            }
+            seen.push(step);
+            files.push((step_name(step), step_file(step)));
+        }
+    }
+    files
+}
+
+/// Returns the file of a shared halving chain step: its comment and its body.
+fn step_file(step: Step) -> String {
+    let who = and_list(
+        &TARGETS
+            .iter()
+            .filter(|t| t.steps().contains(&step))
+            .map(|t| t.file)
+            .collect::<Vec<_>>(),
+    );
+    let (words, callee) = (step.words, format!("clmul{}_xor", step.words / 2));
+    let head = if step.first {
+        comment(&format!(
+            "The first step of the halving chain of crc32c_fold.mlir: clmul_state halves the \
+             {words} words of the fold's state and calls {callee} on each half. {who} share this \
+             file. `cargo xtask mlir` writes it and puts it behind the target file, which defines \
+             the state type !st, and in front of crc32c.mlir."
+        ))
+    } else {
+        comment(&format!(
+            "A step of the halving chain of crc32c_fold.mlir: {callee} on each half of {words} \
+             words. {who} share this file. `cargo xtask mlir` writes it and puts it behind the \
+             target file and in front of crc32c.mlir, beside the other steps of the chain."
+        ))
+    };
+    head + &half(step)
+}
+
+/// Returns the body of one halving chain step: it takes three vectors of `words` words, splits
+/// each in two, calls the next step, or the register leaf of the target, on the halves, and joins
+/// the results. The first step is the fold's entry and takes the state type; every other step and
+/// the leaf are named for the words they take.
+fn half(step: Step) -> String {
+    let (h, words) = (step.words / 2, step.words);
+    let (name, t) = if step.first {
+        ("clmul_state".to_string(), "!st".to_string())
+    } else {
+        (format!("clmul{words}_xor"), format!("vector<{words}xi64>"))
+    };
+    let (callee, what) = (
+        format!("clmul{h}_xor"),
+        if step.first {
+            "the whole state".to_string()
+        } else {
+            format!("{words} words")
+        },
+    );
+    let ht = format!("vector<{h}xi64>");
+    let idx = rows(&(0..i64::from(words)).collect::<Vec<_>>(), 16, ",\n      ");
+    let split = |o: char, from: &str| -> String {
+        [(0, 'a'), (h, 'b')]
+            .iter()
+            .map(|(off, i)| {
+                format!(
+                    "  %{o}{i} = vector.extract_strided_slice %{o} {{offsets = [{off}], \
+                     sizes = [{h}], strides = [1]}}\n      : {from} to {ht}\n"
+                )
+            })
+            .collect()
+    };
+    let (xa, ka, da) = (split('x', &t), split('k', &t), split('d', &t));
+    format!(
+        r#"
+// {name} is the fold of crc32c_fold.mlir on {what}, as {callee} on each half.
+func.func private @{name}(%x: {t}, %k: {t}, %d: {t})
+    -> {t} {{
+{xa}{ka}{da}  %ra = func.call @{callee}(%xa, %ka, %da)
+      : ({ht}, {ht}, {ht}) -> {ht}
+  %rb = func.call @{callee}(%xb, %kb, %db)
+      : ({ht}, {ht}, {ht}) -> {ht}
+  %r = vector.shuffle %ra, %rb [
+      {idx}
+    ] : {ht}, {ht}
+  return %r : {t}
+}}
+"#
+    )
+}
+
+/// Returns the names joined as English: "a", "a and b", "a, b and c".
+fn and_list(who: &[&'static str]) -> String {
+    match who {
+        [] => String::new(),
+        [one] => (*one).to_string(),
+        [rest @ .., last] => {
+            let mut s = rest.join(", ");
+            s += " and ";
+            s += last;
+            s
+        }
+    }
+}
+
 /// Returns the head of a chains target's file: its comment, its region size and its key.
 fn chains(arch: Arch, bytes: u32) -> String {
     let title = match arch {
@@ -418,72 +601,20 @@ func.func private @shift_key() -> i64 {{
     s
 }
 
-/// Returns clmul2_xor on `vector<n x i64>` as the same on each half, down to `clmul_reg_xor` on
-/// one register of `leaf` words.
-fn halves(n: u32, leaf: u32) -> String {
-    let mut s = String::new();
-    let (mut size, mut name) = (n, "clmul2_xor".to_string());
-    while size > leaf {
-        let h = size / 2;
-        let sub = if h > leaf {
-            format!("clmul{h}_xor")
-        } else {
-            "clmul_reg_xor".to_string()
-        };
-        let t = if size == n {
-            "!st".to_string()
-        } else {
-            format!("vector<{size}xi64>")
-        };
-        let ht = format!("vector<{h}xi64>");
-        let idx = rows(&(0..i64::from(size)).collect::<Vec<_>>(), 16, ",\n      ");
-        let split = |o: char, from: &str| -> String {
-            [(0, 'a'), (h, 'b')]
-                .iter()
-                .map(|(off, i)| {
-                    format!(
-                        "  %{o}{i} = vector.extract_strided_slice %{o} {{offsets = [{off}], \
-                         sizes = [{h}], strides = [1]}}\n      : {from} to {ht}\n"
-                    )
-                })
-                .collect()
-        };
-        let (xa, ka, da) = (split('x', &t), split('k', &t), split('d', &t));
-        write!(
-            s,
-            r#"
-// {name} is clmul2_xor on {size} words, as {sub} on each half.
-func.func private @{name}(%x: {t}, %k: {t}, %d: {t})
-    -> {t} {{
-{xa}{ka}{da}  %ra = func.call @{sub}(%xa, %ka, %da)
-      : ({ht}, {ht}, {ht}) -> {ht}
-  %rb = func.call @{sub}(%xb, %kb, %db)
-      : ({ht}, {ht}, {ht}) -> {ht}
-  %r = vector.shuffle %ra, %rb [
-      {idx}
-    ] : {ht}, {ht}
-  return %r : {t}
-}}
-"#
-        )
-        .expect("writing to a String");
-        (name, size) = (sub, h);
-    }
-    s
-}
-
-/// Returns the x86-64 carry-less multiplies: clmul2_xor on one register, and clmul.
+/// Returns the leaf of the halving chain for x86-64, the fold on one register of `bits / 64`
+/// words: one vector register of the target, named for its words.
 fn x86_clmul(bits: u32, insn: &str) -> String {
-    let vt = format!("vector<{}xi64>", bits / 64);
+    let (w, vt) = (bits / 64, format!("vector<{}xi64>", bits / 64));
     let intr = match bits {
         128 => "llvm.x86.pclmulqdq".to_string(),
         _ => format!("llvm.x86.pclmulqdq.{bits}"),
     };
     format!(
         r#"
-// clmul_reg_xor is clmul2_xor on one register: {insn} multiplies the low words of each 128-bit
+// clmul{w}_xor is the fold on one register: {insn} multiplies the low words of each 128-bit
 // lane (immediate 0x00) or the high words (0x11).
-func.func private @clmul_reg_xor(%x: {vt}, %k: {vt}, %d: {vt}) -> {vt} {{
+func.func private @clmul{w}_xor(%x: {vt}, %k: {vt}, %d: {vt})
+    -> {vt} {{
   %lo = llvm.mlir.constant(0 : i8) : i8
   %hi = llvm.mlir.constant(17 : i8) : i8
   %a = llvm.call_intrinsic "{intr}"(%x, %k, %lo)
@@ -494,26 +625,15 @@ func.func private @clmul_reg_xor(%x: {vt}, %k: {vt}, %d: {vt}) -> {vt} {{
   %r = arith.xori %ab, %d : {vt}
   return %r : {vt}
 }}
-
-// clmul returns the 128-bit carry-less product of a and b.
-func.func private @clmul(%a: i64, %b: i64) -> vector<2xi64> {{
-  %z = arith.constant dense<0> : vector<2xi64>
-  %va = vector.insert %a, %z [0] : i64 into vector<2xi64>
-  %vb = vector.insert %b, %z [0] : i64 into vector<2xi64>
-  %lo = llvm.mlir.constant(0 : i8) : i8
-  %r = llvm.call_intrinsic "llvm.x86.pclmulqdq"(%va, %vb, %lo)
-      : (vector<2xi64>, vector<2xi64>, i8) -> vector<2xi64>
-  return %r : vector<2xi64>
-}}
 "#
     )
 }
 
-/// The NEON `clmul_reg_xor`, the fold's carry-less multiply on one register.
-const NEON_CLMUL_REG_XOR: &str = r#"
-// clmul_reg_xor is clmul2_xor on one register: PMULL multiplies the low words, PMULL2 the high
+/// The NEON leaf of the halving chain, the fold on one q register.
+const NEON_CLMUL2: &str = r#"
+// clmul2_xor is the fold on one q register: PMULL multiplies the low words, PMULL2 the high
 // words.
-func.func private @clmul_reg_xor(%x: vector<2xi64>, %k: vector<2xi64>, %d: vector<2xi64>)
+func.func private @clmul2_xor(%x: vector<2xi64>, %k: vector<2xi64>, %d: vector<2xi64>)
     -> vector<2xi64> {
   %x0 = vector.extract %x[0] : i64 from vector<2xi64>
   %x1 = vector.extract %x[1] : i64 from vector<2xi64>
@@ -527,25 +647,15 @@ func.func private @clmul_reg_xor(%x: vector<2xi64>, %k: vector<2xi64>, %d: vecto
 }
 "#;
 
-/// The aarch64 `clmul`, which both aarch64 folds use for one 128-bit product.
-const ARM_CLMUL: &str = r#"
-// clmul returns the 128-bit carry-less product of a and b.
-func.func private @clmul(%a: i64, %b: i64) -> vector<2xi64> {
-  %p = llvm.call_intrinsic "llvm.aarch64.neon.pmull64"(%a, %b) : (i64, i64) -> vector<16xi8>
-  %r = vector.bitcast %p : vector<16xi8> to vector<2xi64>
-  return %r : vector<2xi64>
-}
-"#;
-
-/// The SVE2 leaf of the `clmul2_xor` chain.
-const SVE2_CLMUL_REG_XOR: &str = r#"
-// clmul_reg_xor is clmul2_xor on one register: pmullb multiplies the low words, pmullt the high
+/// The SVE2 leaf of the halving chain, the fold on one register.
+const SVE2_CLMUL2: &str = r#"
+// clmul2_xor is the fold on one register: pmullb multiplies the low words, pmullt the high
 // words, and eor3 adds the two products and d in one instruction. At a 16-byte vector length a
 // register is the two words, so pmullb takes element 0 of each operand and pmullt element 1, each
 // into the whole register. eor3 also writes its last operand, so that is the product of the low
 // words: its register is the one the next fold reads as the state, and with either other operand
 // last the loop needs a copy of the state per lane.
-func.func private @clmul_reg_xor(%x: vector<2xi64>, %k: vector<2xi64>, %d: vector<2xi64>)
+func.func private @clmul2_xor(%x: vector<2xi64>, %k: vector<2xi64>, %d: vector<2xi64>)
     -> vector<2xi64> {
   %z = ub.poison : vector<[2]xi64>
   %z8 = ub.poison : vector<[16]xi8>
@@ -567,91 +677,32 @@ func.func private @clmul_reg_xor(%x: vector<2xi64>, %k: vector<2xi64>, %d: vecto
 }
 "#;
 
-/// The x86-64 CRC32 instructions.
-const X86_CRC32: &str = r#"
-// crc32 returns the CRC state c after the word w: CRC32 with a 64-bit operand.
-func.func private @crc32(%c: i64, %w: i64) -> i64 {
-  %r = llvm.call_intrinsic "llvm.x86.sse42.crc32.64.64"(%c, %w) : (i64, i64) -> i64
-  return %r : i64
-}
-
-// crc32w, crc32h and crc32b return the CRC state c, low 32 bits, after v: CRC32 with a 32-bit,
-// 16-bit or 8-bit operand.
-func.func private @crc32w(%c: i64, %v: i32) -> i64 {
-  %c32 = arith.trunci %c : i64 to i32
-  %r32 = llvm.call_intrinsic "llvm.x86.sse42.crc32.32.32"(%c32, %v) : (i32, i32) -> i32
-  %r = arith.extui %r32 : i32 to i64
-  return %r : i64
-}
-
-func.func private @crc32h(%c: i64, %v: i16) -> i64 {
-  %c32 = arith.trunci %c : i64 to i32
-  %r32 = llvm.call_intrinsic "llvm.x86.sse42.crc32.32.16"(%c32, %v) : (i32, i16) -> i32
-  %r = arith.extui %r32 : i32 to i64
-  return %r : i64
-}
-
-func.func private @crc32b(%c: i64, %v: i8) -> i64 {
-  %c32 = arith.trunci %c : i64 to i32
-  %r32 = llvm.call_intrinsic "llvm.x86.sse42.crc32.32.8"(%c32, %v) : (i32, i8) -> i32
-  %r = arith.extui %r32 : i32 to i64
-  return %r : i64
-}
-"#;
-
-/// The aarch64 CRC32 instructions.
-const ARM_CRC32: &str = r#"
-// crc32 returns the CRC state c, low 32 bits, after the word w: CRC32CX.
-func.func private @crc32(%c: i64, %w: i64) -> i64 {
-  %c32 = arith.trunci %c : i64 to i32
-  %r32 = llvm.call_intrinsic "llvm.aarch64.crc32cx"(%c32, %w) : (i32, i64) -> i32
-  %r = arith.extui %r32 : i32 to i64
-  return %r : i64
-}
-
-// crc32w, crc32h and crc32b return the CRC state c, low 32 bits, after v: CRC32CW, CRC32CH and
-// CRC32CB.
-func.func private @crc32w(%c: i64, %v: i32) -> i64 {
-  %c32 = arith.trunci %c : i64 to i32
-  %r32 = llvm.call_intrinsic "llvm.aarch64.crc32cw"(%c32, %v) : (i32, i32) -> i32
-  %r = arith.extui %r32 : i32 to i64
-  return %r : i64
-}
-
-func.func private @crc32h(%c: i64, %v: i16) -> i64 {
-  %c32 = arith.trunci %c : i64 to i32
-  %v32 = arith.extui %v : i16 to i32
-  %r32 = llvm.call_intrinsic "llvm.aarch64.crc32ch"(%c32, %v32) : (i32, i32) -> i32
-  %r = arith.extui %r32 : i32 to i64
-  return %r : i64
-}
-
-func.func private @crc32b(%c: i64, %v: i8) -> i64 {
-  %c32 = arith.trunci %c : i64 to i32
-  %v32 = arith.extui %v : i8 to i32
-  %r32 = llvm.call_intrinsic "llvm.aarch64.crc32cb"(%c32, %v32) : (i32, i32) -> i32
-  %r = arith.extui %r32 : i32 to i64
-  return %r : i64
-}
-"#;
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// The committed target files are the ones `cargo xtask mlir` writes.
+    /// The committed target files and shared halving chain step files are the ones
+    /// `cargo xtask mlir` writes.
     #[test]
     fn target_files_are_current() {
-        for t in &TARGETS {
-            let path = crate::mlir_dir().join(format!("crc32c/{}.mlir", t.file));
+        let check = |path: std::path::PathBuf, text: &str| {
             let file = std::fs::read_to_string(&path)
-                .expect("target file")
+                .expect("generated file")
                 .replace("\r\n", "\n");
             assert!(
-                file == t.generate(),
+                file == text,
                 "{} is stale: run cargo xtask mlir",
                 path.display()
             );
+        };
+        for t in &TARGETS {
+            check(
+                crate::mlir_dir().join(format!("crc32c/{}.mlir", t.file)),
+                &t.generate(),
+            );
+        }
+        for (name, text) in shared_steps() {
+            check(crate::mlir_dir().join(format!("crc32c/{name}.mlir")), &text);
         }
     }
 

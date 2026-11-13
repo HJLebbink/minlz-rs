@@ -1,12 +1,12 @@
 // CRC32C (Castagnoli): the parts that both kernels use. `cargo xtask mlir` puts common.mlir, a
-// target file (crc32c/*.mlir) and this file in front of a kernel: crc32c_fold.mlir, which folds
-// with carry-less multiplies, or crc32c_chains.mlir, for targets that have the CRC32 instruction
-// alone. Both define minlz_crc32c_update, which the naked functions in
-// crates/minlz/src/stream/crc/mlir.rs hold.
+// target file (crc32c/*.mlir), the file of its architecture (crc32c_x86.mlir or crc32c_arm.mlir)
+// and this file in front of a kernel: crc32c_fold.mlir, which folds with carry-less multiplies, or
+// crc32c_chains.mlir, for targets that have the CRC32 instruction alone. Both define
+// minlz_crc32c_update, which the naked functions in crates/minlz/src/stream/crc/mlir.rs hold.
 //
 // The CRC is reflected, as the CRC32 instructions compute it. A CRC state is the CRC without its
-// final inversion, as the CRC32 instructions keep it. Every target file gives the CRC32
-// instruction, which returns a CRC state, low 32 bits, after a value:
+// final inversion, as the CRC32 instructions keep it. The architecture file gives the CRC32
+// instructions, which return a CRC state, low 32 bits, after a value:
 // - @crc32(i64, i64) -> i64 for a word;
 // - @crc32w(i64, i32) -> i64, @crc32h(i64, i16) -> i64 and @crc32b(i64, i8) -> i64 for 4, 2 and 1
 //   bytes.

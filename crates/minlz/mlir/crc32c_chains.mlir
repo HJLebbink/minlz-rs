@@ -1,7 +1,7 @@
 // CRC32C for targets that have the CRC32 instruction but no carry-less multiply. `cargo xtask
-// mlir` puts common.mlir, a target file (crc32c/*.mlir) and crc32c.mlir in front of this file and
-// lowers the result once per target. The naked functions in crates/minlz/src/stream/crc/mlir.rs
-// hold the output.
+// mlir` puts common.mlir, a target file (crc32c/*.mlir), the file of its architecture
+// (crc32c_x86.mlir or crc32c_arm.mlir) and crc32c.mlir in front of this file and lowers the result
+// once per target. The naked functions in crates/minlz/src/stream/crc/mlir.rs hold the output.
 //
 // The CRC32 instruction takes 3 cycles and starts one each cycle, so three chains run beside each
 // other, over three neighboring regions of S bytes, as in Go's castagnoliSSE42Triple. Joining two
@@ -11,7 +11,8 @@
 // x. A CRC32 instruction from state 0 multiplies a word by x^32 and reduces it modulo P. So the
 // key that moves a state on past S bytes is x^(8·S-33) mod P, reflected into 32 bits.
 //
-// The target file gives, besides the CRC32 instructions that crc32c.mlir lists:
+// The architecture file of the target gives the CRC32 instructions that crc32c.mlir lists. The
+// target file gives:
 // - @chain_bytes() -> index, S, a multiple of 8;
 // - @shift_key() -> i64, the key.
 

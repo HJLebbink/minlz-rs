@@ -310,9 +310,18 @@ fn mlir() -> Result<(), String> {
     }
 
     let crc32c = read("crc32c.mlir")?;
+    for (name, text) in crc32c::shared_steps() {
+        write(&dir.join("crc32c").join(format!("{name}.mlir")), &text)?;
+    }
     for t in &crc32c::TARGETS {
         let file = t.generate();
         write(&dir.join("crc32c").join(format!("{}.mlir", t.file)), &file)?;
+        // The target file defines the state type that the steps of the halving chain are written
+        // in, so it goes in front of them.
+        let arch = read(t.arch_file)?;
+        let steps: Result<Vec<String>, String> =
+            t.step_files().iter().map(|step| read(step)).collect();
+        let kernel = read(t.kernel())?;
         lowerings.push(Lowering {
             kernel: "crc32c",
             source: t.kernel(),
@@ -321,7 +330,15 @@ fn mlir() -> Result<(), String> {
             arch: t.arch,
             mattr: t.mattr,
             functions: &["update"],
-            mlir: [common.as_str(), &file, &crc32c, &read(t.kernel())?].concat(),
+            mlir: [
+                common.as_str(),
+                &file,
+                &arch,
+                &steps?.join(""),
+                &crc32c,
+                &kernel,
+            ]
+            .concat(),
         });
     }
 
