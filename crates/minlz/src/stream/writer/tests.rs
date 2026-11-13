@@ -22,7 +22,7 @@ use crate::stream::format::{
 };
 use crate::stream::{
     MIN_USER_SKIPPABLE_CHUNK, MtWriter, MtWriterBuilder, ReadSeeker, Reader, ReaderBuilder, Writer,
-    WriterBuilder,
+    WriterBuilder, xorshift,
 };
 use crate::{Level, try_encode, xxh3};
 
@@ -410,16 +410,6 @@ const SIMD_LEVELS: [Level; 7] = [
     Level::FastestSimdDelta,
     Level::BalancedSimdDelta,
 ];
-
-fn xorshift(seed: u64) -> impl FnMut() -> u64 {
-    let mut x = seed.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    move || {
-        x ^= x << 13;
-        x ^= x >> 7;
-        x ^= x << 17;
-        x
-    }
-}
 
 /// Go's `makeTestData`: n bytes of JSON log lines.
 fn make_test_data(n: usize) -> Vec<u8> {

@@ -16,60 +16,12 @@
 //! encoding into a large enough dst must not allocate. A counting global allocator needs its own
 //! test binary.
 
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::cell::Cell;
-
 use minlz::{Level, encode};
 
-thread_local! {
-    static ALLOCS: Cell<usize> = const { Cell::new(0) };
-}
+#[path = "support/alloc_count.rs"]
+mod alloc_count;
 
-/// Counts the allocations of the current thread.
-struct Counting;
-
-fn count() {
-    let _ = ALLOCS.try_with(|c| c.set(c.get() + 1));
-}
-
-// SAFETY: forwards to the system allocator; counting does not allocate.
-unsafe impl GlobalAlloc for Counting {
-    unsafe fn alloc(&self, l: Layout) -> *mut u8 {
-        count();
-        // SAFETY: the caller upholds the GlobalAlloc contract.
-        unsafe { System.alloc(l) }
-    }
-
-    unsafe fn alloc_zeroed(&self, l: Layout) -> *mut u8 {
-        count();
-        // SAFETY: as for alloc.
-        unsafe { System.alloc_zeroed(l) }
-    }
-
-    unsafe fn realloc(&self, p: *mut u8, l: Layout, n: usize) -> *mut u8 {
-        count();
-        // SAFETY: as for alloc.
-        unsafe { System.realloc(p, l, n) }
-    }
-
-    unsafe fn dealloc(&self, p: *mut u8, l: Layout) {
-        // SAFETY: as for alloc.
-        unsafe { System.dealloc(p, l) }
-    }
-}
-
-#[global_allocator]
-static GLOBAL: Counting = Counting;
-
-fn check_allocs(what: &str, mut f: impl FnMut()) {
-    f(); // warm up
-    let before = ALLOCS.with(Cell::get);
-    for _ in 0..5 {
-        f();
-    }
-    let n = ALLOCS.with(Cell::get) - before;
-    assert_eq!(n, 0, "{what}: {n} allocs in 5 runs");
-}
+use alloc_count::{assert_counter_counts, check_allocs};
 
 /// Go's genEncText of 1 MiB, from SplitMix64.
 fn text() -> Vec<u8> {
@@ -106,9 +58,7 @@ fn text() -> Vec<u8> {
 
 #[test]
 fn counter_counts() {
-    let before = ALLOCS.with(Cell::get);
-    drop(std::hint::black_box(vec![0u8; 100]));
-    assert!(ALLOCS.with(Cell::get) > before);
+    assert_counter_counts();
 }
 
 /// TestSIMDEncodeAllocs, also at 64 KB, where the parsers have other tables.
@@ -119,7 +69,7 @@ fn simd_encode_allocs() {
     for n in [64 << 10, src.len()] {
         for l in [4, 5, 6, 7, 260, 261, 262] {
             let level = Level::try_from(l).unwrap();
-            check_allocs(&format!("size {n} level {l}"), || {
+            check_allocs(&format!("size {n} level {l}"), 5, || {
                 encode(&mut dst, &src[..n], level).unwrap();
             });
         }
@@ -138,7 +88,7 @@ fn encode_allocs() {
             Level::Balanced,
             Level::Smallest,
         ] {
-            check_allocs(&format!("size {n} level {level:?}"), || {
+            check_allocs(&format!("size {n} level {level:?}"), 5, || {
                 encode(&mut dst, &src[..n], level).unwrap();
             });
         }

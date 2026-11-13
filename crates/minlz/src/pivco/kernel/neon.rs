@@ -177,35 +177,14 @@ pub(super) unsafe fn pack_neon(dst: &mut [u8], ranks: &[u8], d: u8, base: u8) {
 /// P16_A[m0] | P16_B[m1][pc0..] is the index that puts the left ranks of 16 with mask
 /// m0|m1<<8 in order at the front and the right ones reversed at the back;
 /// pc0 = popcount(m0).
-static P16_A: [[u8; 16]; 256] = p16_tabs().0;
-static P16_B: [[u8; 32]; 256] = p16_tabs().1;
+static P16_A: [[u8; 16]; 256] = super::p16_tabs().0;
+static P16_B: [[u8; 32]; 256] = super::p16_tabs().1;
 /// CTAB[0][m] (CTAB[1][m]) moves the right ranks of the low (high) 8 lanes of a vector to
 /// the front; 0xFF lanes look up zero.
 static CTAB: [[[u8; 8]; 256]; 2] = ctabs();
 /// NAT_PACK_TAB[d] is the compacting TBL and the USHL counts of upstream's converging
 /// pyramid (src/pivco_huffman_neon_pack.h) at the 8, 16, 32 and 64-bit levels.
 static NAT_PACK_TAB: [[[u8; 16]; 5]; 8] = nat_pack_tabs();
-
-const fn p16_tabs() -> ([[u8; 16]; 256], [[u8; 32]; 256]) {
-    let (mut a, mut b) = ([[0u8; 16]; 256], [[0u8; 32]; 256]);
-    let mut m = 0;
-    while m < 256 {
-        let (mut la, mut ra, mut lb, mut rb) = (0, 15, 8, 15);
-        let mut k = 0;
-        while k < 8 {
-            if m >> k & 1 != 0 {
-                (a[m][ra], b[m][rb]) = (k as u8, 8 + k as u8);
-                (ra, rb) = (ra - 1, rb - 1);
-            } else {
-                (a[m][la], b[m][lb]) = (k as u8, 8 + k as u8);
-                (la, lb) = (la + 1, lb + 1);
-            }
-            k += 1;
-        }
-        m += 1;
-    }
-    (a, b)
-}
 
 const fn ctabs() -> [[[u8; 8]; 256]; 2] {
     let mut t = [[[0u8; 8]; 256]; 2];

@@ -68,13 +68,7 @@
 /// change xmm6 to xmm15, which a Windows function must keep, so the function that calls a kernel
 /// saves and restores all ten. Inlined into a caller, that cost hits every call of the caller,
 /// even the ones that run no kernel.
-#[cfg(all(
-    any(
-        target_arch = "x86_64",
-        all(target_arch = "aarch64", target_endian = "little")
-    ),
-    not(miri)
-))]
+#[cfg(all(minlz_mlir, not(miri)))]
 macro_rules! mlir_kernel {
     ($($pre:literal,)? $name:ident($($arg:ident: $ty:ty),*) $(-> $ret:ty)?, $file:expr) => {
         #[cfg(target_arch = "x86_64")]
@@ -88,6 +82,30 @@ macro_rules! mlir_kernel {
             core::arch::naked_asm!($($pre,)? include_str!($file), options(raw))
         }
     };
+}
+
+/// Declares the type alias `$name` for a pointer to a kernel of [`mlir_kernel!`], in the calling
+/// convention of the target.
+#[cfg(all(minlz_mlir, not(miri)))]
+macro_rules! mlir_kernel_type {
+    ($name:ident = fn($($ty:ty),*) $(-> $ret:ty)?) => {
+        #[cfg(target_arch = "x86_64")]
+        type $name = unsafe extern "sysv64" fn($($ty),*) $(-> $ret)?;
+        #[cfg(target_arch = "aarch64")]
+        type $name = unsafe extern "C" fn($($ty),*) $(-> $ret)?;
+    };
+}
+
+/// The instruction sets with MLIR kernels for the SIMD block decoder and the pivco decoder.
+#[cfg(all(minlz_mlir, not(miri)))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Isa {
+    #[cfg(target_arch = "x86_64")]
+    Avx2,
+    #[cfg(target_arch = "x86_64")]
+    Avx512,
+    #[cfg(target_arch = "aarch64")]
+    Neon,
 }
 
 pub mod block;

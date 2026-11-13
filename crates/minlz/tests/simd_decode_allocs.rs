@@ -18,8 +18,6 @@
 //! builder; Go encoder fixtures with coded and class tables, delta literals, several chunks and
 //! literal blocks stand in for it.
 
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::cell::Cell;
 use std::io::{Cursor, Read, Write};
 
 use minlz::Level;
@@ -28,45 +26,10 @@ use minlz::stream::{Reader, WriterBuilder};
 #[path = "../src/unzip.rs"]
 mod unzip;
 
-thread_local! {
-    static ALLOCS: Cell<usize> = const { Cell::new(0) };
-}
+#[path = "support/alloc_count.rs"]
+mod alloc_count;
 
-/// Counts the allocations of the current thread.
-struct Counting;
-
-fn count() {
-    let _ = ALLOCS.try_with(|c| c.set(c.get() + 1));
-}
-
-// SAFETY: forwards to the system allocator; counting does not allocate.
-unsafe impl GlobalAlloc for Counting {
-    unsafe fn alloc(&self, l: Layout) -> *mut u8 {
-        count();
-        // SAFETY: the caller upholds the GlobalAlloc contract.
-        unsafe { System.alloc(l) }
-    }
-
-    unsafe fn alloc_zeroed(&self, l: Layout) -> *mut u8 {
-        count();
-        // SAFETY: as for alloc.
-        unsafe { System.alloc_zeroed(l) }
-    }
-
-    unsafe fn realloc(&self, p: *mut u8, l: Layout, n: usize) -> *mut u8 {
-        count();
-        // SAFETY: as for alloc.
-        unsafe { System.realloc(p, l, n) }
-    }
-
-    unsafe fn dealloc(&self, p: *mut u8, l: Layout) {
-        // SAFETY: as for alloc.
-        unsafe { System.dealloc(p, l) }
-    }
-}
-
-#[global_allocator]
-static GLOBAL: Counting = Counting;
+use alloc_count::{assert_counter_counts, check_allocs};
 
 fn fixture(name: &str) -> Vec<u8> {
     unzip::simd_fixtures()
@@ -100,19 +63,10 @@ fn simd_decode_allocs() {
         minlz::cpu::AVX512 | minlz::cpu::AVX2 | minlz::cpu::NEON,
     ] {
         minlz::cpu::disable(mask);
-        run(); // warm up
-        let before = ALLOCS.with(Cell::get);
-        for _ in 0..20 {
-            run();
-        }
-        let n = ALLOCS.with(Cell::get) - before;
+        check_allocs(&format!("tiers without {mask:#x}"), 20, &mut run);
         minlz::cpu::enable_all();
-        assert_eq!(n, 0, "tiers without {mask:#x}: {n} allocs in 20 runs");
     }
-    // The counter works.
-    let before = ALLOCS.with(Cell::get);
-    drop(std::hint::black_box(vec![0u8; 100]));
-    assert!(ALLOCS.with(Cell::get) > before);
+    assert_counter_counts();
 }
 
 /// Go checks `decodeSIMDHash`, which the stream reader decodes SIMD chunks with, directly; here a
@@ -136,17 +90,11 @@ fn simd_stream_decode_allocs() {
     assert!(simd_chunks > 10, "{simd_chunks} SIMD chunks");
     let mut out = vec![0; data.len()];
     let mut r = Reader::new(Cursor::new(&stream[..]));
-    let mut run = || {
+    let run = || {
         r.reset(Cursor::new(&stream[..]));
         r.read_exact(&mut out).unwrap();
         assert_eq!(r.read(&mut [0; 1]).unwrap(), 0);
     };
-    run(); // warm up
-    let before = ALLOCS.with(Cell::get);
-    for _ in 0..20 {
-        run();
-    }
-    let n = ALLOCS.with(Cell::get) - before;
-    assert_eq!(n, 0, "{n} allocs in 20 stream decodes");
+    check_allocs("stream decodes", 20, run);
     assert!(out == data);
 }

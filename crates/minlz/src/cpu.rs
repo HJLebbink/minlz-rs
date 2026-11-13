@@ -99,6 +99,46 @@ impl Drop for Disabled {
     }
 }
 
+/// Checks that each bit of `cases`, disabled on its own, drops its tiers from `available()`.
+#[cfg(all(test, minlz_mlir, not(miri)))]
+pub(crate) fn assert_disabled_drops<T: PartialEq + core::fmt::Debug>(
+    available: fn() -> Vec<T>,
+    cases: &[(u32, &[T])],
+) {
+    for &(bit, tiers) in cases {
+        let _d = Disabled::new(bit);
+        let v = available();
+        for t in tiers {
+            assert!(
+                !v.contains(t),
+                "{t:?} is available with bit {bit:#x} disabled"
+            );
+        }
+    }
+}
+
+/// Returns the SVE vector length in bytes.
+///
+/// # Safety
+///
+/// The CPU has SVE.
+#[cfg(all(target_arch = "aarch64", minlz_mlir, not(miri)))]
+#[inline]
+pub(crate) unsafe fn vl_bytes() -> usize {
+    let n: usize;
+    // SAFETY: the caller checked SVE. The asm is not `pure`: the vector length can change between
+    // calls, so the compiler must not merge two reads.
+    unsafe {
+        core::arch::asm!(
+            ".arch_extension sve",
+            "rdvl {n}, #1",
+            n = out(reg) n,
+            options(nomem, nostack, preserves_flags)
+        );
+    }
+    n
+}
+
 #[inline]
 fn detected() -> u32 {
     use std::sync::OnceLock;
@@ -136,13 +176,7 @@ fn detect() -> u32 {
     NEON
 }
 
-#[cfg(any(
-    miri,
-    not(any(
-        target_arch = "x86_64",
-        all(target_arch = "aarch64", target_endian = "little")
-    ))
-))]
+#[cfg(any(miri, not(minlz_mlir)))]
 fn detect() -> u32 {
     0
 }

@@ -17,6 +17,7 @@
 //! (`fuzz_test.go`). Blocks round trip through `decode` and the strict reference decoder. Go's
 //! asm parser tiers (simdEncTiers) have no Rust counterpart.
 
+use super::super::decode_tests::Rng;
 use super::super::parse_better::better_max_off;
 use super::super::{rvarint, simd_header};
 use super::*;
@@ -37,24 +38,9 @@ const LEVELS: [i32; 7] = [
     LEVEL_BALANCED | LEVEL_DELTA,
 ];
 
-/// SplitMix64.
-struct Rng(u64);
-
 impl Rng {
-    fn next(&mut self) -> u64 {
-        self.0 = self.0.wrapping_add(0x9e3779b97f4a7c15);
-        let mut z = self.0;
-        z = (z ^ (z >> 30)).wrapping_mul(0xbf58476d1ce4e5b9);
-        z = (z ^ (z >> 27)).wrapping_mul(0x94d049bb133111eb);
-        z ^ (z >> 31)
-    }
-
-    fn intn(&mut self, n: usize) -> usize {
-        (self.next() % n as u64) as usize
-    }
-
     fn f64(&mut self) -> f64 {
-        (self.next() >> 11) as f64 / (1u64 << 53) as f64
+        (self.uint64() >> 11) as f64 / (1u64 << 53) as f64
     }
 
     fn exp_f64(&mut self) -> f64 {
@@ -63,7 +49,7 @@ impl Rng {
 
     /// Returns n random bytes (Go's `genEncRandom`).
     fn random(&mut self, n: usize) -> Vec<u8> {
-        (0..n).map(|_| self.next() as u8).collect()
+        (0..n).map(|_| self.uint64() as u8).collect()
     }
 
     /// Returns size bytes of random words (Go's `genEncText`).
@@ -125,13 +111,8 @@ impl Rng {
     }
 }
 
-fn testdata(name: &str) -> Vec<u8> {
-    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../testdata");
-    std::fs::read(p.join(name)).unwrap()
-}
-
 fn twain() -> Vec<u8> {
-    testdata("Mark.Twain-Tom.Sawyer.txt")
+    crate::block::tests::locate_testdata("Mark.Twain-Tom.Sawyer.txt").unwrap()
 }
 
 /// The files of testdata/bench (or $MINLZ_TESTDATA/bench), when present.
@@ -615,7 +596,7 @@ fn simd_lit_blocks_max() {
         let (mut lits, mut ends) = (Vec::new(), Vec::new());
         for n in [575 * LIT_SEG + 2739, 299 * LIT_SEG + 2413, last] {
             lits.extend((0..n).map(|i| {
-                let b = rng.next() as u8 & 0x7f;
+                let b = rng.uint64() as u8 & 0x7f;
                 if i / LIT_SEG % 2 == 1 { !b } else { b }
             }));
             ends.push(lits.len());
@@ -925,7 +906,7 @@ fn simd_encode_chunk_edge() {
             let mut src = Vec::new();
             for &(lits, off, ml) in &ops {
                 for _ in 0..lits {
-                    src.push(rng.next() as u8);
+                    src.push(rng.uint64() as u8);
                 }
                 for _ in 0..ml {
                     src.push(src[src.len() - off.min(src.len())]);
@@ -967,7 +948,7 @@ fn test_parse_input(rng: &mut Rng) -> Vec<u8> {
     let mut src = vec![0];
     while src.len() < 1 << 20 {
         for _ in 0..LENS[rng.intn(LENS.len())] {
-            src.push(rng.next() as u8);
+            src.push(rng.uint64() as u8);
         }
         let off = OFFS[rng.intn(OFFS.len())].min(src.len());
         for _ in 0..LENS[rng.intn(LENS.len())].max(4) {
@@ -1037,7 +1018,7 @@ fn simd_encode_delta() {
         for _ in 0..CHUNK_OPS {
             let p = src2.len();
             for j in 0..6 {
-                let mut v = rng.next() as u8;
+                let mut v = rng.uint64() as u8;
                 if delta && p >= 8 {
                     v = src2[p - 8 + j].wrapping_add(rng.intn(2) as u8);
                 }
@@ -1266,7 +1247,7 @@ impl Rng {
     /// Returns a random byte that is not in not (Go's `simdOtherByte`).
     fn other(&mut self, not: &[u8]) -> u8 {
         loop {
-            let c = self.next() as u8;
+            let c = self.uint64() as u8;
             if !not.contains(&c) {
                 return c;
             }

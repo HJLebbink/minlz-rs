@@ -28,13 +28,7 @@
 
 use std::sync::OnceLock;
 
-#[cfg(all(
-    any(
-        target_arch = "x86_64",
-        all(target_arch = "aarch64", target_endian = "little")
-    ),
-    not(miri)
-))]
+#[cfg(all(minlz_mlir, not(miri)))]
 mod mlir;
 
 const POLY: u32 = 0x82F6_3B78;
@@ -67,13 +61,7 @@ fn dispatch() -> CrcFn {
 }
 
 fn select_impl() -> CrcFn {
-    #[cfg(all(
-        any(
-            target_arch = "x86_64",
-            all(target_arch = "aarch64", target_endian = "little")
-        ),
-        not(miri)
-    ))]
+    #[cfg(all(minlz_mlir, not(miri)))]
     if let Some(f) = mlir::best() {
         return f;
     }
@@ -251,13 +239,7 @@ mod tests {
     /// longer ones, from unaligned starts and a nonzero CRC. The lengths reach the folding
     /// kernels' blocks, strides and tails, and the chains kernels' runs of three 1 KiB regions
     /// (`crc32c_chains.mlir`) and the bytes after them.
-    #[cfg(all(
-        any(
-            target_arch = "x86_64",
-            all(target_arch = "aarch64", target_endian = "little")
-        ),
-        not(miri)
-    ))]
+    #[cfg(all(minlz_mlir, not(miri)))]
     #[test]
     fn kernels_match_table() {
         let data = lcg_bytes(0x0123_4567_89ab_cdef, 70_000);

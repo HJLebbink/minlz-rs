@@ -23,14 +23,8 @@
 
 use std::sync::OnceLock;
 
-#[cfg(all(
-    any(
-        target_arch = "x86_64",
-        all(target_arch = "aarch64", target_endian = "little")
-    ),
-    not(miri)
-))]
-pub(crate) mod mlir;
+#[cfg(all(minlz_mlir, not(miri)))]
+mod mlir;
 #[cfg(test)]
 mod tests;
 
@@ -237,13 +231,7 @@ impl Hasher {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Tier {
     Scalar,
-    #[cfg(all(
-        any(
-            target_arch = "x86_64",
-            all(target_arch = "aarch64", target_endian = "little")
-        ),
-        not(miri)
-    ))]
+    #[cfg(all(minlz_mlir, not(miri)))]
     Mlir(mlir::Isa),
 }
 
@@ -251,13 +239,7 @@ enum Tier {
 fn tiers() -> Vec<Tier> {
     #[allow(unused_mut)]
     let mut t = vec![Tier::Scalar];
-    #[cfg(all(
-        any(
-            target_arch = "x86_64",
-            all(target_arch = "aarch64", target_endian = "little")
-        ),
-        not(miri)
-    ))]
+    #[cfg(all(minlz_mlir, not(miri)))]
     t.extend(mlir::Isa::available().into_iter().map(Tier::Mlir));
     t
 }
@@ -281,13 +263,7 @@ impl Tier {
     fn accum(self, a: &mut [u64; 8], p: &[u8]) {
         match self {
             Tier::Scalar => accum_scalar(a, p),
-            #[cfg(all(
-                any(
-                    target_arch = "x86_64",
-                    all(target_arch = "aarch64", target_endian = "little")
-                ),
-                not(miri)
-            ))]
+            #[cfg(all(minlz_mlir, not(miri)))]
             Tier::Mlir(isa) => {
                 // SAFETY: tiers() made self once the CPU had isa's features.
                 unsafe { mlir::accum(isa, a, p) }
@@ -299,13 +275,7 @@ impl Tier {
     fn blocks(self, a: &mut [u64; 8], p: &[u8], n: usize) {
         match self {
             Tier::Scalar => blocks_scalar(a, p, n),
-            #[cfg(all(
-                any(
-                    target_arch = "x86_64",
-                    all(target_arch = "aarch64", target_endian = "little")
-                ),
-                not(miri)
-            ))]
+            #[cfg(all(minlz_mlir, not(miri)))]
             Tier::Mlir(isa) => {
                 // SAFETY: tiers() made self once the CPU had isa's features.
                 unsafe { mlir::blocks(isa, a, p, n) }

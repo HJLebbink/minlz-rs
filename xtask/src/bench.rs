@@ -235,9 +235,9 @@ pub fn bench_hw(args: &[&str]) -> Result<(), String> {
 
     let timed = with_lock(lock.map(Path::new), || {
         let mut runs: Runs = Vec::new();
-        for t in local_tiers() {
-            let rows = compare_pinned(&ours_exe, &base_exe, t, &opts, &data)?;
-            runs.push((t.to_string(), rows));
+        for t in tiers(&ours_exe)? {
+            let rows = compare_pinned(&ours_exe, &base_exe, &t, &opts, &data)?;
+            runs.push((t, rows));
         }
         Ok(runs)
     })?;
@@ -286,27 +286,19 @@ fn with_lock<T>(dir: Option<&Path>, f: impl FnOnce() -> Result<T, String>) -> Re
     result
 }
 
-/// The kernel tiers to time on this machine, named as `minlz-bench tiers` names them.
-fn local_tiers() -> Vec<&'static str> {
-    let mut v: Vec<&str> = Vec::new();
-    #[cfg(target_arch = "x86_64")]
-    {
-        if std::is_x86_feature_detected!("avx512f") {
-            v.push("avx512");
-        }
-        if std::is_x86_feature_detected!("avx2") {
-            v.push("avx2");
-        }
+/// Returns the kernel tiers to time on this machine: the lines of `<exe> tiers`.
+fn tiers(exe: &Path) -> Result<Vec<String>, String> {
+    let out = Command::new(exe)
+        .arg("tiers")
+        .output()
+        .map_err(|e| format!("{}: {e}", exe.display()))?;
+    if !out.status.success() {
+        return Err(format!("{} tiers: {}", exe.display(), out.status));
     }
-    #[cfg(target_arch = "aarch64")]
-    {
-        if std::arch::is_aarch64_feature_detected!("sve2") {
-            v.push("sve2");
-        }
-        v.push("neon");
-    }
-    v.push("generic");
-    v
+    Ok(String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .map(str::to_string)
+        .collect())
 }
 
 /// One row of a `minlz-bench compare` table, kept to print with a Tier column added.
@@ -472,17 +464,17 @@ fn remote_timings(host: &str, opts: &[&str], base: &Path, dir: &Path) -> Result<
     send_tree(host, dir, &format!("{home}/testdata"), &[])?;
 
     let mut script = String::from("flock -x /tmp/minlz-gb10.lock bash -c 'set -e\n");
+    let this = format!("~/minlz-bench-hw/targets/{name}/release/minlz-bench");
+    let base_exe = format!("~/minlz-bench-hw/targets/{name}-base/release/minlz-bench");
     for core in ["8", "2"] {
-        for tier in ["sve2", "neon", "generic"] {
-            let this = format!("~/minlz-bench-hw/targets/{name}/release/minlz-bench");
-            let base_exe = format!("~/minlz-bench-hw/targets/{name}-base/release/minlz-bench");
-            script += &format!("echo \"## core {core} tier {tier}\"\n");
-            script += &format!(
-                "MINLZ_TESTDATA={home}/testdata taskset -c {core} {this} compare {base_exe} \
-                 --tier {tier} {}\n",
-                opts.join(" ")
-            );
-        }
+        script += &format!(
+            "for tier in $({this} tiers); do\n\
+             echo \"## core {core} tier $tier\"\n\
+             MINLZ_TESTDATA={home}/testdata taskset -c {core} {this} compare {base_exe} \
+             --tier $tier {}\n\
+             done\n",
+            opts.join(" ")
+        );
     }
     script += "'";
     let out = Command::new("ssh")

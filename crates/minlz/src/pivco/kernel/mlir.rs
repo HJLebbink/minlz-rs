@@ -27,16 +27,7 @@ use super::{ARENA_SLACK, Op, Program, R2S_LEN};
 
 const _: () = assert!(ARENA_SLACK >= 63 && R2S_LEN >= 255 + 64);
 
-/// The targets with kernels.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Isa {
-    #[cfg(target_arch = "x86_64")]
-    Avx2,
-    #[cfg(target_arch = "x86_64")]
-    Avx512,
-    #[cfg(target_arch = "aarch64")]
-    Neon,
-}
+pub(super) use crate::Isa;
 
 /// The merge table of the AVX2 and NEON kernels. For the 16 bitmap bits m0 | m1 << 8 of 16
 /// outputs, `merge[0][m0] + merge[1][m1]` is the index of each output: a right output holds its
@@ -105,10 +96,7 @@ struct Exec {
     scratch: [u8; 64],
 }
 
-#[cfg(target_arch = "x86_64")]
-type Kernel = unsafe extern "sysv64" fn(*mut Exec) -> usize;
-#[cfg(target_arch = "aarch64")]
-type Kernel = unsafe extern "C" fn(*mut Exec) -> usize;
+mlir_kernel_type!(Kernel = fn(*mut Exec) -> usize);
 
 #[cfg(target_arch = "x86_64")]
 mlir_kernel!(exec_avx2(a: *mut Exec) -> usize, "mlir/avx2/exec.s");

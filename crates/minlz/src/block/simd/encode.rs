@@ -26,6 +26,7 @@ use super::{
 };
 use crate::block::format::{put_uvarint, put_uvarint_at};
 use crate::block::load_store::{load8, load64};
+use crate::block::table_pool::zeroed;
 use crate::pivco;
 
 /// Go's `LevelSuperFastSIMD` and the other int levels of [`encode_block_simd`].
@@ -182,15 +183,6 @@ impl Scratch {
                 sample: zeroed(),
             },
         })
-    }
-}
-
-/// Allocates `[T::default(); N]` on the heap: `Box::new` builds it on the stack first, and the
-/// streams and tables would overflow a small thread stack.
-fn zeroed<T: Clone + Default, const N: usize>() -> Box<[T; N]> {
-    match vec![T::default(); N].into_boxed_slice().try_into() {
-        Ok(b) => b,
-        Err(_) => unreachable!("the vector has N elements"),
     }
 }
 

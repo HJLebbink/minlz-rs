@@ -331,20 +331,6 @@ pub(super) unsafe fn part_none(ranks: &[u8], bm: &mut [u8], thr: u8) -> usize {
     unsafe { part::<false, false>(ranks.as_ptr(), null, null, bm.as_mut_ptr(), n, thr) }
 }
 
-/// Runs `body` for `s` = 0..8, unrolled: the vertical kernels need constant shift counts
-/// and column indexes, and LLVM does not unroll the larger depths by itself.
-macro_rules! unroll8 {
-    ($s:ident => $body:block) => {
-        unroll8!(@ $s $body 0 1 2 3 4 5 6 7)
-    };
-    (@ $s:ident $body:block $($v:literal)*) => {
-        $({
-            let $s: usize = $v;
-            $body
-        })*
-    };
-}
-
 /// One row of a vertical block: zmm for the 64-lane (512-value) blocks, xmm for the 16-lane
 /// (128-value) ones.
 ///

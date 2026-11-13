@@ -21,21 +21,55 @@
 //! Dispatch is a `match` on [`Tier`] with direct calls: each vector tier's arm checks its
 //! CPU features in its guard, and every other case runs the generic kernel.
 
+/// Runs `body` for `s` = 0..8, unrolled with `s` a constant: the x86-64 kernels need constant
+/// shift counts, masks and column indexes, and LLVM does not unroll the larger bodies by itself.
+#[cfg(all(target_arch = "x86_64", not(miri)))]
+macro_rules! unroll8 {
+    ($s:ident => $body:block) => {
+        unroll8!(@ $s $body 0 1 2 3 4 5 6 7)
+    };
+    (@ $s:ident $body:block $($v:literal)*) => {
+        $({
+            let $s: usize = $v;
+            $body
+        })*
+    };
+}
+
 #[cfg(all(target_arch = "x86_64", not(miri)))]
 mod avx2;
+
+/// The partition tables of upstream's build_tabs and x86_build_tabs, per mask m of 8 lanes:
+/// the first puts the left lanes forward from lane 0 and the right lanes backward from lane 15,
+/// and the second does the same for lanes 8 to 15, loaded at an offset of popcount(m0).
+#[cfg(all(minlz_mlir, not(miri)))]
+const fn p16_tabs() -> ([[u8; 16]; 256], [[u8; 32]; 256]) {
+    let (mut a, mut b) = ([[0u8; 16]; 256], [[0u8; 32]; 256]);
+    let mut m = 0;
+    while m < 256 {
+        let (mut la, mut ra, mut lb, mut rb) = (0, 15, 8, 15);
+        let mut k = 0;
+        while k < 8 {
+            if m >> k & 1 != 0 {
+                (a[m][ra], b[m][rb]) = (k as u8, 8 + k as u8);
+                (ra, rb) = (ra - 1, rb - 1);
+            } else {
+                (a[m][la], b[m][lb]) = (k as u8, 8 + k as u8);
+                (la, lb) = (la + 1, lb + 1);
+            }
+            k += 1;
+        }
+        m += 1;
+    }
+    (a, b)
+}
 #[cfg(all(target_arch = "x86_64", not(miri)))]
 mod avx512;
 mod generic;
 mod generic_exec;
 mod generic_pack;
 mod layout;
-#[cfg(all(
-    any(
-        target_arch = "x86_64",
-        all(target_arch = "aarch64", target_endian = "little")
-    ),
-    not(miri)
-))]
+#[cfg(all(minlz_mlir, not(miri)))]
 mod mlir;
 #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
 mod neon;
@@ -225,34 +259,29 @@ impl fmt::Display for Tier {
 }
 
 impl Tier {
+    /// The vector tiers, best first, with the CPU features each needs.
+    const VECTOR: [(Tier, u32); 3] = [
+        (Tier::Avx512, cpu::PIVCO_AVX512),
+        (Tier::Avx2, cpu::PIVCO_AVX2),
+        (Tier::Neon, cpu::NEON),
+    ];
+
+    /// Returns the vector tiers usable on this CPU, best first.
+    fn usable() -> impl Iterator<Item = Tier> {
+        Self::VECTOR
+            .into_iter()
+            .filter(|&(_, f)| cpu::has(f))
+            .map(|(t, _)| t)
+    }
+
     /// Returns the fastest tier usable on this CPU.
     pub fn best() -> Tier {
-        if cpu::has(cpu::PIVCO_AVX512) {
-            return Tier::Avx512;
-        }
-        if cpu::has(cpu::PIVCO_AVX2) {
-            return Tier::Avx2;
-        }
-        if cpu::has(cpu::NEON) {
-            return Tier::Neon;
-        }
-        Tier::Generic
+        Self::usable().next().unwrap_or(Tier::Generic)
     }
 
     /// Returns all usable tiers, best first; [`Tier::Generic`] is always last.
     pub fn tiers() -> Vec<Tier> {
-        let mut ts = Vec::new();
-        if cpu::has(cpu::PIVCO_AVX512) {
-            ts.push(Tier::Avx512);
-        }
-        if cpu::has(cpu::PIVCO_AVX2) {
-            ts.push(Tier::Avx2);
-        }
-        if cpu::has(cpu::NEON) {
-            ts.push(Tier::Neon);
-        }
-        ts.push(Tier::Generic);
-        ts
+        Self::usable().chain([Tier::Generic]).collect()
     }
 
     /// Sets `ranks[i] = s2r[src[i]]` and returns the largest rank written.

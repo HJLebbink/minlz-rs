@@ -59,9 +59,6 @@ pub struct Target {
     pub kind: Kind,
     /// The features of the target, as an `-mattr` flag.
     pub mattr: &'static str,
-    /// The hand-written file of `mlir/` that holds the instructions of the architecture: the CRC32
-    /// instructions and `@clmul`.
-    pub arch_file: &'static str,
 }
 
 /// The targets, each with only the features that `stream::crc` checks for it.
@@ -79,7 +76,6 @@ pub const TARGETS: [Target; 7] = [
         arch: Arch::X86,
         kind: Kind::Chains { bytes: 1024 },
         mattr: "-mattr=+sse4.2,+crc32",
-        arch_file: "crc32c_x86.mlir",
     },
     Target {
         dir: "pclmul",
@@ -94,7 +90,6 @@ pub const TARGETS: [Target; 7] = [
             sve2: false,
         },
         mattr: "-mattr=+sse4.2,+crc32,+pclmul",
-        arch_file: "crc32c_x86.mlir",
     },
     Target {
         dir: "avx2",
@@ -109,7 +104,6 @@ pub const TARGETS: [Target; 7] = [
             sve2: false,
         },
         mattr: "-mattr=+avx2,+crc32,+pclmul,+vpclmulqdq",
-        arch_file: "crc32c_x86.mlir",
     },
     Target {
         dir: "avx512",
@@ -124,7 +118,6 @@ pub const TARGETS: [Target; 7] = [
             sve2: false,
         },
         mattr: "-mattr=+avx512f,+crc32,+pclmul,+vpclmulqdq,-prefer-256-bit",
-        arch_file: "crc32c_x86.mlir",
     },
     Target {
         dir: "crc",
@@ -132,7 +125,6 @@ pub const TARGETS: [Target; 7] = [
         arch: Arch::Arm,
         kind: Kind::Chains { bytes: 1024 },
         mattr: "-mattr=+v8a,+crc",
-        arch_file: "crc32c_arm.mlir",
     },
     Target {
         dir: "neon",
@@ -147,7 +139,6 @@ pub const TARGETS: [Target; 7] = [
             sve2: false,
         },
         mattr: "-mattr=+v8a,+neon,+aes,+crc",
-        arch_file: "crc32c_arm.mlir",
     },
     Target {
         dir: "sve2",
@@ -162,7 +153,6 @@ pub const TARGETS: [Target; 7] = [
             sve2: true,
         },
         mattr: "-mattr=+v8a,+neon,+aes,+crc,+sve2,+sve2-aes",
-        arch_file: "crc32c_arm.mlir",
     },
 ];
 

@@ -126,17 +126,7 @@ pub(crate) fn read_u32_le(b: &[u8]) -> u32 {
     u32::from_le_bytes([b[0], b[1], b[2], b[3]])
 }
 
-/// Encode an unsigned varint into `dst`; returns bytes written.
-pub(crate) fn put_uvarint(dst: &mut [u8], mut value: u64) -> usize {
-    let mut i = 0;
-    while value >= 0x80 {
-        dst[i] = (value as u8) | 0x80;
-        value >>= 7;
-        i += 1;
-    }
-    dst[i] = value as u8;
-    i + 1
-}
+pub(crate) use crate::block::format::put_uvarint_at as put_uvarint;
 
 /// Decode an unsigned varint from `src`; returns `(value, n_bytes_consumed)`
 /// or `None` on overflow / truncation.  Mirrors Go's `binary.Uvarint`.

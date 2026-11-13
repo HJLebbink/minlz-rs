@@ -198,13 +198,7 @@ impl Tier {
         n: usize,
         st: &mut [usize; 4],
     ) {
-        #[cfg(all(
-            any(
-                target_arch = "x86_64",
-                all(target_arch = "aarch64", target_endian = "little")
-            ),
-            not(miri)
-        ))]
+        #[cfg(all(minlz_mlir, not(miri)))]
         if let Some(isa) = self.isa() {
             // SAFETY: the caller keeps the CPU and memory rules (see # Safety).
             return unsafe { exec_vec(isa, false, dst, lits, c, 0, n, [0; 4], st) };
@@ -230,13 +224,7 @@ impl Tier {
         cur: [usize; 4],
         st: &mut [usize; 4],
     ) {
-        #[cfg(all(
-            any(
-                target_arch = "x86_64",
-                all(target_arch = "aarch64", target_endian = "little")
-            ),
-            not(miri)
-        ))]
+        #[cfg(all(minlz_mlir, not(miri)))]
         if let Some(isa) = self.isa() {
             // SAFETY: the caller keeps the CPU and memory rules (see # Safety).
             return unsafe { exec_vec(isa, true, dst, lits, c, k0, k, cur, st) };
@@ -245,13 +233,7 @@ impl Tier {
     }
 
     /// Returns the target of the tier's MLIR kernels, if it has one.
-    #[cfg(all(
-        any(
-            target_arch = "x86_64",
-            all(target_arch = "aarch64", target_endian = "little")
-        ),
-        not(miri)
-    ))]
+    #[cfg(all(minlz_mlir, not(miri)))]
     fn isa(self) -> Option<super::mlir::Isa> {
         match self {
             #[cfg(target_arch = "x86_64")]
@@ -268,13 +250,7 @@ impl Tier {
     /// the summed match length codes, the operations with literals, the repeats and the escaped
     /// matches. ok is false if the prefix has a token above 135. See `tok_stats`.
     pub(super) fn tok_stats_asm(self, _tok: &[u8]) -> (usize, usize, usize, usize, usize, bool) {
-        #[cfg(all(
-            any(
-                target_arch = "x86_64",
-                all(target_arch = "aarch64", target_endian = "little")
-            ),
-            not(miri)
-        ))]
+        #[cfg(all(minlz_mlir, not(miri)))]
         if let Some(isa) = self.isa() {
             // SAFETY: the tier comes from Tier::best or Tier::tiers, which checked the CPU.
             return unsafe { super::mlir::tok(isa, _tok) };
@@ -286,13 +262,7 @@ impl Tier {
     /// ok is false if the prefix has a length outside 1-33; the sum is exact regardless.
     /// See `ll_stats`.
     pub(super) fn ll_stats_asm(self, _ll: &[u8]) -> (usize, usize, usize, bool) {
-        #[cfg(all(
-            any(
-                target_arch = "x86_64",
-                all(target_arch = "aarch64", target_endian = "little")
-            ),
-            not(miri)
-        ))]
+        #[cfg(all(minlz_mlir, not(miri)))]
         if let Some(isa) = self.isa() {
             // SAFETY: as in tok_stats_asm.
             return unsafe { super::mlir::ll(isa, _ll) };
@@ -303,13 +273,7 @@ impl Tier {
     /// Returns the raw bits of a prefix of offc and its length (Go `simdOffStatsAsm`).
     /// ok is false if the prefix has a symbol outside 1-175. See `off_stats`.
     pub(super) fn off_stats_asm(self, _offc: &[u8]) -> (usize, usize, bool) {
-        #[cfg(all(
-            any(
-                target_arch = "x86_64",
-                all(target_arch = "aarch64", target_endian = "little")
-            ),
-            not(miri)
-        ))]
+        #[cfg(all(minlz_mlir, not(miri)))]
         if let Some(isa) = self.isa() {
             // SAFETY: as in tok_stats_asm.
             return unsafe { super::mlir::off(isa, _offc) };
@@ -341,13 +305,7 @@ impl Chunk<'_> {
 /// dst. c's counts are at least what operations 0 to k read, and cur are the stream positions
 /// after operations 0 to k0. Rule 3 is checked here against those counts; rule 4 is the loops'
 /// own.
-#[cfg(all(
-    any(
-        target_arch = "x86_64",
-        all(target_arch = "aarch64", target_endian = "little")
-    ),
-    not(miri)
-))]
+#[cfg(all(minlz_mlir, not(miri)))]
 #[allow(clippy::too_many_arguments)]
 unsafe fn exec_vec(
     isa: super::mlir::Isa,

@@ -51,10 +51,7 @@ pub(super) enum Isa {
     Sve2,
 }
 
-#[cfg(target_arch = "x86_64")]
-type Kernel = unsafe extern "sysv64" fn(u32, *const u8, usize) -> u32;
-#[cfg(target_arch = "aarch64")]
-type Kernel = unsafe extern "C" fn(u32, *const u8, usize) -> u32;
+mlir_kernel_type!(Kernel = fn(u32, *const u8, usize) -> u32);
 
 /// Declares the kernel in `mlir/$dir/`, with the assembler directives `$pre` in front of the code.
 macro_rules! kernel {
@@ -102,7 +99,7 @@ fn sve2_available() -> bool {
     has!("sve2")
         && has!("sve2-aes")
         // SAFETY: SVE2 includes SVE, which is what rdvl needs.
-        && unsafe { crate::xxh3::mlir::vl_bytes() } == SVE2_BYTES
+        && unsafe { cpu::vl_bytes() } == SVE2_BYTES
 }
 
 impl Isa {
@@ -163,7 +160,7 @@ impl Isa {
             Isa::Sve2 => {
                 // SAFETY: the caller checked isa's features. The SVE2 kernel is only correct at
                 // the vector length it is built for, so at any other the NEON kernel runs.
-                if unsafe { crate::xxh3::mlir::vl_bytes() } == SVE2_BYTES {
+                if unsafe { cpu::vl_bytes() } == SVE2_BYTES {
                     update_sve2
                 } else {
                     update_neon
@@ -213,31 +210,21 @@ mod tests {
     use super::Isa;
     use crate::cpu;
 
-    /// A tier whose instruction set is disabled is not in available(): the bit of each of this
-    /// family's tiers, held on its own, drops that tier.
+    /// A tier whose instruction set is disabled is not in available().
     #[test]
     fn disabled_bit_drops_its_tier() {
-        #[cfg(target_arch = "x86_64")]
-        {
-            {
-                let _d = cpu::Disabled::new(cpu::AVX512);
-                assert!(!Isa::available().contains(&Isa::Avx512), "AVX512 held");
-            }
-            let _d = cpu::Disabled::new(cpu::AVX2);
-            assert!(!Isa::available().contains(&Isa::Avx2), "AVX2 held");
-        }
-        #[cfg(target_arch = "aarch64")]
-        {
-            {
-                let _d = cpu::Disabled::new(cpu::SVE2);
-                assert!(!Isa::available().contains(&Isa::Sve2), "SVE2 held");
-            }
-            let _d = cpu::Disabled::new(cpu::NEON);
-            let v = Isa::available();
-            assert!(
-                !v.contains(&Isa::Neon) && !v.contains(&Isa::Sve2),
-                "NEON held"
-            );
-        }
+        cpu::assert_disabled_drops(
+            Isa::available,
+            &[
+                #[cfg(target_arch = "x86_64")]
+                (cpu::AVX512, &[Isa::Avx512]),
+                #[cfg(target_arch = "x86_64")]
+                (cpu::AVX2, &[Isa::Avx2]),
+                #[cfg(target_arch = "aarch64")]
+                (cpu::SVE2, &[Isa::Sve2]),
+                #[cfg(target_arch = "aarch64")]
+                (cpu::NEON, &[Isa::Neon, Isa::Sve2]),
+            ],
+        );
     }
 }

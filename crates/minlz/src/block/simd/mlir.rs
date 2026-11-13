@@ -27,21 +27,9 @@
 
 use super::{MAX_LEN, OFF_TAB};
 
-/// The targets with kernels.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Isa {
-    #[cfg(target_arch = "x86_64")]
-    Avx2,
-    #[cfg(target_arch = "x86_64")]
-    Avx512,
-    #[cfg(target_arch = "aarch64")]
-    Neon,
-}
+pub(super) use crate::Isa;
 
-#[cfg(target_arch = "x86_64")]
-type Kernel = unsafe extern "sysv64" fn(*const u8, usize, *mut u64) -> u64;
-#[cfg(target_arch = "aarch64")]
-type Kernel = unsafe extern "C" fn(*const u8, usize, *mut u64) -> u64;
+mlir_kernel_type!(Kernel = fn(*const u8, usize, *mut u64) -> u64);
 
 /// Declares the tok, ll and off kernels in `mlir/$dir/`.
 macro_rules! kernels {
@@ -225,10 +213,7 @@ impl Exec {
     }
 }
 
-#[cfg(target_arch = "x86_64")]
-type ExecKernel = unsafe extern "sysv64" fn(*mut Exec);
-#[cfg(target_arch = "aarch64")]
-type ExecKernel = unsafe extern "C" fn(*mut Exec);
+mlir_kernel_type!(ExecKernel = fn(*mut Exec));
 
 /// Declares the operation loops in `mlir/$dir/exec/`: plain, with delta literals, with the
 /// no-overlap flag, and with both.

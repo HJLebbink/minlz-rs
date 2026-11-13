@@ -26,7 +26,10 @@ use crate::stream::format::{
     CHUNK_TYPE_UNCOMPRESSED_DATA, DEFAULT_BLOCK_SIZE, MAGIC_BODY_LEN, MAX_BLOCK_SIZE,
     STREAM_FLAG_SIMD, get_uvarint, make_stream_header, put_uvarint, read_chunk_len,
 };
-use crate::stream::{Error, MtWriterBuilder, ReadSeeker, Reader, ReaderBuilder, WriterBuilder};
+use crate::stream::{
+    Error, MtWriterBuilder, ReadSeeker, Reader, ReaderBuilder, WriterBuilder, write_stream,
+    xorshift,
+};
 
 // -------------------- builders --------------------
 
@@ -865,12 +868,6 @@ fn rand_bytes(seed: u64, n: usize) -> Vec<u8> {
             x as u8
         })
         .collect()
-}
-
-fn write_stream(data: &[u8], b: WriterBuilder) -> Vec<u8> {
-    let mut w = b.build(Vec::new()).unwrap();
-    w.write_all(data).unwrap();
-    w.finish().unwrap()
 }
 
 /// Offset of the `nth` (1-based) chunk whose type `pick` accepts.
@@ -2033,16 +2030,6 @@ fn reader_simd_flag_strict() {
 }
 
 // -------------------- seeded ports of Go's stream fuzzers --------------------
-
-fn xorshift(seed: u64) -> impl FnMut() -> u64 {
-    let mut x = seed.wrapping_add(0x9E37_79B9_7F4A_7C15);
-    move || {
-        x ^= x << 13;
-        x ^= x >> 7;
-        x ^= x << 17;
-        x
-    }
-}
 
 /// Inputs for the stream fuzzers: text, random bytes, runs and a mix, of sizes around the
 /// block sizes.

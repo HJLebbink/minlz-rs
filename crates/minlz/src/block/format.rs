@@ -86,7 +86,7 @@ pub(super) fn put_uvarint(dst: &mut Vec<u8>, mut v: u64) {
 }
 
 /// Write the unsigned LEB128 of `v` to the start of `dst`; returns its size.
-pub(super) fn put_uvarint_at(dst: &mut [u8], mut v: u64) -> usize {
+pub(crate) fn put_uvarint_at(dst: &mut [u8], mut v: u64) -> usize {
     let mut i = 0;
     while v >= 0x80 {
         dst[i] = (v as u8) | 0x80;

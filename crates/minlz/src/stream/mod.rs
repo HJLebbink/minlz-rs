@@ -85,3 +85,24 @@ pub(crate) use reader::simd_chunk_header;
 pub use reader::{Reader, ReaderBuilder, UserChunkCb};
 pub use seek::ReadSeeker;
 pub use writer::{Writer, WriterBuilder, Written};
+
+/// A xorshift64 generator of test data, seeded with `seed`.
+#[cfg(test)]
+fn xorshift(seed: u64) -> impl FnMut() -> u64 {
+    let mut x = seed.wrapping_add(0x9E37_79B9_7F4A_7C15);
+    move || {
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        x
+    }
+}
+
+/// Returns data written as a stream by the writer that b builds.
+#[cfg(test)]
+pub(crate) fn write_stream(data: &[u8], b: WriterBuilder) -> Vec<u8> {
+    use std::io::Write;
+    let mut w = b.build(Vec::new()).unwrap();
+    w.write_all(data).unwrap();
+    w.finish().unwrap()
+}

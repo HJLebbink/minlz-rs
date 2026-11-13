@@ -21,13 +21,7 @@ mod decode;
 #[cfg(test)]
 mod decode_tests;
 mod exec;
-#[cfg(all(
-    any(
-        target_arch = "x86_64",
-        all(target_arch = "aarch64", target_endian = "little")
-    ),
-    not(miri)
-))]
+#[cfg(all(minlz_mlir, not(miri)))]
 mod mlir;
 
 pub(crate) use decode::{decode_simd, decode_simd_hash};

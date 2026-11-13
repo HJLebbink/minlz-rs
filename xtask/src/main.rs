@@ -98,6 +98,15 @@ impl Arch {
         }
     }
 
+    /// Returns the file in `mlir/` that holds the CRC32 instructions and `@clmul` of the
+    /// architecture.
+    fn crc32c(self) -> &'static str {
+        match self {
+            Arch::Arm => "crc32c_arm.mlir",
+            Arch::X86 => "crc32c_x86.mlir",
+        }
+    }
+
     /// Returns what starts a comment in the assembly.
     fn comment(self) -> &'static str {
         match self {
@@ -321,7 +330,7 @@ fn mlir() -> Result<(), String> {
         write(&dir.join("crc32c").join(format!("{}.mlir", t.file)), &file)?;
         // The target file defines the state type that the steps of the halving chain are written
         // in, so it goes in front of them.
-        let arch = read(t.arch_file)?;
+        let arch = read(t.arch.crc32c())?;
         let steps: Result<Vec<String>, String> =
             t.step_files().iter().map(|step| read(step)).collect();
         let kernel = read(t.kernel())?;

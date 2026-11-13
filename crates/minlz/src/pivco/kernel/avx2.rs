@@ -254,45 +254,6 @@ fn splat(v: u8) -> __m256i {
     _mm256_set1_epi8(v as i8)
 }
 
-/// Runs $body for $s = 0..8, as constants: the flat kernels need their shifts and masks
-/// folded, and LLVM leaves the larger bodies rolled.
-macro_rules! unroll8 {
-    ($s:ident => $body:block) => {{
-        {
-            let $s = 0usize;
-            $body
-        }
-        {
-            let $s = 1usize;
-            $body
-        }
-        {
-            let $s = 2usize;
-            $body
-        }
-        {
-            let $s = 3usize;
-            $body
-        }
-        {
-            let $s = 4usize;
-            $body
-        }
-        {
-            let $s = 5usize;
-            $body
-        }
-        {
-            let $s = 6usize;
-            $body
-        }
-        {
-            let $s = 7usize;
-            $body
-        }
-    }};
-}
-
 /// Aligns a table to a cache line, as Go's RODATA blobs.
 #[repr(C, align(64))]
 struct Align64<T>(T);
@@ -373,30 +334,24 @@ unsafe fn store_exact(p: *mut u8, k: usize, x: __m128i) {
 // ---------------------------------------------------------------------------------------
 // Encoder kernels (enc_avx2.go).
 
-/// The partition tables of x86_build_tabs (primitives_x86.h:907-952), per mask m: tabA
-/// (lefts forward from lane 0, rights backward from 15), tabB0 (the same for lanes 8..15
-/// at pc0 = 0, loaded at +pc0) and ctabR (rights first, 0x80 fill). x86_pc8 and
-/// x86_ctab_l/pre_l are not needed: POPCNT, and no left compaction by table.
-#[allow(clippy::type_complexity)]
-const fn p16_tabs() -> ([[u8; 16]; 256], [[u8; 32]; 256], [[u8; 16]; 256]) {
-    let (mut ta, mut tb, mut tc) = ([[0; 16]; 256], [[0; 32]; 256], [[0x80; 16]; 256]);
+/// The ctabR table of x86_build_tabs (primitives_x86.h:907-952), per mask m: the right lanes
+/// first, 0x80 fill. Its tabA and tabB0 are [`super::p16_tabs`]. x86_pc8 and x86_ctab_l/pre_l
+/// are not needed: POPCNT, and no left compaction by table.
+const fn ctab_r() -> [[u8; 16]; 256] {
+    let mut t = [[0x80; 16]; 256];
     let mut m = 0;
     while m < 256 {
-        let (mut al, mut ar, mut bl, mut br, mut nr) = (0, 15, 8, 15, 0);
-        let mut k = 0;
+        let (mut nr, mut k) = (0, 0);
         while k < 8 {
             if m >> k & 1 != 0 {
-                (ta[m][ar], tb[m][br], tc[m][nr]) = (k as u8, 8 + k as u8, k as u8);
-                (ar, br, nr) = (ar - 1, br - 1, nr + 1);
-            } else {
-                (ta[m][al], tb[m][bl]) = (k as u8, 8 + k as u8);
-                (al, bl) = (al + 1, bl + 1);
+                t[m][nr] = k as u8;
+                nr += 1;
             }
             k += 1;
         }
         m += 1;
     }
-    (ta, tb, tc)
+    t
 }
 
 /// preR[nlo][m]: the high byte's rights (8+k) from lane nlo on, 0x80 fill.
@@ -421,12 +376,11 @@ const fn pre_r() -> [[[u8; 16]; 256]; 9] {
     t
 }
 
-#[allow(clippy::type_complexity)]
-const P16_TABS: ([[u8; 16]; 256], [[u8; 32]; 256], [[u8; 16]; 256]) = p16_tabs();
-// SAFETY (all three): same size, and every bit pattern is a valid __m128i.
+const P16_TABS: ([[u8; 16]; 256], [[u8; 32]; 256]) = super::p16_tabs();
+// SAFETY (both): same size, and every bit pattern is a valid __m128i.
 static P16_A: [__m128i; 256] = unsafe { transmute(P16_TABS.0) };
 static P16_B: Align64<[[u8; 32]; 256]> = Align64(P16_TABS.1);
-static CTAB_R: [__m128i; 256] = unsafe { transmute(P16_TABS.2) };
+static CTAB_R: [__m128i; 256] = unsafe { transmute(ctab_r()) };
 static PRE_R: [[__m128i; 256]; 9] = unsafe { transmute(pre_r()) };
 
 /// Ports prim_enc_init's 2tab loop (primitives_x86.h:1284-1314): each pair of symbols is

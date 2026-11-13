@@ -59,7 +59,7 @@ mod encode_l0;
 mod encode_l1;
 mod encode_l2;
 mod encode_l3;
-mod format;
+pub(crate) mod format;
 mod hash;
 mod load_store;
 mod match_len;

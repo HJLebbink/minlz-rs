@@ -26,12 +26,11 @@
 //!
 //! [`go_seeds`] also gives the tests that run Go's seed corpora their inputs.
 
-use std::io::Write;
 use std::path::Path;
 
 use crate::block::simd::{MIN_SAVING, simd_header};
 use crate::block::{Level, MAX_BLOCK_SIZE, encode};
-use crate::stream::WriterBuilder;
+use crate::stream::{WriterBuilder, write_stream};
 use crate::unzip::{simd_fixtures, unzip};
 
 fn manifest() -> &'static Path {
@@ -160,12 +159,6 @@ pub(crate) fn simd_seed(block: &[u8]) -> Option<Vec<u8>> {
     Some([&extra.to_le_bytes()[..], body].concat())
 }
 
-fn stream(data: &[u8], b: WriterBuilder) -> Vec<u8> {
-    let mut w = b.build(Vec::new()).unwrap();
-    w.write_all(data).unwrap();
-    w.finish().unwrap()
-}
-
 /// Seeds of the block and stream targets, as Go's `FuzzEncodingBlocks`, `FuzzDecodeBlock`,
 /// `FuzzDecodeSIMD`, `FuzzStreamEncode` and `FuzzStreamDecode` add them.
 #[test]
@@ -197,9 +190,9 @@ fn write_fuzz_seeds() {
         dec.extend([bal, bal_simd, small_simd]);
         let w = || WriterBuilder::new().block_size(8 << 10);
         for s in [
-            stream(b, w()),
-            stream(b, w().level(Level::BalancedSimd).append_index()),
-            stream(b, w().uncompressed().append_index()),
+            write_stream(b, w()),
+            write_stream(b, w().level(Level::BalancedSimd).append_index()),
+            write_stream(b, w().uncompressed().append_index()),
         ] {
             // The mode of Go's reader: two threads, no checksums, 1 MiB blocks.
             sdec.push([&[0x0d][..], &s].concat());

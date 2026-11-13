@@ -45,10 +45,7 @@ pub(super) enum Isa {
     Avx512,
 }
 
-#[cfg(target_arch = "aarch64")]
-type Kernel = unsafe extern "C" fn(*mut u64, *const u8, usize, *const u8);
-#[cfg(target_arch = "x86_64")]
-type Kernel = unsafe extern "sysv64" fn(*mut u64, *const u8, usize, *const u8);
+mlir_kernel_type!(Kernel = fn(*mut u64, *const u8, usize, *const u8));
 
 /// Declares the accum and blocks kernels in `mlir/$dir/`, with the assembler directive `$pre` in
 /// front of the code.
@@ -128,12 +125,12 @@ impl Isa {
             #[cfg(target_arch = "aarch64")]
             Isa::Sve => {
                 // SAFETY: the caller checked SVE.
-                sve_kernels(unsafe { vl_bytes() }).unwrap_or((accum_neon, blocks_neon))
+                sve_kernels(unsafe { cpu::vl_bytes() }).unwrap_or((accum_neon, blocks_neon))
             }
             #[cfg(target_arch = "aarch64")]
             Isa::Sve2 => {
                 // SAFETY: the caller checked SVE2.
-                sve2_kernels(unsafe { vl_bytes() }).unwrap_or((accum_neon, blocks_neon))
+                sve2_kernels(unsafe { cpu::vl_bytes() }).unwrap_or((accum_neon, blocks_neon))
             }
             #[cfg(target_arch = "x86_64")]
             Isa::Sse2 => (accum_sse2, blocks_sse2),
@@ -181,7 +178,8 @@ pub(super) unsafe fn blocks(isa: Isa, a: &mut [u64; 8], p: &[u8], n: usize) {
 #[cfg(target_arch = "aarch64")]
 fn sve_available() -> bool {
     // SAFETY: vl_bytes runs only once SVE is detected.
-    std::arch::is_aarch64_feature_detected!("sve") && sve_kernels(unsafe { vl_bytes() }).is_some()
+    std::arch::is_aarch64_feature_detected!("sve")
+        && sve_kernels(unsafe { cpu::vl_bytes() }).is_some()
 }
 
 /// Returns the (accum, blocks) SVE kernels for a vector length of vl bytes, if it has them.
@@ -198,7 +196,8 @@ fn sve_kernels(vl: usize) -> Option<(Kernel, Kernel)> {
 #[cfg(target_arch = "aarch64")]
 fn sve2_available() -> bool {
     // SAFETY: vl_bytes runs only once SVE2 is detected, and SVE2 implies SVE.
-    std::arch::is_aarch64_feature_detected!("sve2") && sve2_kernels(unsafe { vl_bytes() }).is_some()
+    std::arch::is_aarch64_feature_detected!("sve2")
+        && sve2_kernels(unsafe { cpu::vl_bytes() }).is_some()
 }
 
 /// Returns the (accum, blocks) SVE2 kernels for a vector length of vl bytes, if it has them. Every
@@ -212,58 +211,26 @@ fn sve2_kernels(vl: usize) -> Option<(Kernel, Kernel)> {
     }
 }
 
-/// Returns the SVE vector length in bytes.
-///
-/// # Safety
-///
-/// The CPU has SVE.
-#[cfg(target_arch = "aarch64")]
-#[inline]
-pub(crate) unsafe fn vl_bytes() -> usize {
-    let n: usize;
-    // SAFETY: the caller checked SVE. The asm is not `pure`: the vector length can change between
-    // calls, so the compiler must not merge two reads.
-    unsafe {
-        core::arch::asm!(
-            ".arch_extension sve",
-            "rdvl {n}, #1",
-            n = out(reg) n,
-            options(nomem, nostack, preserves_flags)
-        );
-    }
-    n
-}
-
 #[cfg(test)]
 mod tests {
     use super::Isa;
     use crate::cpu;
 
-    /// A tier whose instruction set is disabled is not in available(): the bit of each of this
-    /// family's tiers, held on its own, drops that tier.
+    /// A tier whose instruction set is disabled is not in available().
     #[test]
     fn disabled_bit_drops_its_tier() {
-        #[cfg(target_arch = "x86_64")]
-        {
-            {
-                let _d = cpu::Disabled::new(cpu::AVX512);
-                assert!(!Isa::available().contains(&Isa::Avx512), "AVX512 held");
-            }
-            let _d = cpu::Disabled::new(cpu::AVX2);
-            assert!(!Isa::available().contains(&Isa::Avx2), "AVX2 held");
-        }
-        #[cfg(target_arch = "aarch64")]
-        {
-            {
-                let _d = cpu::Disabled::new(cpu::SVE2);
-                assert!(!Isa::available().contains(&Isa::Sve2), "SVE2 held");
-            }
-            let _d = cpu::Disabled::new(cpu::NEON);
-            let v = Isa::available();
-            assert!(
-                !v.contains(&Isa::Neon) && !v.contains(&Isa::Sve),
-                "NEON held"
-            );
-        }
+        cpu::assert_disabled_drops(
+            Isa::available,
+            &[
+                #[cfg(target_arch = "x86_64")]
+                (cpu::AVX512, &[Isa::Avx512]),
+                #[cfg(target_arch = "x86_64")]
+                (cpu::AVX2, &[Isa::Avx2]),
+                #[cfg(target_arch = "aarch64")]
+                (cpu::SVE2, &[Isa::Sve2]),
+                #[cfg(target_arch = "aarch64")]
+                (cpu::NEON, &[Isa::Neon, Isa::Sve]),
+            ],
+        );
     }
 }
