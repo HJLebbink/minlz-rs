@@ -42,6 +42,19 @@ pub(super) const OVERSHOOT_PAD: usize = 16;
 /// - The bytes in `dst_ptr[..dlen]` may be uninitialised on entry; on
 ///   `Ok(())` they are fully written.  The padding region is undefined.
 pub(super) unsafe fn minlz_decode(dst_ptr: *mut u8, dlen: usize, src: &[u8]) -> Result<(), Error> {
+    // On Sapphire Rapids the loops below run up to 15% slower at the wrong offset within a
+    // 64-byte fetch window, and the linker aligns a function to 16 bytes only. The directive pads
+    // to a 64-byte boundary and then 16 bytes more, so the loops keep the offset that measured
+    // fastest, whatever else the binary holds. The padding is NOPs, run once per call. A change
+    // to the code between here and the loops moves them: time block-decode/twain-4m/Fastest after
+    // one.
+    #[cfg(all(target_arch = "x86_64", not(miri)))]
+    unsafe {
+        core::arch::asm!(
+            ".p2align 6\n\t.space 16, 0x90",
+            options(nostack, nomem, preserves_flags)
+        );
+    }
     let src_len = src.len();
     let src_ptr = src.as_ptr();
 
