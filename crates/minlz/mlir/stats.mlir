@@ -37,9 +37,7 @@ func.func private @bad(%m: !v, %max: i8) -> i64 {
 
 // store writes x to r + 8·i.
 func.func private @store(%r: !p, %i: index, %x: i64) {
-  %c8 = arith.constant 8 : index
-  %o = arith.muli %i, %c8 : index
-  %q = func.call @at(%r, %o) : (!p, index) -> !p
+  %q = func.call @at8(%r, %i) : (!p, index) -> !p
   ptr.store %x, %q alignment = 8 : i64, !p
   return
 }

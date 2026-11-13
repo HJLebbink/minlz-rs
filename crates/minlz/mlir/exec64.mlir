@@ -343,9 +343,26 @@ func.func private @expand_batch(%a: !p, %k: index, %m: index, %raise: i1) {
   return
 }
 
+// esc_index loads the escape index from word 15 of a; see @escape in exec.mlir.
+func.func private @esc_index(%a: !p, %g: index) -> index {
+  %c15 = arith.constant 15 : index
+  %g0 = func.call @arg(%a, %c15) : (!p, index) -> index
+  return %g0 : index
+}
+
+// esc_next stores the escape index past the byte it consumed, in word 15 of a. The loops carry no
+// escape value, which leaves their registers to the copies; see @escape in exec.mlir.
+func.func private @esc_next(%a: !p, %g2: index) -> index {
+  %c0 = arith.constant 0 : index
+  %c15 = arith.constant 15 : index
+  func.call @set(%a, %c15, %g2) : (!p, index, index) -> ()
+  return %c0 : index
+}
+
 // copy_one runs operation j of the batch of 64 in the buffer of a; see @op.
 func.func private @copy_one(%a: !p, %dst: !p, %j: index, %delta: i1, %flat: i1,
     %fd: i1, %dstP: !p, %litsP: !p, %x: index) -> (!p, !p, index) {
+  %c0 = arith.constant 0 : index
   %c4 = arith.constant 4 : index
   %c512 = arith.constant 512 : index
   %lens = func.call @lens(%a) : (!p) -> !p
@@ -357,8 +374,9 @@ func.func private @copy_one(%a: !p, %dst: !p, %j: index, %delta: i1, %flat: i1,
   %oq = func.call @at(%offs, %jo) : (!p, index) -> !p
   %o32 = ptr.load %oq alignment = 4 : !p -> i32
   %o = arith.index_castui %o32 : i32 to index
-  %s:2 = func.call @op(%a, %dst, %t, %len, %o, %delta, %flat, %fd, %dstP, %litsP, %x)
-      : (!p, !p, index, index, index, i1, i1, i1, !p, !p, index) -> (!p, !p)
+  // The escape index lives in a, so the copy loop carries none of it.
+  %s:3 = func.call @op(%a, %dst, %t, %len, %o, %delta, %flat, %fd, %dstP, %litsP, %x, %c0)
+      : (!p, !p, index, index, index, i1, i1, i1, !p, !p, index, index) -> (!p, !p, index)
   return %s#0, %s#1, %o : !p, !p, index
 }
 

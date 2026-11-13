@@ -33,9 +33,7 @@
 
 // set writes x to word i of a.
 func.func private @set(%a: !p, %i: index, %x: index) {
-  %c8 = arith.constant 8 : index
-  %o = arith.muli %i, %c8 : index
-  %q = func.call @at(%a, %o) : (!p, index) -> !p
+  %q = func.call @at8(%a, %i) : (!p, index) -> !p
   %w = arith.index_castui %x : index to i64
   ptr.store %w, %q alignment = 8 : i64, !p
   return
@@ -63,20 +61,20 @@ func.func private @unlikely(%c: i1) -> i1 {
   return %r : i1
 }
 
-// escape returns the length 33 + e for the next escape byte e, and moves the escape index in a
-// past it. Only escapes use the index, so it stays in memory.
-func.func private @escape(%a: !p) -> index {
+// escape returns the length 33 + e for the escape byte e, and the escape index the loops carry
+// after it. Each structure file says where the index lives: @esc_index reads it and @esc_next
+// takes the index past the byte it consumed.
+func.func private @escape(%a: !p, %g: index) -> (index, index) {
   %c1 = arith.constant 1 : index
   %c6 = arith.constant 6 : index
-  %c15 = arith.constant 15 : index
   %c33 = arith.constant 33 : index
   %esc = func.call @argp(%a, %c6) : (!p, index) -> !p
-  %g = func.call @arg(%a, %c15) : (!p, index) -> index
-  %e = func.call @byte(%esc, %g) : (!p, index) -> index
-  %g2 = arith.addi %g, %c1 : index
-  func.call @set(%a, %c15, %g2) : (!p, index, index) -> ()
+  %g0 = func.call @esc_index(%a, %g) : (!p, index) -> index
+  %e = func.call @byte(%esc, %g0) : (!p, index) -> index
+  %g1 = arith.addi %g0, %c1 : index
+  %gn = func.call @esc_next(%a, %g1) : (!p, index) -> index
   %n = arith.addi %e, %c33 : index
-  return %n : index
+  return %n, %gn : index, index
 }
 
 // long copies the bytes of an escaped length n after the first 32, from s to d, 32 bytes at a
@@ -144,10 +142,11 @@ func.func private @dist(%p: !p, %q: !p) -> index {
 // op runs an operation with token t, literal length len (0 without literals) and offset o, after
 // the offset x. It copies at the output cursor dstP and the literal cursor litsP, pointers into
 // dst and lits, and returns them after it; on aarch64 a load or store at a pointer needs no add
-// before it. With delta, its first 32 literals are added to their references. With flat, the
-// chunk has the no-overlap flag, and with fd the offset is raised here.
+// before it. It takes the escape index g and returns the one the loops carry after it. With
+// delta, its first 32 literals are added to their references. With flat, the chunk has the
+// no-overlap flag, and with fd the offset is raised here.
 func.func private @op(%a: !p, %dst: !p, %t: index, %len: index, %o: index, %delta: i1,
-    %flat: i1, %fd: i1, %dstP: !p, %litsP: !p, %x: index) -> (!p, !p) {
+    %flat: i1, %fd: i1, %dstP: !p, %litsP: !p, %x: index, %g: index) -> (!p, !p, index) {
   %c0 = arith.constant 0 : index
   %c1 = arith.constant 1 : index
   %c2 = arith.constant 2 : index
@@ -201,12 +200,12 @@ func.func private @op(%a: !p, %dst: !p, %t: index, %len: index, %o: index, %delt
   // Literal lengths from 33 on are 33 plus an escape, copied after the first 32 bytes.
   %llong0 = arith.cmpi uge, %len, %c33 : index
   %llong = func.call @unlikely(%llong0) : (i1) -> i1
-  %n = scf.if %llong -> index {
-    %ne = func.call @escape(%a) : (!p) -> index
+  %n, %g1 = scf.if %llong -> (index, index) {
+    %ne, %g0 = func.call @escape(%a, %g) : (!p, index) -> (index, index)
     func.call @long(%dstP, %litsP, %ne) : (!p, !p, index) -> ()
-    scf.yield %ne : index
+    scf.yield %ne, %g0 : index, index
   } else {
-    scf.yield %len : index
+    scf.yield %len, %g : index, index
   }
   %dstP1 = func.call @at(%dstP, %n) : (!p, index) -> !p
   // The match copies from the offset clamped to the position. Flat chunks raise it to
@@ -250,21 +249,21 @@ func.func private @op(%a: !p, %dst: !p, %t: index, %len: index, %o: index, %delt
   // 32.
   %mlong0 = arith.cmpi uge, %ml, %c33 : index
   %mlong = func.call @unlikely(%mlong0) : (i1) -> i1
-  %mn = scf.if %mlong -> index {
+  %mn, %g2 = scf.if %mlong -> (index, index) {
     %close = arith.cmpi ult, %r, %c32 : index
     %bad = arith.andi %notflat, %close : i1
     scf.if %bad {
       func.call @set(%a, %c13, %c1) : (!p, index, index) -> ()
     }
-    %n2 = func.call @escape(%a) : (!p) -> index
-    func.call @long(%dstP1, %srcP, %n2) : (!p, !p, index) -> ()
-    scf.yield %n2 : index
+    %me, %g0 = func.call @escape(%a, %g1) : (!p, index) -> (index, index)
+    func.call @long(%dstP1, %srcP, %me) : (!p, !p, index) -> ()
+    scf.yield %me, %g0 : index, index
   } else {
-    scf.yield %ml : index
+    scf.yield %ml, %g1 : index, index
   }
   %dstP2 = func.call @at(%dstP1, %mn) : (!p, index) -> !p
   %litsP1 = func.call @at(%litsP, %n) : (!p, index) -> !p
-  return %dstP2, %litsP1 : !p, !p
+  return %dstP2, %litsP1, %g2 : !p, !p, index
 }
 
 // minlz_exec_plain runs the operations of a chunk.

@@ -5,6 +5,20 @@
 // The literal lengths and offset symbols of a batch are expanded into a word each, and @op8
 // decodes each offset with a table lookup. The 8 operations of a batch are unrolled, and each
 // batch expands the next before it runs.
+//
+// The loops carry the escape index in a register: only escapes read it, and the loops read word 15
+// of a once, before they start, so the escape branches never touch a for it.
+
+// esc_index returns the escape index the loops carry; see @escape in exec.mlir.
+func.func private @esc_index(%a: !p, %g: index) -> index {
+  return %g : index
+}
+
+// esc_next returns the escape index past the byte it consumed, which the loops carry; see @escape
+// in exec.mlir.
+func.func private @esc_next(%a: !p, %g2: index) -> index {
+  return %g2 : index
+}
 
 // expand2 returns the literal lengths and the offset symbols of the 8 operations at tok + k, a byte
 // each, and the offsets li and oi in ll and offc after them. Operations without literals get
@@ -52,8 +66,8 @@ func.func private @lane8o(%w: i64, %k: i64) -> i64 {
 // cursor dstP and the literal cursor litsP, and returns the cursors after it, the offset and p.
 // See @op.
 func.func private @op8(%a: !p, %dst: !p, %raw: !p, %tab: !p, %k: i64, %tw: i64,
-    %lw: i64, %sw: i64, %delta: i1, %flat: i1, %dstP: !p, %litsP: !p, %x: index, %p: index)
-    -> (!p, !p, index, index) {
+    %lw: i64, %sw: i64, %delta: i1, %flat: i1, %dstP: !p, %litsP: !p, %x: index, %p: index,
+    %g: index) -> (!p, !p, index, index, index) {
   %c0 = arith.constant 0 : index
   %c3 = arith.constant 3 : index
   %c7 = arith.constant 7 : index
@@ -88,9 +102,9 @@ func.func private @op8(%a: !p, %dst: !p, %raw: !p, %tab: !p, %k: i64, %tw: i64,
   %on = arith.addi %base, %bits : index
   %new = arith.cmpi ne, %on, %c0 : index
   %o = arith.select %new, %on, %x : index
-  %s:2 = func.call @op(%a, %dst, %t, %len, %o, %delta, %flat, %flat, %dstP, %litsP, %x)
-      : (!p, !p, index, index, index, i1, i1, i1, !p, !p, index) -> (!p, !p)
-  return %s#0, %s#1, %o, %p2 : !p, !p, index, index
+  %s:3 = func.call @op(%a, %dst, %t, %len, %o, %delta, %flat, %flat, %dstP, %litsP, %x, %g)
+      : (!p, !p, index, index, index, i1, i1, i1, !p, !p, index, index) -> (!p, !p, index)
+  return %s#0, %s#1, %o, %p2, %s#2 : !p, !p, index, index, index
 }
 
 // run runs the operations of the kernel arguments a in batches of 8. Each batch takes the words
@@ -110,6 +124,7 @@ func.func private @run(%a: !p, %delta: i1, %flat: i1) {
   %c10 = arith.constant 10 : index
   %c11 = arith.constant 11 : index
   %c12 = arith.constant 12 : index
+  %c15 = arith.constant 15 : index
   %j0 = arith.constant 0 : i64
   %j1 = arith.constant 1 : i64
   %j2 = arith.constant 2 : i64
@@ -122,18 +137,20 @@ func.func private @run(%a: !p, %delta: i1, %flat: i1) {
   %ones0 = arith.constant 72340172838076673 : i64
   // Opaque to LLVM, which would otherwise make c - f in expand8 a second multiply.
   %ones = llvm.inline_asm "", "=r,0" %ones0 : (i64) -> i64
-  %dst = func.call @argp(%a, %c0) : (!p, index) -> !p
-  %lits = func.call @argp(%a, %c1) : (!p, index) -> !p
-  %tok = func.call @argp(%a, %c2) : (!p, index) -> !p
-  %ll = func.call @argp(%a, %c3) : (!p, index) -> !p
-  %offc = func.call @argp(%a, %c4) : (!p, index) -> !p
-  %raw = func.call @argp(%a, %c5) : (!p, index) -> !p
-  %tab = func.call @argp(%a, %c7) : (!p, index) -> !p
-  %n = func.call @arg(%a, %c8) : (!p, index) -> index
+  %dst = func.call @roargp(%a, %c0) : (!p, index) -> !p
+  %lits = func.call @roargp(%a, %c1) : (!p, index) -> !p
+  %tok = func.call @roargp(%a, %c2) : (!p, index) -> !p
+  %ll = func.call @roargp(%a, %c3) : (!p, index) -> !p
+  %offc = func.call @roargp(%a, %c4) : (!p, index) -> !p
+  %raw = func.call @roargp(%a, %c5) : (!p, index) -> !p
+  %tab = func.call @roargp(%a, %c7) : (!p, index) -> !p
+  %n = func.call @roarg(%a, %c8) : (!p, index) -> index
   %pos = func.call @arg(%a, %c9) : (!p, index) -> index
   %d = func.call @arg(%a, %c10) : (!p, index) -> index
   %l = func.call @arg(%a, %c11) : (!p, index) -> index
   %last = func.call @arg(%a, %c12) : (!p, index) -> index
+  // The escape index the loops carry, read from word 15 of a before they start.
+  %g0 = func.call @roarg(%a, %c15) : (!p, index) -> index
   %any = arith.cmpi ne, %n, %c0 : index
   scf.if %any {
     // The cursors of the batch: the output and literal positions as pointers.
@@ -142,16 +159,16 @@ func.func private @run(%a: !p, %delta: i1, %flat: i1) {
     %lw0, %sw0, %li0, %oi0 = func.call @expand2(%tok, %c0, %ll, %c0, %offc, %c0, %ones)
         : (!p, index, !p, index, !p, index, i64) -> (i64, i64, index, index)
     // Whole batches. k is the index of the next token, left the operations from it on.
-    %b:10 = scf.while (%k = %c0, %left = %n, %lw = %lw0, %sw = %sw0, %li = %li0, %oi = %oi0,
-        %x0 = %last, %p0 = %pos, %dstP = %dstP0, %litsP = %litsP0)
-        : (index, index, i64, i64, index, index, index, index, !p, !p)
-        -> (index, index, i64, i64, index, index, index, index, !p, !p) {
+    %b:11 = scf.while (%k = %c0, %left = %n, %lw = %lw0, %sw = %sw0, %li = %li0, %oi = %oi0,
+        %x0 = %last, %p0 = %pos, %dstP = %dstP0, %litsP = %litsP0, %g = %g0)
+        : (index, index, i64, i64, index, index, index, index, !p, !p, index)
+        -> (index, index, i64, i64, index, index, index, index, !p, !p, index) {
       %more = arith.cmpi uge, %left, %c8 : index
-      scf.condition(%more) %k, %left, %lw, %sw, %li, %oi, %x0, %p0, %dstP, %litsP
-          : index, index, i64, i64, index, index, index, index, !p, !p
+      scf.condition(%more) %k, %left, %lw, %sw, %li, %oi, %x0, %p0, %dstP, %litsP, %g
+          : index, index, i64, i64, index, index, index, index, !p, !p, index
     } do {
     ^bb0(%k: index, %left: index, %lw: i64, %sw: i64, %li: index, %oi: index, %x0: index,
-        %p0: index, %dstP: !p, %litsP: !p):
+        %p0: index, %dstP: !p, %litsP: !p, %g: index):
       %tw = func.call @word(%tok, %k) : (!p, index) -> i64
       %k2 = arith.addi %k, %c8 : index
       %left2 = arith.subi %left, %c8 : index
@@ -163,65 +180,65 @@ func.func private @run(%a: !p, %delta: i1, %flat: i1) {
       } else {
         scf.yield %lw, %sw, %li, %oi : i64, i64, index, index
       }
-      %s0:4 = func.call @op8(%a, %dst, %raw, %tab, %j0, %tw, %lw, %sw, %delta, %flat,
-          %dstP, %litsP, %x0, %p0)
-          : (!p, !p, !p, !p, i64, i64, i64, i64, i1, i1, !p, !p, index, index)
-          -> (!p, !p, index, index)
-      %s1:4 = func.call @op8(%a, %dst, %raw, %tab, %j1, %tw, %lw, %sw, %delta, %flat,
-          %s0#0, %s0#1, %s0#2, %s0#3)
-          : (!p, !p, !p, !p, i64, i64, i64, i64, i1, i1, !p, !p, index, index)
-          -> (!p, !p, index, index)
-      %s2:4 = func.call @op8(%a, %dst, %raw, %tab, %j2, %tw, %lw, %sw, %delta, %flat,
-          %s1#0, %s1#1, %s1#2, %s1#3)
-          : (!p, !p, !p, !p, i64, i64, i64, i64, i1, i1, !p, !p, index, index)
-          -> (!p, !p, index, index)
-      %s3:4 = func.call @op8(%a, %dst, %raw, %tab, %j3, %tw, %lw, %sw, %delta, %flat,
-          %s2#0, %s2#1, %s2#2, %s2#3)
-          : (!p, !p, !p, !p, i64, i64, i64, i64, i1, i1, !p, !p, index, index)
-          -> (!p, !p, index, index)
-      %s4:4 = func.call @op8(%a, %dst, %raw, %tab, %j4, %tw, %lw, %sw, %delta, %flat,
-          %s3#0, %s3#1, %s3#2, %s3#3)
-          : (!p, !p, !p, !p, i64, i64, i64, i64, i1, i1, !p, !p, index, index)
-          -> (!p, !p, index, index)
-      %s5:4 = func.call @op8(%a, %dst, %raw, %tab, %j5, %tw, %lw, %sw, %delta, %flat,
-          %s4#0, %s4#1, %s4#2, %s4#3)
-          : (!p, !p, !p, !p, i64, i64, i64, i64, i1, i1, !p, !p, index, index)
-          -> (!p, !p, index, index)
-      %s6:4 = func.call @op8(%a, %dst, %raw, %tab, %j6, %tw, %lw, %sw, %delta, %flat,
-          %s5#0, %s5#1, %s5#2, %s5#3)
-          : (!p, !p, !p, !p, i64, i64, i64, i64, i1, i1, !p, !p, index, index)
-          -> (!p, !p, index, index)
-      %s7:4 = func.call @op8(%a, %dst, %raw, %tab, %j7, %tw, %lw, %sw, %delta, %flat,
-          %s6#0, %s6#1, %s6#2, %s6#3)
-          : (!p, !p, !p, !p, i64, i64, i64, i64, i1, i1, !p, !p, index, index)
-          -> (!p, !p, index, index)
-      scf.yield %k2, %left2, %e#0, %e#1, %e#2, %e#3, %s7#2, %s7#3, %s7#0, %s7#1
-          : index, index, i64, i64, index, index, index, index, !p, !p
+      %s0:5 = func.call @op8(%a, %dst, %raw, %tab, %j0, %tw, %lw, %sw, %delta, %flat,
+          %dstP, %litsP, %x0, %p0, %g)
+          : (!p, !p, !p, !p, i64, i64, i64, i64, i1, i1, !p, !p, index, index, index)
+          -> (!p, !p, index, index, index)
+      %s1:5 = func.call @op8(%a, %dst, %raw, %tab, %j1, %tw, %lw, %sw, %delta, %flat,
+          %s0#0, %s0#1, %s0#2, %s0#3, %s0#4)
+          : (!p, !p, !p, !p, i64, i64, i64, i64, i1, i1, !p, !p, index, index, index)
+          -> (!p, !p, index, index, index)
+      %s2:5 = func.call @op8(%a, %dst, %raw, %tab, %j2, %tw, %lw, %sw, %delta, %flat,
+          %s1#0, %s1#1, %s1#2, %s1#3, %s1#4)
+          : (!p, !p, !p, !p, i64, i64, i64, i64, i1, i1, !p, !p, index, index, index)
+          -> (!p, !p, index, index, index)
+      %s3:5 = func.call @op8(%a, %dst, %raw, %tab, %j3, %tw, %lw, %sw, %delta, %flat,
+          %s2#0, %s2#1, %s2#2, %s2#3, %s2#4)
+          : (!p, !p, !p, !p, i64, i64, i64, i64, i1, i1, !p, !p, index, index, index)
+          -> (!p, !p, index, index, index)
+      %s4:5 = func.call @op8(%a, %dst, %raw, %tab, %j4, %tw, %lw, %sw, %delta, %flat,
+          %s3#0, %s3#1, %s3#2, %s3#3, %s3#4)
+          : (!p, !p, !p, !p, i64, i64, i64, i64, i1, i1, !p, !p, index, index, index)
+          -> (!p, !p, index, index, index)
+      %s5:5 = func.call @op8(%a, %dst, %raw, %tab, %j5, %tw, %lw, %sw, %delta, %flat,
+          %s4#0, %s4#1, %s4#2, %s4#3, %s4#4)
+          : (!p, !p, !p, !p, i64, i64, i64, i64, i1, i1, !p, !p, index, index, index)
+          -> (!p, !p, index, index, index)
+      %s6:5 = func.call @op8(%a, %dst, %raw, %tab, %j6, %tw, %lw, %sw, %delta, %flat,
+          %s5#0, %s5#1, %s5#2, %s5#3, %s5#4)
+          : (!p, !p, !p, !p, i64, i64, i64, i64, i1, i1, !p, !p, index, index, index)
+          -> (!p, !p, index, index, index)
+      %s7:5 = func.call @op8(%a, %dst, %raw, %tab, %j7, %tw, %lw, %sw, %delta, %flat,
+          %s6#0, %s6#1, %s6#2, %s6#3, %s6#4)
+          : (!p, !p, !p, !p, i64, i64, i64, i64, i1, i1, !p, !p, index, index, index)
+          -> (!p, !p, index, index, index)
+      scf.yield %k2, %left2, %e#0, %e#1, %e#2, %e#3, %s7#2, %s7#3, %s7#0, %s7#1, %s7#4
+          : index, index, i64, i64, index, index, index, index, !p, !p, index
     }
     // The partial last batch takes byte 0 of each word and shifts the words down.
     %rest = arith.cmpi ne, %b#1, %c0 : index
     %f:3 = scf.if %rest -> (index, index, index) {
       %tw0 = func.call @word(%tok, %b#0) : (!p, index) -> i64
-      %t:8 = scf.while (%left = %b#1, %tw = %tw0, %lw = %b#2, %sw = %b#3, %x0 = %b#6,
-          %p0 = %b#7, %dstP = %b#8, %litsP = %b#9)
-          : (index, i64, i64, i64, index, index, !p, !p)
-          -> (index, i64, i64, i64, index, index, !p, !p) {
+      %t:9 = scf.while (%left = %b#1, %tw = %tw0, %lw = %b#2, %sw = %b#3, %x0 = %b#6,
+          %p0 = %b#7, %dstP = %b#8, %litsP = %b#9, %g = %b#10)
+          : (index, i64, i64, i64, index, index, !p, !p, index)
+          -> (index, i64, i64, i64, index, index, !p, !p, index) {
         %more = arith.cmpi ne, %left, %c0 : index
-        scf.condition(%more) %left, %tw, %lw, %sw, %x0, %p0, %dstP, %litsP
-            : index, i64, i64, i64, index, index, !p, !p
+        scf.condition(%more) %left, %tw, %lw, %sw, %x0, %p0, %dstP, %litsP, %g
+            : index, i64, i64, i64, index, index, !p, !p, index
       } do {
       ^bb0(%left: index, %tw: i64, %lw: i64, %sw: i64, %x0: index, %p0: index, %dstP: !p,
-          %litsP: !p):
-        %s:4 = func.call @op8(%a, %dst, %raw, %tab, %j0, %tw, %lw, %sw, %delta, %flat,
-            %dstP, %litsP, %x0, %p0)
-            : (!p, !p, !p, !p, i64, i64, i64, i64, i1, i1, !p, !p, index, index)
-            -> (!p, !p, index, index)
+          %litsP: !p, %g: index):
+        %s:5 = func.call @op8(%a, %dst, %raw, %tab, %j0, %tw, %lw, %sw, %delta, %flat,
+            %dstP, %litsP, %x0, %p0, %g)
+            : (!p, !p, !p, !p, i64, i64, i64, i64, i1, i1, !p, !p, index, index, index)
+            -> (!p, !p, index, index, index)
         %left2 = arith.subi %left, %c1 : index
         %tw2 = arith.shrui %tw, %j8 : i64
         %lw2 = arith.shrui %lw, %j8 : i64
         %sw2 = arith.shrui %sw, %j8 : i64
-        scf.yield %left2, %tw2, %lw2, %sw2, %s#2, %s#3, %s#0, %s#1
-            : index, i64, i64, i64, index, index, !p, !p
+        scf.yield %left2, %tw2, %lw2, %sw2, %s#2, %s#3, %s#0, %s#1, %s#4
+            : index, i64, i64, i64, index, index, !p, !p, index
       }
       %d2 = func.call @dist(%t#6, %dst) : (!p, !p) -> index
       %l2 = func.call @dist(%t#7, %lits) : (!p, !p) -> index
