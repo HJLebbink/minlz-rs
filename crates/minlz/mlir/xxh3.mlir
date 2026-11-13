@@ -8,7 +8,9 @@
 // - !p, the pointer type, and @at, from common.mlir; !acc;
 // - @lanes_load(!p) -> !acc and @lanes_store(!acc, !p), which read and write 8 lanes;
 // - @swap(!acc) -> !acc, which exchanges neighboring lanes;
-// - @lohi(!acc) -> !acc, the product of the low and the high 32-bit half of each lane.
+// - @lohi(!acc) -> !acc, the product of the low and the high 32-bit half of each lane;
+// - @prefetch(!p), which brings the 64 bytes at the address into the cache. A target that gains
+//   nothing from prefetching defines it to do nothing.
 // The spec adds each stripe's data to the accumulator with neighboring lanes swapped. The loop adds
 // the data of many stripes unswapped and swaps their sum once (@settle): the same lanes, with one
 // swap instead of one per stripe. Everything else works lane by lane and needs no layout. An SVE
@@ -58,6 +60,26 @@ func.func private @settle(%acc: !acc, %a: !acc, %s: !acc) -> !acc {
   return %r : !acc
 }
 
+// ahead returns the address 4096 bytes past p + o, four blocks past the stripe at p + o.
+func.func private @ahead(%p: !p, %o: index) -> !p {
+  %c4096 = arith.constant 4096 : index
+  %a = arith.addi %o, %c4096 : index
+  %r = func.call @at(%p, %a) : (!p, index) -> !p
+  return %r : !p
+}
+
+// prefetch_lines brings the n lines of 64 bytes at p into the cache.
+func.func private @prefetch_lines(%p: !p, %n: index) {
+  %c0 = arith.constant 0 : index
+  %c64 = arith.constant 64 : index
+  %e = arith.muli %n, %c64 : index
+  scf.for %o = %c0 to %e step %c64 {
+    %q = func.call @at(%p, %o) : (!p, index) -> !p
+    func.call @prefetch(%q) : (!p) -> ()
+  }
+  return
+}
+
 // quads returns the sums of the products and of the data of the 4·nq stripes at p, with key rows
 // 0 to 4·nq - 1, four stripes per loop trip.
 func.func private @quads(%p: !p, %keys: !p, %nq: index) -> (!acc, !acc) {
@@ -82,17 +104,21 @@ func.func private @quads(%p: !p, %keys: !p, %nq: index) -> (!acc, !acc) {
 
 // blocks accumulates n blocks of 1024 bytes at p and scrambles after each. A block's sums start
 // at zero, so its stripes need not wait for the scramble of the block before, and each block
-// adds to the accumulator once.
+// adds to the accumulator once. Every trip also prefetches the 16 lines of the block four ahead of
+// the one it accumulates, where an input past the last level cache is still on its way in.
 func.func private @blocks(%a: !acc, %p: !p, %n: index, %keys: !p) -> !acc {
   %c0 = arith.constant 0 : index
   %c1 = arith.constant 1 : index
   %c4 = arith.constant 4 : index
+  %c16 = arith.constant 16 : index
   %c1024 = arith.constant 1024 : index
   %skp = func.call @at(%keys, %c1024) : (!p, index) -> !p
   %sk = func.call @lanes_load(%skp) : (!p) -> !acc
   %r = scf.for %b = %c0 to %n step %c1 iter_args(%acc = %a) -> (!acc) {
     %o = arith.muli %b, %c1024 : index
     %pb = func.call @at(%p, %o) : (!p, index) -> !p
+    %fp = func.call @ahead(%p, %o) : (!p, index) -> !p
+    func.call @prefetch_lines(%fp, %c16) : (!p, index) -> ()
     %y:2 = func.call @quads(%pb, %keys, %c4) : (!p, !p, index) -> (!acc, !acc)
     %x = func.call @settle(%acc, %y#0, %y#1) : (!acc, !acc, !acc) -> !acc
     %c = func.call @scramble(%x, %sk) : (!acc, !acc) -> !acc

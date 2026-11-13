@@ -9,25 +9,43 @@
 	vmovups	ymmword ptr [rsp + 32], ymm0
 	vmovdqu	ymm0, ymmword ptr [rcx + 1056]
 	vmovdqu	ymmword ptr [rsp], ymm0
-	add	rsi, 192
-	xor	eax, eax
+	lea	rax, [rsi + 192]
+	xor	r8d, r8d
 	vpbroadcastq	ymm3, qword ptr [rip + 32f]
 	.p2align	4
 2:
 	vmovdqu	ymmword ptr [rsp + 64], ymm2
+	mov	r9, r8
+	shl	r9, 10
+	prefetcht0	byte ptr [rsi + r9 + 4096]
+	prefetcht0	byte ptr [rsi + r9 + 4160]
+	prefetcht0	byte ptr [rsi + r9 + 4224]
+	prefetcht0	byte ptr [rsi + r9 + 4288]
+	prefetcht0	byte ptr [rsi + r9 + 4352]
+	prefetcht0	byte ptr [rsi + r9 + 4416]
+	prefetcht0	byte ptr [rsi + r9 + 4480]
+	prefetcht0	byte ptr [rsi + r9 + 4544]
+	prefetcht0	byte ptr [rsi + r9 + 4608]
+	prefetcht0	byte ptr [rsi + r9 + 4672]
+	prefetcht0	byte ptr [rsi + r9 + 4736]
+	prefetcht0	byte ptr [rsi + r9 + 4800]
+	prefetcht0	byte ptr [rsi + r9 + 4864]
+	prefetcht0	byte ptr [rsi + r9 + 4928]
+	prefetcht0	byte ptr [rsi + r9 + 4992]
+	prefetcht0	byte ptr [rsi + r9 + 5056]
 	vpxor	xmm6, xmm6, xmm6
-	mov	r8, -256
+	mov	r9, -256
 	vpxor	xmm7, xmm7, xmm7
 	vpxor	xmm8, xmm8, xmm8
 	vpxor	xmm5, xmm5, xmm5
 	.p2align	4
 12:
-	vmovdqu	ymm9, ymmword ptr [rsi + r8 + 64]
-	vmovdqu	ymm10, ymmword ptr [rsi + r8 + 96]
-	vmovdqu	ymm11, ymmword ptr [rsi + r8 + 128]
-	vmovdqu	ymm12, ymmword ptr [rsi + r8 + 160]
-	vpxor	ymm13, ymm10, ymmword ptr [rcx + r8 + 288]
-	vpxor	ymm14, ymm9, ymmword ptr [rcx + r8 + 256]
+	vmovdqu	ymm9, ymmword ptr [rax + r9 + 64]
+	vmovdqu	ymm10, ymmword ptr [rax + r9 + 96]
+	vmovdqu	ymm11, ymmword ptr [rax + r9 + 128]
+	vmovdqu	ymm12, ymmword ptr [rax + r9 + 160]
+	vpxor	ymm13, ymm10, ymmword ptr [rcx + r9 + 288]
+	vpxor	ymm14, ymm9, ymmword ptr [rcx + r9 + 256]
 	vpsrlq	ymm15, ymm14, 32
 	vpsrlq	ymm1, ymm13, 32
 	vpmuludq	ymm1, ymm13, ymm1
@@ -36,16 +54,16 @@
 	vpaddq	ymm5, ymm6, ymm5
 	vpaddq	ymm6, ymm9, ymm7
 	vpaddq	ymm7, ymm10, ymm8
-	vpxor	ymm8, ymm11, ymmword ptr [rcx + r8 + 320]
-	vpxor	ymm9, ymm12, ymmword ptr [rcx + r8 + 352]
+	vpxor	ymm8, ymm11, ymmword ptr [rcx + r9 + 320]
+	vpxor	ymm9, ymm12, ymmword ptr [rcx + r9 + 352]
 	vpsrlq	ymm10, ymm9, 32
 	vpsrlq	ymm13, ymm8, 32
 	vpmuludq	ymm8, ymm8, ymm13
 	vpmuludq	ymm9, ymm9, ymm10
-	vmovdqu	ymm10, ymmword ptr [rsi + r8 + 192]
-	vmovdqu	ymm13, ymmword ptr [rsi + r8 + 224]
-	vpxor	ymm14, ymm13, ymmword ptr [rcx + r8 + 416]
-	vpxor	ymm15, ymm10, ymmword ptr [rcx + r8 + 384]
+	vmovdqu	ymm10, ymmword ptr [rax + r9 + 192]
+	vmovdqu	ymm13, ymmword ptr [rax + r9 + 224]
+	vpxor	ymm14, ymm13, ymmword ptr [rcx + r9 + 416]
+	vpxor	ymm15, ymm10, ymmword ptr [rcx + r9 + 384]
 	vpsrlq	ymm2, ymm15, 32
 	vpsrlq	ymm0, ymm14, 32
 	vpmuludq	ymm0, ymm14, ymm0
@@ -58,10 +76,10 @@
 	vpaddq	ymm2, ymm6, ymm2
 	vpaddq	ymm5, ymm12, ymm13
 	vpaddq	ymm7, ymm7, ymm5
-	vmovdqu	ymm8, ymmword ptr [rsi + r8 + 288]
-	vmovdqu	ymm9, ymmword ptr [rsi + r8 + 256]
-	vpxor	ymm5, ymm9, ymmword ptr [rcx + r8 + 448]
-	vpxor	ymm6, ymm8, ymmword ptr [rcx + r8 + 480]
+	vmovdqu	ymm8, ymmword ptr [rax + r9 + 288]
+	vmovdqu	ymm9, ymmword ptr [rax + r9 + 256]
+	vpxor	ymm5, ymm9, ymmword ptr [rcx + r9 + 448]
+	vpxor	ymm6, ymm8, ymmword ptr [rcx + r9 + 480]
 	vpsrlq	ymm10, ymm6, 32
 	vpsrlq	ymm11, ymm5, 32
 	vpmuludq	ymm5, ymm11, ymm5
@@ -70,8 +88,8 @@
 	vpaddq	ymm6, ymm0, ymm1
 	vpaddq	ymm8, ymm8, ymm7
 	vpaddq	ymm7, ymm9, ymm2
-	add	r8, 256
-	cmp	r8, 768
+	add	r9, 256
+	cmp	r9, 768
 	jb	12b
 	vpshufd	ymm0, ymm8, 78
 	vpshufd	ymm1, ymm7, 78
@@ -95,9 +113,9 @@
 	vpmuludq	ymm0, ymm0, ymm3
 	vpsllq	ymm0, ymm0, 32
 	vpaddq	ymm4, ymm1, ymm0
-	inc	rax
-	add	rsi, 1024
-	cmp	rax, rdx
+	inc	r8
+	add	rax, 1024
+	cmp	r8, rdx
 	jne	2b
 	add	rsp, 104
 22:

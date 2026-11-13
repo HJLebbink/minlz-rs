@@ -17,6 +17,24 @@
 	.p2align	4
 2:
 	vmovdqu	ymmword ptr [rsp + 64], ymm15
+	mov	r11, r10
+	shl	r11, 10
+	prefetcht0	byte ptr [rsi + r11 + 4096]
+	prefetcht0	byte ptr [rsi + r11 + 4160]
+	prefetcht0	byte ptr [rsi + r11 + 4224]
+	prefetcht0	byte ptr [rsi + r11 + 4288]
+	prefetcht0	byte ptr [rsi + r11 + 4352]
+	prefetcht0	byte ptr [rsi + r11 + 4416]
+	prefetcht0	byte ptr [rsi + r11 + 4480]
+	prefetcht0	byte ptr [rsi + r11 + 4544]
+	prefetcht0	byte ptr [rsi + r11 + 4608]
+	prefetcht0	byte ptr [rsi + r11 + 4672]
+	prefetcht0	byte ptr [rsi + r11 + 4736]
+	prefetcht0	byte ptr [rsi + r11 + 4800]
+	prefetcht0	byte ptr [rsi + r11 + 4864]
+	prefetcht0	byte ptr [rsi + r11 + 4928]
+	prefetcht0	byte ptr [rsi + r11 + 4992]
+	prefetcht0	byte ptr [rsi + r11 + 5056]
 	vpxor	xmm6, xmm6, xmm6
 	mov	r11, -256
 	vpxor	xmm7, xmm7, xmm7

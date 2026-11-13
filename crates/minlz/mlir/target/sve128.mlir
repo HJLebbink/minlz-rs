@@ -28,3 +28,9 @@ func.func private @lohi(%x: !acc) -> !acc {
   %r = arith.muli %l, %h : !acc
   return %r : !acc
 }
+
+// prefetch does nothing on this target. A prfm four blocks ahead made XXH3 slower on both GB10
+// cores, the Cortex-X925 and the Cortex-A725.
+func.func private @prefetch(%p: !p) {
+  return
+}
