@@ -3,8 +3,7 @@
 
 // expand64 returns, in byte i, the next value at p + o if f[i], and 0 if not, and the offset after
 // the values it took: VPEXPANDB, which only reads the values it takes.
-func.func private @expand64(%p: !p, %o: index, %f: vector<64xi1>, %a: !p)
-    -> (vector<64xi8>, index) {
+func.func private @expand64(%p: !p, %o: index, %f: vector<64xi1>) -> (vector<64xi8>, index) {
   %z = arith.constant dense<0> : vector<64xi8>
   %q = func.call @at(%p, %o) : (!p, index) -> !p
   %x = llvm.call_intrinsic "llvm.masked.expandload.v64i8"(%q, %f, %z)

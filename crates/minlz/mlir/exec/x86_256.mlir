@@ -1,12 +1,76 @@
 // Target file of exec.mlir and exec64.mlir for x86-64 with AVX2: PSHUFB permutes and expands
 // bytes.
 
-// expand64 is expand_swar64.
-func.func private @expand64(%p: !p, %o: index, %f: vector<64xi1>, %a: !p)
-    -> (vector<64xi8>, index) {
-  %r, %o2 = func.call @expand_swar64(%p, %o, %f, %a)
-      : (!p, index, vector<64xi1>, !p) -> (vector<64xi8>, index)
-  return %r, %o2 : vector<64xi8>, index
+// expand64 returns, in byte i, the next value at p + o if f[i], and 0 if not, with the offset
+// after the values it took: @expand8v for each 8 flags, whose words come straight out of the flag
+// bytes and whose results are joined into the answer, so neither crosses memory.
+func.func private @expand64(%p: !p, %o: index, %f: vector<64xi1>) -> (vector<64xi8>, index) {
+  %ones0 = arith.constant 72340172838076673 : i64
+  // Opaque to LLVM, which would otherwise make c - f in expand8 a second multiply.
+  %ones = llvm.inline_asm "", "=r,0" %ones0 : (i64) -> i64
+  %z = arith.constant dense<0> : vector<64xi8>
+  %one = arith.constant dense<1> : vector<64xi8>
+  %fb = arith.select %f, %one, %z : vector<64xi1>, vector<64xi8>
+  %fw = vector.bitcast %fb : vector<64xi8> to vector<8xi64>
+  %f0 = vector.extract %fw[0] : i64 from vector<8xi64>
+  %f1 = vector.extract %fw[1] : i64 from vector<8xi64>
+  %f2 = vector.extract %fw[2] : i64 from vector<8xi64>
+  %f3 = vector.extract %fw[3] : i64 from vector<8xi64>
+  %f4 = vector.extract %fw[4] : i64 from vector<8xi64>
+  %f5 = vector.extract %fw[5] : i64 from vector<8xi64>
+  %f6 = vector.extract %fw[6] : i64 from vector<8xi64>
+  %f7 = vector.extract %fw[7] : i64 from vector<8xi64>
+  %y0, %o1 = func.call @expand8v(%p, %o, %f0, %ones)
+      : (!p, index, i64, i64) -> (vector<8xi8>, index)
+  %y1, %o2 = func.call @expand8v(%p, %o1, %f1, %ones)
+      : (!p, index, i64, i64) -> (vector<8xi8>, index)
+  %y2, %o3 = func.call @expand8v(%p, %o2, %f2, %ones)
+      : (!p, index, i64, i64) -> (vector<8xi8>, index)
+  %y3, %o4 = func.call @expand8v(%p, %o3, %f3, %ones)
+      : (!p, index, i64, i64) -> (vector<8xi8>, index)
+  %y4, %o5 = func.call @expand8v(%p, %o4, %f4, %ones)
+      : (!p, index, i64, i64) -> (vector<8xi8>, index)
+  %y5, %o6 = func.call @expand8v(%p, %o5, %f5, %ones)
+      : (!p, index, i64, i64) -> (vector<8xi8>, index)
+  %y6, %o7 = func.call @expand8v(%p, %o6, %f6, %ones)
+      : (!p, index, i64, i64) -> (vector<8xi8>, index)
+  %y7, %o8 = func.call @expand8v(%p, %o7, %f7, %ones)
+      : (!p, index, i64, i64) -> (vector<8xi8>, index)
+  %a01 = vector.shuffle %y0, %y1 [
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+    ] : vector<8xi8>, vector<8xi8>
+  %a23 = vector.shuffle %y2, %y3 [
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+    ] : vector<8xi8>, vector<8xi8>
+  %a45 = vector.shuffle %y4, %y5 [
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+    ] : vector<8xi8>, vector<8xi8>
+  %a67 = vector.shuffle %y6, %y7 [
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+    ] : vector<8xi8>, vector<8xi8>
+  %b0123 = vector.shuffle %a01, %a23 [
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+      16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
+    ] : vector<16xi8>, vector<16xi8>
+  %b4567 = vector.shuffle %a45, %a67 [
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+      16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31
+    ] : vector<16xi8>, vector<16xi8>
+  %r = vector.shuffle %b0123, %b4567 [
+      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15,
+      16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31,
+      32, 33, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47,
+      48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63
+    ] : vector<32xi8>, vector<32xi8>
+  return %r, %o8 : vector<64xi8>, index
+}
+
+// expand8v is @expand8 with its answer as a vector of 8 bytes.
+func.func private @expand8v(%p: !p, %o: index, %f: i64, %ones: i64) -> (vector<8xi8>, index) {
+  %w, %o2 = func.call @expand8(%p, %o, %f, %ones) : (!p, index, i64, i64) -> (i64, index)
+  %wv = vector.from_elements %w : vector<1xi64>
+  %r = vector.bitcast %wv : vector<1xi64> to vector<8xi8>
+  return %r, %o2 : vector<8xi8>, index
 }
 
 // permute returns byte idx[i] of t in byte i, for indexes below 32. PSHUFB takes each index from

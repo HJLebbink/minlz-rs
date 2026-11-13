@@ -7,9 +7,9 @@
 // offsets of the batch from the buffer. Each step has the registers it needs.
 //
 // The target file also gives:
-// - @expand64(p: !p, o: index, f: vector<64xi1>, a: !p) -> (vector<64xi8>, index), whose byte i
+// - @expand64(p: !p, o: index, f: vector<64xi1>) -> (vector<64xi8>, index), whose byte i
 //   is the next value at p + o if f[i], and 0 if not, with the offset after the values it took;
-//   its reads stay within 8 bytes past the values, as @expand_swar64's do;
+//   it may read up to 8 bytes past the values it takes, which the streams keep readable;
 // - @permute64(t: vector<64xi8>, idx: vector<64xi8>) -> vector<64xi8>, whose byte i is byte idx[i]
 //   of t, for indexes below 64.
 
@@ -53,34 +53,6 @@ func.func private @window(%p: !p, %o: index, %n: index, %s: !p) -> !b {
     scf.yield %x : !b
   }
   return %r : !b
-}
-
-// expand_swar64 is @expand64 for targets without a vector expand load: @expand8 for each 8 values.
-// Each step reads the 8 bytes at its offset; the flags and the result pass through the token
-// window of a.
-func.func private @expand_swar64(%p: !p, %o: index, %f: vector<64xi1>, %a: !p)
-    -> (!b, index) {
-  %c0 = arith.constant 0 : index
-  %c8 = arith.constant 8 : index
-  %c64 = arith.constant 64 : index
-  %c512 = arith.constant 512 : index
-  %ones0 = arith.constant 72340172838076673 : i64
-  // Opaque to LLVM, which would otherwise make c - f in expand8 a second multiply.
-  %ones = llvm.inline_asm "", "=r,0" %ones0 : (i64) -> i64
-  %z = arith.constant dense<0> : !b
-  %one = arith.constant dense<1> : !b
-  %fb = arith.select %f, %one, %z : vector<64xi1>, !b
-  %s = func.call @at(%a, %c512) : (!p, index) -> !p
-  ptr.store %fb, %s alignment = 8 : !b, !p
-  %r = scf.for %j = %c0 to %c64 step %c8 iter_args(%oj = %o) -> (index) {
-    %fw = func.call @word(%s, %j) : (!p, index) -> i64
-    %y, %o2 = func.call @expand8(%p, %oj, %fw, %ones) : (!p, index, i64, i64) -> (i64, index)
-    %q = func.call @at(%s, %j) : (!p, index) -> !p
-    ptr.store %y, %q alignment = 8 : i64, !p
-    scf.yield %o2 : index
-  }
-  %v = ptr.load %s alignment = 8 : !p -> !b
-  return %v, %r : !b, index
 }
 
 // slice16 returns bytes 16g to 16g + 15 of x as 32-bit lanes, for a constant g.
@@ -316,13 +288,12 @@ func.func private @expand_batch(%a: !p, %k: index, %m: index, %raise: i1) {
   %tr = arith.andi %tv, %b1 : !b
   %new = arith.cmpi eq, %tr, %z : !b
   %fo = arith.andi %new, %live : vector<64xi1>
-  %lv, %li2 = func.call @expand64(%ll, %li, %fl, %a) : (!p, index, vector<64xi1>, !p) -> (!b, index)
+  %lv, %li2 = func.call @expand64(%ll, %li, %fl) : (!p, index, vector<64xi1>) -> (!b, index)
   %lens = func.call @lens(%a) : (!p) -> !p
   ptr.store %lv, %lens alignment = 8 : !b, !p
-  %sv, %oi2 = func.call @expand64(%offc, %oi, %fo, %a)
-      : (!p, index, vector<64xi1>, !p) -> (!b, index)
+  %sv, %oi2 = func.call @expand64(%offc, %oi, %fo) : (!p, index, vector<64xi1>) -> (!b, index)
   // The copy loop reads the token of operation j at byte 512 + j of a, as it reads its length at
-  // byte 192 + j. The store is after both expand calls: @expand_swar64 uses these bytes as scratch.
+  // byte 192 + j. @window keeps a short tail in these bytes, so the tokens go back after it.
   ptr.store %tv, %ts alignment = 8 : !b, !p
   %l32 = arith.index_castui %last : index to i32
   %lastv = vector.broadcast %l32 : i32 to !w
