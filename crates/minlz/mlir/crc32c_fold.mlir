@@ -1,9 +1,9 @@
 // CRC32C (Castagnoli) by folding with carry-less multiplies, with three CRC32-instruction chains
 // beside it, for the targets that have a carry-less multiply. `cargo xtask mlir` puts common.mlir,
-// the target file (crc32c/*.mlir), its architecture file (crc32c_x86.mlir or crc32c_arm.mlir), its
-// halving chain steps (crc32c/halves_*.mlir) and crc32c.mlir in front of this file and lowers the
-// result once per target. The naked functions in crates/minlz/src/stream/crc/mlir.rs hold the
-// output.
+// the target file (crc32c/*.mlir), its architecture file (crc32c_x86.mlir or crc32c_arm.mlir), the
+// prefetch file of the architecture (target/prefetch.mlir or target/no_prefetch.mlir), its halving
+// chain steps (crc32c/halves_*.mlir) and crc32c.mlir in front of this file and lowers the result
+// once per target. The naked functions in crates/minlz/src/stream/crc/mlir.rs hold the output.
 //
 // The CRC is reflected, as the CRC32 instructions compute it. A 16-byte load, read as a
 // little-endian 128-bit number, is a polynomial in which bit j is the coefficient of x^(127-j).
@@ -20,9 +20,10 @@
 // through each chain. At the end of the block the lanes move on past the scalar regions, and each
 // chain's CRC joins lane 0 times the power of x that places it.
 //
-// What this kernel calls comes from three of those files, beside the CRC32 instructions that
+// What this kernel calls comes from four of those files, beside the CRC32 instructions that
 // crc32c.mlir lists. The architecture file gives @clmul(i64, i64) -> vector<2xi64>, the 128-bit
-// carry-less product of two words. The step files, with the target file where a step belongs to
+// carry-less product of two words. The prefetch file gives @prefetch(!p), which brings the 64
+// bytes at the address into the cache on x86-64 and does nothing on aarch64. The step files, with the target file where a step belongs to
 // one target only, give @clmul_state(!st, !st, !st) -> !st, which breaks the state into the
 // registers of the target, multiplies each of them by the keys and xors in the third argument.
 // The target file gives the state, the sizes, the keys and the leaf of the chain:
@@ -109,6 +110,46 @@ func.func private @reduce(%lo: i64, %hi: i64) -> i32 {
   return %crc : i32
 }
 
+// ahead brings the lines of the block that follows the one at p into the cache, 4096 bytes past
+// its end, where an input past the last level cache is still on its way in: the stride that trip
+// i of @block folds, and the words that it runs through each chain. A prefetch never faults, so
+// the last block may name an address past the end of the input.
+func.func private @ahead(%p: !p, %i: index) {
+  %c0 = arith.constant 0 : index
+  %c8 = arith.constant 8 : index
+  %c64 = arith.constant 64 : index
+  %cd = arith.constant 4096 : index
+  %stride = func.call @stride() : () -> index
+  %k = func.call @words() : () -> index
+  %n = func.call @iters() : () -> index
+  %vlen = arith.muli %stride, %n : index
+  %kn = arith.muli %k, %n : index
+  %slen = arith.muli %kn, %c8 : index
+  %r1 = arith.addi %vlen, %slen : index
+  %r2 = arith.addi %r1, %slen : index
+  %blen = arith.addi %r2, %slen : index
+  %d = arith.addi %blen, %cd : index
+  %q = func.call @at(%p, %d) : (!p, index) -> !p
+  %o = arith.muli %i, %stride : index
+  %v = func.call @at(%q, %o) : (!p, index) -> !p
+  scf.for %x = %c0 to %stride step %c64 {
+    %r = func.call @at(%v, %x) : (!p, index) -> !p
+    func.call @prefetch(%r) : (!p) -> ()
+  }
+  %ik = arith.muli %i, %k : index
+  %w = arith.muli %ik, %c8 : index
+  %oa = arith.addi %vlen, %w : index
+  %ob = arith.addi %r1, %w : index
+  %oc = arith.addi %r2, %w : index
+  %qa = func.call @at(%q, %oa) : (!p, index) -> !p
+  func.call @prefetch(%qa) : (!p) -> ()
+  %qb = func.call @at(%q, %ob) : (!p, index) -> !p
+  func.call @prefetch(%qb) : (!p) -> ()
+  %qc = func.call @at(%q, %oc) : (!p, index) -> !p
+  func.call @prefetch(%qc) : (!p) -> ()
+  return
+}
+
 // block returns s after the block at p.
 func.func private @block(%s: !st, %p: !p) -> !st {
   %c0 = arith.constant 0 : index
@@ -129,6 +170,7 @@ func.func private @block(%s: !st, %p: !p) -> !st {
     %o = arith.muli %i, %stride : index
     %f = func.call @fold(%v, %kf, %p, %o) : (!st, !st, !p, index) -> !st
     %ik = arith.muli %i, %k : index
+    func.call @ahead(%p, %i) : (!p, index) -> ()
     %u:3 = scf.for %j = %c0 to %k step %c1 iter_args(%x = %a, %y = %b, %w = %c) -> (i64, i64, i64) {
       %wi = arith.addi %ik, %j : index
       %wo = arith.muli %wi, %c8 : index

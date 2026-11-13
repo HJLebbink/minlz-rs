@@ -31,45 +31,52 @@
 	push	r14
 	push	r12
 	push	rbx
-	lea	rdi, [rsi + 4616]
-	xor	r9d, r9d
+	lea	rdi, [rsi + 9152]
+	lea	r9, [rsi + 13568]
+	xor	r10d, r10d
 	vpbroadcastq	zmm5, qword ptr [rip + 212f]
 	vpbroadcastq	zmm6, qword ptr [rip + 222f]
 	vpbroadcastq	zmm7, qword ptr [rip + 232f]
 	vpbroadcastq	zmm8, qword ptr [rip + 242f]
-	movabs	r10, -1610642981159698432
-	vmovq	xmm9, r10
+	movabs	r11, -1610642981159698432
+	vmovq	xmm9, r11
 	vmovq	xmm10, rax
-	mov	r10, rsi
 	vpxor	xmm3, xmm3, xmm3
 	vpxor	xmm2, xmm2, xmm2
 	.p2align	4
 22:
 	mov	r15, -256
-	mov	r12, r10
+	mov	r12, rdi
 	xor	r11d, r11d
 	xor	ebx, ebx
 	xor	r14d, r14d
 	.p2align	4
 32:
-	crc32	r14, qword ptr [rdi + r15 - 264]
-	crc32	rbx, qword ptr [rdi + r15 - 8]
-	crc32	r11, qword ptr [rdi + r15 + 248]
-	crc32	r14, qword ptr [rdi + r15 - 256]
-	crc32	rbx, qword ptr [rdi + r15]
-	crc32	r11, qword ptr [rdi + r15 + 256]
+	prefetcht0	byte ptr [r12 - 192]
 	vpclmulqdq	zmm11, zmm1, zmm5, 0
 	vpclmulqdq	zmm1, zmm1, zmm6, 17
-	vpternlogq	zmm1, zmm11, zmmword ptr [r12], 150
+	vpternlogq	zmm1, zmm11, zmmword ptr [r12 - 9152], 150
 	vpclmulqdq	zmm11, zmm0, zmm5, 0
 	vpclmulqdq	zmm0, zmm0, zmm6, 17
-	vpternlogq	zmm0, zmm11, zmmword ptr [r12 + 64], 150
+	vpternlogq	zmm0, zmm11, zmmword ptr [r12 - 9088], 150
 	vpclmulqdq	zmm11, zmm3, zmm5, 0
 	vpclmulqdq	zmm3, zmm3, zmm6, 17
-	vpternlogq	zmm3, zmm11, zmmword ptr [r12 + 128], 150
+	vpternlogq	zmm3, zmm11, zmmword ptr [r12 - 9024], 150
 	vpclmulqdq	zmm11, zmm2, zmm5, 0
 	vpclmulqdq	zmm2, zmm2, zmm6, 17
-	vpternlogq	zmm2, zmm11, zmmword ptr [r12 + 192], 150
+	vpternlogq	zmm2, zmm11, zmmword ptr [r12 - 8960], 150
+	prefetcht0	byte ptr [r12 - 128]
+	prefetcht0	byte ptr [r12 - 64]
+	prefetcht0	byte ptr [r12]
+	prefetcht0	byte ptr [r9 + r15 - 256]
+	prefetcht0	byte ptr [r9 + r15]
+	prefetcht0	byte ptr [r9 + r15 + 256]
+	crc32	r14, qword ptr [r9 + r15 - 9216]
+	crc32	rbx, qword ptr [r9 + r15 - 8960]
+	crc32	r11, qword ptr [r9 + r15 - 8704]
+	crc32	r14, qword ptr [r9 + r15 - 9208]
+	crc32	rbx, qword ptr [r9 + r15 - 8952]
+	crc32	r11, qword ptr [r9 + r15 - 8696]
 	add	r12, 256
 	add	r15, 16
 	jne	32b
@@ -92,10 +99,10 @@
 	vmovq	xmm1, r11
 	vpclmulqdq	xmm1, xmm1, xmm4, 0
 	vpternlogq	zmm1, zmm12, zmm11, 150
-	inc	r9
-	add	r10, 4864
+	inc	r10
 	add	rdi, 4864
-	cmp	r9, rdx
+	add	r9, 4864
+	cmp	r10, rdx
 	jne	22b
 	pop	rbx
 	pop	r12

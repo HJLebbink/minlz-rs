@@ -47,6 +47,19 @@
 	xor	r14d, r14d
 	.p2align	4
 32:
+	prefetcht0	byte ptr [r10 + 4*r15 + 6912]
+	vpclmulqdq	ymm9, ymm2, ymm5, 0
+	vpxor	ymm9, ymm9, ymmword ptr [r10 + 4*r15 + 1024]
+	vpclmulqdq	ymm10, ymm0, ymm5, 0
+	vpxor	ymm10, ymm10, ymmword ptr [r10 + 4*r15 + 1056]
+	vpclmulqdq	ymm11, ymm3, ymm5, 0
+	vpxor	ymm11, ymm11, ymmword ptr [r10 + 4*r15 + 1088]
+	vpclmulqdq	ymm12, ymm1, ymm5, 0
+	vpxor	ymm12, ymm12, ymmword ptr [r10 + 4*r15 + 1120]
+	prefetcht0	byte ptr [r10 + 4*r15 + 6976]
+	prefetcht0	byte ptr [r10 + r15 + 7168]
+	prefetcht0	byte ptr [r10 + r15 + 7424]
+	prefetcht0	byte ptr [r10 + r15 + 7680]
 	crc32	r14, qword ptr [r10 + r15 + 1280]
 	crc32	rbx, qword ptr [r10 + r15 + 1536]
 	crc32	r11, qword ptr [r10 + r15 + 1792]
@@ -59,22 +72,14 @@
 	crc32	r14, qword ptr [r10 + r15 + 1304]
 	crc32	rbx, qword ptr [r10 + r15 + 1560]
 	crc32	r11, qword ptr [r10 + r15 + 1816]
-	vpclmulqdq	ymm9, ymm2, ymm5, 0
 	vpclmulqdq	ymm2, ymm2, ymm6, 17
-	vpxor	ymm9, ymm9, ymmword ptr [r10 + 4*r15 + 1024]
 	vpxor	ymm2, ymm9, ymm2
-	vpclmulqdq	ymm9, ymm0, ymm5, 0
 	vpclmulqdq	ymm0, ymm0, ymm6, 17
-	vpxor	ymm9, ymm9, ymmword ptr [r10 + 4*r15 + 1056]
-	vpxor	ymm0, ymm9, ymm0
-	vpclmulqdq	ymm9, ymm3, ymm5, 0
+	vpxor	ymm0, ymm10, ymm0
 	vpclmulqdq	ymm3, ymm3, ymm6, 17
-	vpxor	ymm9, ymm9, ymmword ptr [r10 + 4*r15 + 1088]
-	vpxor	ymm3, ymm9, ymm3
-	vpclmulqdq	ymm9, ymm1, ymm5, 0
+	vpxor	ymm3, ymm11, ymm3
 	vpclmulqdq	ymm1, ymm1, ymm6, 17
-	vpxor	ymm9, ymm9, ymmword ptr [r10 + 4*r15 + 1120]
-	vpxor	ymm1, ymm9, ymm1
+	vpxor	ymm1, ymm12, ymm1
 	add	r15, 32
 	jne	32b
 	vpclmulqdq	ymm9, ymm2, ymm7, 0

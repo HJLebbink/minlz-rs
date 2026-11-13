@@ -89,6 +89,15 @@ impl Arch {
         }
     }
 
+    /// Returns the file in `mlir/` that gives `@prefetch`: a prefetch into the L1 on x86-64, and
+    /// nothing on aarch64.
+    fn prefetch(self) -> &'static str {
+        match self {
+            Arch::Arm => "target/no_prefetch.mlir",
+            Arch::X86 => "target/prefetch.mlir",
+        }
+    }
+
     /// Returns what starts a comment in the assembly.
     fn comment(self) -> &'static str {
         match self {
@@ -123,7 +132,7 @@ const XXH3: [Row; 7] = [
     (
         "sve128",
         "sve128",
-        &["lohi", "no_prefetch"],
+        &["lohi"],
         SPLIT,
         Arch::Arm,
         "-mattr=+v8.2a,+sve",
@@ -131,23 +140,16 @@ const XXH3: [Row; 7] = [
     (
         "sve256",
         "sve256",
-        &["lohi", "no_prefetch"],
+        &["lohi"],
         SPLIT,
         Arch::Arm,
         "-mattr=+v8.2a,+sve",
     ),
-    (
-        "neon",
-        "neon",
-        &["no_prefetch"],
-        WHOLE,
-        Arch::Arm,
-        "-mattr=+v8a,+neon",
-    ),
+    ("neon", "neon", &[], WHOLE, Arch::Arm, "-mattr=+v8a,+neon"),
     (
         "sve2",
         "neon",
-        &["no_prefetch"],
+        &[],
         WHOLE,
         Arch::Arm,
         "-mattr=+v8.2a,+neon,+sve2",
@@ -302,6 +304,7 @@ fn mlir() -> Result<(), String> {
                 common.as_str(),
                 &file,
                 &read_in("target", shared)?,
+                &read(arch.prefetch())?,
                 &read(layout)?,
                 &xxh3,
             ]
@@ -334,6 +337,7 @@ fn mlir() -> Result<(), String> {
                 common.as_str(),
                 &file,
                 &arch,
+                &read(t.arch.prefetch())?,
                 &steps?.join(""),
                 &crc32c,
                 &kernel,
