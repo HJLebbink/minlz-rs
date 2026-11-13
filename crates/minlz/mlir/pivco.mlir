@@ -18,7 +18,8 @@
 //   in t (d from 2 to 8), for the low w lanes (64, 32 or 16); the others are not used. The bits
 //   of v above d are clear, or may hold any value if @clean_codes is false.
 // - @nat_codes(p: !p, d: index) -> !b: the 64 codes of depth d (2 to 8) in the natural layout at
-//   p, one in each byte, with the bits above d clear. It may read 64 bytes at p.
+//   p, one in each byte, with the bits above d clear, or any value in them if @clean_codes is
+//   false. It may read 64 bytes at p.
 // - @spread(t: i64) -> !b, whose byte i is 255 if bit i of t is set and 0 if not.
 // - @load_n(p: !p, n: index) -> !b: the n bytes at p (n up to 64), zero after them. It reads only
 //   those bytes.

@@ -232,14 +232,12 @@
 	vmovdqa64	zmm1, zmmword ptr [rip + 972f]
 	vpbroadcastq	zmm2, qword ptr [rip + 982f]
 	add	r8, -40
-	vpbroadcastb	zmm3, byte ptr [rip + 992f]
 	.p2align	4
 142:
-	vpermb	zmm4, zmm1, zmmword ptr [rsi]
-	vpmultishiftqb	zmm4, zmm2, zmm4
-	vpandq	zmm4, zmm4, zmm3
-	vpermb	zmm4, zmm4, zmm0
-	vmovdqu64	zmmword ptr [rdi], zmm4
+	vpermb	zmm3, zmm1, zmmword ptr [rsi]
+	vpmultishiftqb	zmm3, zmm2, zmm3
+	vpermb	zmm3, zmm3, zmm0
+	vmovdqu64	zmmword ptr [rdi], zmm3
 	add	rdi, 64
 	add	rsi, 40
 	add	rdx, -64
@@ -254,28 +252,23 @@
 	vmovdqa64	zmm1, zmmword ptr [rip + 972f]
 	vpbroadcastq	zmm2, qword ptr [rip + 982f]
 	mov	rcx, -1
-	vpbroadcastb	zmm3, byte ptr [rip + 992f]
 	.p2align	4
 162:
 	cmp	rdx, 64
 	mov	r8d, 64
 	cmovb	r8, rdx
 	lea	r9d, [r8 + 4*r8 + 7]
-	shlx	r10, rcx, r8
-	not	r10
-	cmovae	r10, rcx
 	shr	r9d, 3
-	shlx	r9, rcx, r9
-	not	r9
+	bzhi	r9, rcx, r9
 	kmovq	k1, r9
-	vmovdqu8	zmm4 {k1} {z}, zmmword ptr [rsi]
-	vmovdqu64	zmmword ptr [rax], zmm4
-	vpermb	zmm4, zmm1, zmm4
-	vpmultishiftqb	zmm4, zmm2, zmm4
-	vpandq	zmm4, zmm4, zmm3
-	vpermb	zmm4, zmm4, zmm0
-	kmovq	k1, r10
-	vmovdqu8	zmmword ptr [rdi] {k1}, zmm4
+	vmovdqu8	zmm3 {k1} {z}, zmmword ptr [rsi]
+	vmovdqu64	zmmword ptr [rax], zmm3
+	vpermb	zmm3, zmm1, zmm3
+	vpmultishiftqb	zmm3, zmm2, zmm3
+	vpermb	zmm3, zmm3, zmm0
+	bzhi	r9, rcx, r8
+	kmovq	k1, r9
+	vmovdqu8	zmmword ptr [rdi] {k1}, zmm3
 	add	rdi, 64
 	add	rsi, 40
 	sub	rdx, r8
@@ -292,18 +285,16 @@
 	setb	r9b
 	or	r9b, cl
 	jne	192f
-	vmovdqa64	zmm1, zmmword ptr [rip + 1002f]
-	vpbroadcastq	zmm2, qword ptr [rip + 1012f]
+	vmovdqa64	zmm1, zmmword ptr [rip + 992f]
+	vpbroadcastq	zmm2, qword ptr [rip + 1002f]
 	vpbroadcastq	zmm3, xmm0
 	add	r8, -24
-	vpbroadcastb	zmm4, byte ptr [rip + 1022f]
 	.p2align	4
 182:
-	vpermb	zmm5, zmm1, zmmword ptr [rsi]
-	vpmultishiftqb	zmm5, zmm2, zmm5
-	vpandq	zmm5, zmm5, zmm4
-	vpermb	zmm5, zmm5, zmm3
-	vmovdqu64	zmmword ptr [rdi], zmm5
+	vpermb	zmm4, zmm1, zmmword ptr [rsi]
+	vpmultishiftqb	zmm4, zmm2, zmm4
+	vpermb	zmm4, zmm4, zmm3
+	vmovdqu64	zmmword ptr [rdi], zmm4
 	add	rdi, 64
 	add	rsi, 24
 	add	rdx, -64
@@ -315,32 +306,27 @@
 192:
 	test	rdx, rdx
 	je	412f
-	vmovdqa64	zmm1, zmmword ptr [rip + 1002f]
-	vpbroadcastq	zmm2, qword ptr [rip + 1012f]
+	vmovdqa64	zmm1, zmmword ptr [rip + 992f]
+	vpbroadcastq	zmm2, qword ptr [rip + 1002f]
 	vpbroadcastq	zmm0, xmm0
 	mov	rcx, -1
-	vpbroadcastb	zmm3, byte ptr [rip + 1022f]
 	.p2align	4
 202:
 	cmp	rdx, 64
 	mov	r8d, 64
 	cmovb	r8, rdx
 	lea	r9d, [r8 + 2*r8 + 7]
-	shlx	r10, rcx, r8
-	not	r10
-	cmovae	r10, rcx
 	shr	r9d, 3
-	shlx	r9, rcx, r9
-	not	r9
+	bzhi	r9, rcx, r9
 	kmovq	k1, r9
-	vmovdqu8	zmm4 {k1} {z}, zmmword ptr [rsi]
-	vmovdqu64	zmmword ptr [rax], zmm4
-	vpermb	zmm4, zmm1, zmm4
-	vpmultishiftqb	zmm4, zmm2, zmm4
-	vpandq	zmm4, zmm4, zmm3
-	vpermb	zmm4, zmm4, zmm0
-	kmovq	k1, r10
-	vmovdqu8	zmmword ptr [rdi] {k1}, zmm4
+	vmovdqu8	zmm3 {k1} {z}, zmmword ptr [rsi]
+	vmovdqu64	zmmword ptr [rax], zmm3
+	vpermb	zmm3, zmm1, zmm3
+	vpmultishiftqb	zmm3, zmm2, zmm3
+	vpermb	zmm3, zmm3, zmm0
+	bzhi	r9, rcx, r8
+	kmovq	k1, r9
+	vmovdqu8	zmmword ptr [rdi] {k1}, zmm3
 	add	rdi, 64
 	add	rsi, 24
 	sub	rdx, r8
@@ -356,8 +342,8 @@
 	setb	r9b
 	or	r9b, cl
 	jne	232f
-	vmovdqa64	zmm2, zmmword ptr [rip + 1032f]
-	vpbroadcastq	zmm3, qword ptr [rip + 1042f]
+	vmovdqa64	zmm2, zmmword ptr [rip + 1012f]
+	vpbroadcastq	zmm3, qword ptr [rip + 1022f]
 	add	r8, -56
 	.p2align	4
 222:
@@ -376,29 +362,26 @@
 232:
 	test	rdx, rdx
 	je	412f
-	vmovdqa64	zmm2, zmmword ptr [rip + 1032f]
-	vpbroadcastq	zmm3, qword ptr [rip + 1042f]
+	vmovdqa64	zmm2, zmmword ptr [rip + 1012f]
+	vpbroadcastq	zmm3, qword ptr [rip + 1022f]
 	mov	rcx, -1
 	.p2align	4
 242:
 	cmp	rdx, 64
 	mov	r8d, 64
 	cmovb	r8, rdx
-	shlx	r9, rcx, r8
-	not	r9
-	cmovae	r9, rcx
-	lea	r10d, [8*r8]
-	sub	r10d, r8d
-	add	r10d, 7
-	shr	r10d, 3
-	shlx	r10, rcx, r10
-	not	r10
-	kmovq	k1, r10
+	lea	r9d, [8*r8]
+	sub	r9d, r8d
+	add	r9d, 7
+	shr	r9d, 3
+	bzhi	r9, rcx, r9
+	kmovq	k1, r9
 	vmovdqu8	zmm4 {k1} {z}, zmmword ptr [rsi]
 	vmovdqu64	zmmword ptr [rax], zmm4
 	vpermb	zmm4, zmm2, zmm4
 	vpmultishiftqb	zmm4, zmm3, zmm4
 	vpermi2b	zmm4, zmm0, zmm1
+	bzhi	r9, rcx, r8
 	kmovq	k1, r9
 	vmovdqu8	zmmword ptr [rdi] {k1}, zmm4
 	add	rdi, 64
@@ -413,18 +396,16 @@
 	setb	r9b
 	or	r9b, cl
 	jne	272f
-	vmovdqa64	zmm1, zmmword ptr [rip + 1052f]
-	vpbroadcastq	zmm2, qword ptr [rip + 1062f]
+	vmovdqa64	zmm1, zmmword ptr [rip + 1032f]
+	vpbroadcastq	zmm2, qword ptr [rip + 1042f]
 	vpbroadcastd	zmm3, xmm0
 	add	r8, -16
-	vpbroadcastb	zmm4, byte ptr [rip + 1072f]
 	.p2align	4
 262:
-	vpermb	zmm5, zmm1, zmmword ptr [rsi]
-	vpmultishiftqb	zmm5, zmm2, zmm5
-	vpandq	zmm5, zmm5, zmm4
-	vpermb	zmm5, zmm5, zmm3
-	vmovdqu64	zmmword ptr [rdi], zmm5
+	vpermb	zmm4, zmm1, zmmword ptr [rsi]
+	vpmultishiftqb	zmm4, zmm2, zmm4
+	vpermb	zmm4, zmm4, zmm3
+	vmovdqu64	zmmword ptr [rdi], zmm4
 	add	rdi, 64
 	add	rsi, 16
 	add	rdx, -64
@@ -436,33 +417,28 @@
 272:
 	test	rdx, rdx
 	je	412f
-	vmovdqa64	zmm1, zmmword ptr [rip + 1052f]
-	vpbroadcastq	zmm2, qword ptr [rip + 1062f]
+	vmovdqa64	zmm1, zmmword ptr [rip + 1032f]
+	vpbroadcastq	zmm2, qword ptr [rip + 1042f]
 	vpbroadcastd	zmm0, xmm0
 	xor	ecx, ecx
 	mov	r8, -1
-	vpbroadcastb	zmm3, byte ptr [rip + 1072f]
 	.p2align	4
 282:
 	cmp	rdx, 64
 	mov	r9d, 64
 	cmovb	r9, rdx
 	lea	r10d, [r9 + r9 + 6]
-	shlx	r11, r8, r9
-	not	r11
-	cmovae	r11, r8
 	shr	r10d, 3
-	shlx	r10, r8, r10
-	not	r10
+	bzhi	r10, r8, r10
 	kmovq	k1, r10
-	vmovdqu8	zmm4 {k1} {z}, zmmword ptr [rsi + rcx]
-	vmovdqu64	zmmword ptr [rax], zmm4
-	vpermb	zmm4, zmm1, zmm4
-	vpmultishiftqb	zmm4, zmm2, zmm4
-	vpandq	zmm4, zmm4, zmm3
-	vpermb	zmm4, zmm4, zmm0
-	kmovq	k1, r11
-	vmovdqu8	zmmword ptr [rdi + 4*rcx] {k1}, zmm4
+	vmovdqu8	zmm3 {k1} {z}, zmmword ptr [rsi + rcx]
+	vmovdqu64	zmmword ptr [rax], zmm3
+	vpermb	zmm3, zmm1, zmm3
+	vpmultishiftqb	zmm3, zmm2, zmm3
+	vpermb	zmm3, zmm3, zmm0
+	bzhi	r10, r8, r9
+	kmovq	k1, r10
+	vmovdqu8	zmmword ptr [rdi + 4*rcx] {k1}, zmm3
 	add	rcx, 16
 	sub	rdx, r9
 	jne	282b
@@ -475,17 +451,15 @@
 	or	r9b, cl
 	vshufi64x2	zmm0, zmm0, zmm0, 0
 	jne	312f
-	vmovdqa64	zmm1, zmmword ptr [rip + 1082f]
-	vpbroadcastq	zmm2, qword ptr [rip + 1092f]
+	vmovdqa64	zmm1, zmmword ptr [rip + 1052f]
+	vpbroadcastq	zmm2, qword ptr [rip + 1062f]
 	add	r8, -32
-	vpbroadcastb	zmm3, byte ptr [rip + 1102f]
 	.p2align	4
 302:
-	vpermb	zmm4, zmm1, zmmword ptr [rsi]
-	vpmultishiftqb	zmm4, zmm2, zmm4
-	vpandq	zmm4, zmm4, zmm3
-	vpermb	zmm4, zmm4, zmm0
-	vmovdqu64	zmmword ptr [rdi], zmm4
+	vpermb	zmm3, zmm1, zmmword ptr [rsi]
+	vpmultishiftqb	zmm3, zmm2, zmm3
+	vpermb	zmm3, zmm3, zmm0
+	vmovdqu64	zmmword ptr [rdi], zmm3
 	add	rdi, 64
 	add	rsi, 32
 	add	rdx, -64
@@ -497,32 +471,27 @@
 312:
 	test	rdx, rdx
 	je	412f
-	vmovdqa64	zmm1, zmmword ptr [rip + 1082f]
-	vpbroadcastq	zmm2, qword ptr [rip + 1092f]
+	vmovdqa64	zmm1, zmmword ptr [rip + 1052f]
+	vpbroadcastq	zmm2, qword ptr [rip + 1062f]
 	xor	ecx, ecx
 	mov	r8, -1
-	vpbroadcastb	zmm3, byte ptr [rip + 1102f]
 	.p2align	4
 322:
 	cmp	rdx, 64
 	mov	r9d, 64
 	cmovb	r9, rdx
 	lea	r10d, [4*r9 + 4]
-	shlx	r11, r8, r9
-	not	r11
-	cmovae	r11, r8
 	shr	r10d, 3
-	shlx	r10, r8, r10
-	not	r10
+	bzhi	r10, r8, r10
 	kmovq	k1, r10
-	vmovdqu8	zmm4 {k1} {z}, zmmword ptr [rsi + rcx]
-	vmovdqu64	zmmword ptr [rax], zmm4
-	vpermb	zmm4, zmm1, zmm4
-	vpmultishiftqb	zmm4, zmm2, zmm4
-	vpandq	zmm4, zmm4, zmm3
-	vpermb	zmm4, zmm4, zmm0
-	kmovq	k1, r11
-	vmovdqu8	zmmword ptr [rdi + 2*rcx] {k1}, zmm4
+	vmovdqu8	zmm3 {k1} {z}, zmmword ptr [rsi + rcx]
+	vmovdqu64	zmmword ptr [rax], zmm3
+	vpermb	zmm3, zmm1, zmm3
+	vpmultishiftqb	zmm3, zmm2, zmm3
+	vpermb	zmm3, zmm3, zmm0
+	bzhi	r10, r8, r9
+	kmovq	k1, r10
+	vmovdqu8	zmmword ptr [rdi + 2*rcx] {k1}, zmm3
 	add	rcx, 32
 	sub	rdx, r9
 	jne	322b
@@ -534,8 +503,8 @@
 	setb	r9b
 	or	r9b, cl
 	jne	352f
-	vmovdqa64	zmm1, zmmword ptr [rip + 1112f]
-	vpbroadcastq	zmm2, qword ptr [rip + 1122f]
+	vmovdqa64	zmm1, zmmword ptr [rip + 1072f]
+	vpbroadcastq	zmm2, qword ptr [rip + 1082f]
 	add	r8, -48
 	.p2align	4
 342:
@@ -554,8 +523,8 @@
 352:
 	test	rdx, rdx
 	je	412f
-	vmovdqa64	zmm1, zmmword ptr [rip + 1112f]
-	vpbroadcastq	zmm2, qword ptr [rip + 1122f]
+	vmovdqa64	zmm1, zmmword ptr [rip + 1072f]
+	vpbroadcastq	zmm2, qword ptr [rip + 1082f]
 	mov	rcx, -1
 	.p2align	4
 362:
@@ -564,19 +533,16 @@
 	cmovb	r8, rdx
 	lea	r9d, [r8 + 2*r8]
 	lea	r9d, [r9 + r9 + 6]
-	shlx	r10, rcx, r8
-	not	r10
-	cmovae	r10, rcx
 	shr	r9d, 3
-	shlx	r9, rcx, r9
-	not	r9
+	bzhi	r9, rcx, r9
 	kmovq	k1, r9
 	vmovdqu8	zmm3 {k1} {z}, zmmword ptr [rsi]
 	vmovdqu64	zmmword ptr [rax], zmm3
 	vpermb	zmm3, zmm1, zmm3
 	vpmultishiftqb	zmm3, zmm2, zmm3
 	vpermb	zmm3, zmm3, zmm0
-	kmovq	k1, r10
+	bzhi	r9, rcx, r8
+	kmovq	k1, r9
 	vmovdqu8	zmmword ptr [rdi] {k1}, zmm3
 	add	rdi, 64
 	add	rsi, 48
@@ -622,9 +588,7 @@
 	cmp	rdx, 64
 	mov	r9d, 64
 	cmovb	r9, rdx
-	shlx	r10, r8, r9
-	not	r10
-	cmovae	r10, r8
+	bzhi	r10, r8, r9
 	kmovq	k1, r10
 	vmovdqu8	zmm4 {k1} {z}, zmmword ptr [rsi + rcx]
 	vmovdqu64	zmmword ptr [rax], zmm4
@@ -693,8 +657,7 @@
 	kmovq	k1, rcx
 	vmovdqu8	zmm0 {k1}, zmm1
 	mov	rcx, -1
-	shlx	rax, rcx, rax
-	not	rax
+	bzhi	rax, rcx, rax
 	kmovq	k1, rax
 	vmovdqu8	zmmword ptr [rdi + rsi] {k1}, zmm0
 492:
@@ -720,8 +683,7 @@
 	je	532f
 	and	edx, -64
 	mov	rcx, -1
-	shlx	rax, rcx, rax
-	not	rax
+	bzhi	rax, rcx, rax
 	kmovq	k1, rax
 	vmovdqu8	zmm0 {k1} {z}, zmmword ptr [rsi + rdx]
 	vmovdqu8	zmmword ptr [rdi + rdx] {k1}, zmm0
@@ -849,18 +811,18 @@
 	vmovdqu64	zmm1, zmmword ptr [rcx + 64]
 	add	rsi, 96
 	add	rdi, 112
-	vpbroadcastb	zmm2, byte ptr [rip + 1132f]
-	vpbroadcastb	zmm3, byte ptr [rip + 1142f]
-	vpbroadcastb	zmm4, byte ptr [rip + 1152f]
-	vpbroadcastb	zmm5, byte ptr [rip + 1162f]
-	vpbroadcastb	zmm6, byte ptr [rip + 1172f]
-	vpbroadcastb	zmm7, byte ptr [rip + 1182f]
-	vpbroadcastb	zmm8, byte ptr [rip + 1192f]
-	vpbroadcastb	zmm9, byte ptr [rip + 1202f]
-	vpbroadcastb	zmm10, byte ptr [rip + 1212f]
-	vpbroadcastb	zmm11, byte ptr [rip + 1222f]
-	vpbroadcastb	zmm12, byte ptr [rip + 1232f]
-	vpbroadcastb	zmm13, byte ptr [rip + 1242f]
+	vpbroadcastb	zmm2, byte ptr [rip + 1092f]
+	vpbroadcastb	zmm3, byte ptr [rip + 1102f]
+	vpbroadcastb	zmm4, byte ptr [rip + 1112f]
+	vpbroadcastb	zmm5, byte ptr [rip + 1122f]
+	vpbroadcastb	zmm6, byte ptr [rip + 1132f]
+	vpbroadcastb	zmm7, byte ptr [rip + 1142f]
+	vpbroadcastb	zmm8, byte ptr [rip + 1152f]
+	vpbroadcastb	zmm9, byte ptr [rip + 1162f]
+	vpbroadcastb	zmm10, byte ptr [rip + 1172f]
+	vpbroadcastb	zmm11, byte ptr [rip + 1182f]
+	vpbroadcastb	zmm12, byte ptr [rip + 1192f]
+	vpbroadcastb	zmm13, byte ptr [rip + 1202f]
 	.p2align	4
 592:
 	vmovdqu64	xmm16, xmmword ptr [rsi - 96]
@@ -946,18 +908,18 @@
 	vmovdqu64	zmm1, zmmword ptr [rcx + 64]
 	add	rsi, 384
 	add	rdi, 448
-	vpbroadcastb	zmm2, byte ptr [rip + 1142f]
-	vpbroadcastb	zmm3, byte ptr [rip + 1132f]
-	vpbroadcastb	zmm4, byte ptr [rip + 1152f]
-	vpbroadcastb	zmm5, byte ptr [rip + 1162f]
-	vpbroadcastb	zmm6, byte ptr [rip + 1172f]
-	vpbroadcastb	zmm7, byte ptr [rip + 1182f]
-	vpbroadcastb	zmm8, byte ptr [rip + 1192f]
-	vpbroadcastb	zmm9, byte ptr [rip + 1202f]
-	vpbroadcastb	zmm10, byte ptr [rip + 1212f]
-	vpbroadcastb	zmm11, byte ptr [rip + 1222f]
-	vpbroadcastb	zmm12, byte ptr [rip + 1232f]
-	vpbroadcastb	zmm13, byte ptr [rip + 1242f]
+	vpbroadcastb	zmm2, byte ptr [rip + 1102f]
+	vpbroadcastb	zmm3, byte ptr [rip + 1092f]
+	vpbroadcastb	zmm4, byte ptr [rip + 1112f]
+	vpbroadcastb	zmm5, byte ptr [rip + 1122f]
+	vpbroadcastb	zmm6, byte ptr [rip + 1132f]
+	vpbroadcastb	zmm7, byte ptr [rip + 1142f]
+	vpbroadcastb	zmm8, byte ptr [rip + 1152f]
+	vpbroadcastb	zmm9, byte ptr [rip + 1162f]
+	vpbroadcastb	zmm10, byte ptr [rip + 1172f]
+	vpbroadcastb	zmm11, byte ptr [rip + 1182f]
+	vpbroadcastb	zmm12, byte ptr [rip + 1192f]
+	vpbroadcastb	zmm13, byte ptr [rip + 1202f]
 	.p2align	4
 612:
 	vmovdqu64	zmm14, zmmword ptr [rsi - 384]
@@ -1108,10 +1070,10 @@
 	vmovdqu	ymm0, ymmword ptr [rcx]
 	add	rsi, 64
 	add	rdi, 112
-	vpbroadcastd	ymm1, dword ptr [rip + 1252f]
-	vpbroadcastd	ymm2, dword ptr [rip + 1262f]
-	vpbroadcastd	ymm3, dword ptr [rip + 1272f]
-	vpbroadcastd	ymm4, dword ptr [rip + 1282f]
+	vpbroadcastd	ymm1, dword ptr [rip + 1212f]
+	vpbroadcastd	ymm2, dword ptr [rip + 1222f]
+	vpbroadcastd	ymm3, dword ptr [rip + 1232f]
+	vpbroadcastd	ymm4, dword ptr [rip + 1242f]
 	.p2align	4
 672:
 	vmovdqu	xmm6, xmmword ptr [rsi - 64]
@@ -1178,14 +1140,14 @@
 	vshufi64x2	zmm0, zmm0, zmm0, 68
 	add	rsi, 256
 	add	rdi, 448
-	vpbroadcastb	zmm1, byte ptr [rip + 1182f]
-	vpbroadcastb	zmm2, byte ptr [rip + 1292f]
-	vpbroadcastb	zmm3, byte ptr [rip + 1302f]
-	vpbroadcastb	zmm4, byte ptr [rip + 1142f]
-	vpbroadcastb	zmm5, byte ptr [rip + 1312f]
-	vpbroadcastb	zmm6, byte ptr [rip + 1202f]
-	vpbroadcastb	zmm7, byte ptr [rip + 1322f]
-	vpbroadcastb	zmm8, byte ptr [rip + 1162f]
+	vpbroadcastb	zmm1, byte ptr [rip + 1142f]
+	vpbroadcastb	zmm2, byte ptr [rip + 1252f]
+	vpbroadcastb	zmm3, byte ptr [rip + 1262f]
+	vpbroadcastb	zmm4, byte ptr [rip + 1102f]
+	vpbroadcastb	zmm5, byte ptr [rip + 1272f]
+	vpbroadcastb	zmm6, byte ptr [rip + 1162f]
+	vpbroadcastb	zmm7, byte ptr [rip + 1282f]
+	vpbroadcastb	zmm8, byte ptr [rip + 1122f]
 	.p2align	4
 692:
 	vmovdqu64	zmm9, zmmword ptr [rsi - 256]
@@ -1239,8 +1201,8 @@
 	vpbroadcastq	xmm0, qword ptr [rcx]
 	add	rsi, 32
 	add	rdi, 112
-	vpbroadcastd	xmm1, dword ptr [rip + 1282f]
-	vpbroadcastd	xmm2, dword ptr [rip + 1262f]
+	vpbroadcastd	xmm1, dword ptr [rip + 1242f]
+	vpbroadcastd	xmm2, dword ptr [rip + 1222f]
 	.p2align	4
 712:
 	vmovdqu	xmm3, xmmword ptr [rsi - 32]
@@ -1300,10 +1262,10 @@
 	vpbroadcastq	zmm0, qword ptr [rcx]
 	sub	rsi, -128
 	add	rdi, 448
-	vpbroadcastb	zmm1, byte ptr [rip + 1162f]
-	vpbroadcastb	zmm2, byte ptr [rip + 1322f]
-	vpbroadcastb	zmm3, byte ptr [rip + 1302f]
-	vpbroadcastb	zmm4, byte ptr [rip + 1142f]
+	vpbroadcastb	zmm1, byte ptr [rip + 1122f]
+	vpbroadcastb	zmm2, byte ptr [rip + 1282f]
+	vpbroadcastb	zmm3, byte ptr [rip + 1262f]
+	vpbroadcastb	zmm4, byte ptr [rip + 1102f]
 	.p2align	4
 732:
 	vmovdqu64	zmm5, zmmword ptr [rsi - 128]
@@ -1349,10 +1311,10 @@
 	vmovdqu64	zmm0, zmmword ptr [rcx]
 	add	rsi, 80
 	add	rdi, 112
-	vpbroadcastb	zmm1, byte ptr [rip + 1162f]
-	vpbroadcastb	zmm2, byte ptr [rip + 1322f]
-	vpbroadcastb	zmm3, byte ptr [rip + 1202f]
-	vpbroadcastb	zmm4, byte ptr [rip + 1312f]
+	vpbroadcastb	zmm1, byte ptr [rip + 1122f]
+	vpbroadcastb	zmm2, byte ptr [rip + 1282f]
+	vpbroadcastb	zmm3, byte ptr [rip + 1162f]
+	vpbroadcastb	zmm4, byte ptr [rip + 1272f]
 	.p2align	4
 752:
 	vmovdqu	xmm5, xmmword ptr [rsi - 80]
@@ -1422,10 +1384,10 @@
 	vmovdqu64	zmm0, zmmword ptr [rcx]
 	add	rsi, 320
 	add	rdi, 448
-	vpbroadcastb	zmm1, byte ptr [rip + 1162f]
-	vpbroadcastb	zmm2, byte ptr [rip + 1322f]
-	vpbroadcastb	zmm3, byte ptr [rip + 1202f]
-	vpbroadcastb	zmm4, byte ptr [rip + 1312f]
+	vpbroadcastb	zmm1, byte ptr [rip + 1122f]
+	vpbroadcastb	zmm2, byte ptr [rip + 1282f]
+	vpbroadcastb	zmm3, byte ptr [rip + 1162f]
+	vpbroadcastb	zmm4, byte ptr [rip + 1272f]
 	.p2align	4
 772:
 	vmovdqu64	zmm5, zmmword ptr [rsi - 320]
@@ -1538,19 +1500,18 @@
 862:
 	movzx	edx, byte ptr [rdx]
 872:
-	mov	r9, -1
-	shlx	r9, r9, r8
-	not	r9
 	bzhi	rdx, rdx, r8
-	popcnt	r8, rdx
+	popcnt	r9, rdx
 	kmovq	k1, rdx
 	vmovups	zmm1, zmmword ptr [rcx + rax]
 	#APP
 	#NO_APP
 	vpexpandb	zmm0 {k1}, zmm1
-	kmovq	k1, r9
+	mov	rcx, -1
+	bzhi	rcx, rcx, r8
+	kmovq	k1, rcx
 	vmovdqu8	zmmword ptr [rdi + rsi] {k1}, zmm0
-	add	rax, r8
+	add	rax, r9
 	vzeroupper
 	ret
 	.p2align	4
@@ -1623,18 +1584,15 @@
 	add	r11, -2
 942:
 	shl	r11d, 3
-	shlx	r11, rdx, r11
-	or	r11, rbx
+	shlx	rdx, rdx, r11
+	or	rdx, rbx
 	jmp	962f
 952:
-	movzx	r11d, byte ptr [rdx]
+	movzx	edx, byte ptr [rdx]
 962:
-	mov	rdx, -1
-	shlx	rdx, rdx, r10
-	not	rdx
-	bzhi	r10, r11, r10
-	popcnt	r11, r10
-	kmovq	k1, r10
+	bzhi	rdx, rdx, r10
+	popcnt	r11, rdx
+	kmovq	k1, rdx
 	vmovups	zmm0, zmmword ptr [r8 + rax]
 	#APP
 	#NO_APP
@@ -1647,7 +1605,9 @@
 	#NO_APP
 	vpexpandb	zmm2 {k2}, zmm1
 	vpexpandb	zmm2 {k1}, zmm0
-	kmovq	k1, rdx
+	mov	rcx, -1
+	bzhi	rcx, rcx, r10
+	kmovq	k1, rcx
 	vmovdqu8	zmmword ptr [rdi + rsi] {k1}, zmm2
 	add	rax, r11
 	pop	rbx
@@ -1732,9 +1692,6 @@
 	.byte	35
 	.p2align	6, 0x0
 992:
-	.byte	31
-	.p2align	6, 0x0
-1002:
 	.byte	0
 	.byte	1
 	.byte	2
@@ -1800,7 +1757,7 @@
 	.byte	27
 	.byte	28
 	.p2align	3, 0x0
-1012:
+1002:
 	.byte	0
 	.byte	3
 	.byte	6
@@ -1810,10 +1767,7 @@
 	.byte	18
 	.byte	21
 	.p2align	6, 0x0
-1022:
-	.byte	7
-	.p2align	6, 0x0
-1032:
+1012:
 	.byte	0
 	.byte	1
 	.byte	2
@@ -1879,7 +1833,7 @@
 	.byte	55
 	.byte	56
 	.p2align	3, 0x0
-1042:
+1022:
 	.byte	0
 	.byte	7
 	.byte	14
@@ -1889,7 +1843,7 @@
 	.byte	42
 	.byte	49
 	.p2align	6, 0x0
-1052:
+1032:
 	.byte	0
 	.byte	1
 	.byte	2
@@ -1955,7 +1909,7 @@
 	.byte	20
 	.byte	21
 	.p2align	3, 0x0
-1062:
+1042:
 	.byte	0
 	.byte	2
 	.byte	4
@@ -1965,10 +1919,7 @@
 	.byte	12
 	.byte	14
 	.p2align	6, 0x0
-1072:
-	.byte	3
-	.p2align	6, 0x0
-1082:
+1052:
 	.byte	0
 	.byte	1
 	.byte	2
@@ -2034,7 +1985,7 @@
 	.byte	34
 	.byte	35
 	.p2align	3, 0x0
-1092:
+1062:
 	.byte	0
 	.byte	4
 	.byte	8
@@ -2044,10 +1995,7 @@
 	.byte	24
 	.byte	28
 	.p2align	6, 0x0
-1102:
-	.byte	15
-	.p2align	6, 0x0
-1112:
+1072:
 	.byte	0
 	.byte	1
 	.byte	2
@@ -2113,7 +2061,7 @@
 	.byte	48
 	.byte	49
 	.p2align	3, 0x0
-1122:
+1082:
 	.byte	0
 	.byte	6
 	.byte	12
@@ -2123,62 +2071,62 @@
 	.byte	36
 	.byte	42
 	.p2align	6, 0x0
-1132:
+1092:
 	.byte	126
 	.p2align	6, 0x0
-1142:
+1102:
 	.byte	1
 	.p2align	6, 0x0
-1152:
+1112:
 	.byte	124
 	.p2align	6, 0x0
-1162:
+1122:
 	.byte	3
 	.p2align	6, 0x0
-1172:
+1132:
 	.byte	120
 	.p2align	6, 0x0
-1182:
+1142:
 	.byte	7
 	.p2align	6, 0x0
-1192:
+1152:
 	.byte	112
 	.p2align	6, 0x0
-1202:
+1162:
 	.byte	15
 	.p2align	6, 0x0
-1212:
+1172:
 	.byte	96
 	.p2align	6, 0x0
-1222:
+1182:
 	.byte	31
 	.p2align	6, 0x0
-1232:
+1192:
 	.byte	64
 	.p2align	6, 0x0
-1242:
+1202:
 	.byte	63
 	.p2align	2, 0x0
-1252:
+1212:
 	.long	4177066232
 	.p2align	2, 0x0
-1262:
+1222:
 	.long	4278124286
 	.p2align	2, 0x0
-1272:
+1232:
 	.long	4042322160
 	.p2align	2, 0x0
-1282:
+1242:
 	.long	4244438268
 	.p2align	6, 0x0
-1292:
+1252:
 	.byte	56
 	.p2align	6, 0x0
-1302:
+1262:
 	.byte	62
 	.p2align	6, 0x0
-1312:
+1272:
 	.byte	48
 	.p2align	6, 0x0
-1322:
+1282:
 	.byte	60

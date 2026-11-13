@@ -178,7 +178,9 @@ func.func private @lut_map(%v: !b, %t: !lut, %d: index, %w: index) -> !b {
   return %out : !b
 }
 // nat_codes gathers bytes d*k to d*k+7 into qword k with VPERMB, and VPMULTISHIFTQB takes byte i
-// of each qword from bit d*i. The index and the control are constants for a constant d.
+// of each qword from bit d*i. The index and the control are constants for a constant d. Bits
+// above d are left in place: @clean_codes is false, so @lut_map looks a code up in a table that
+// repeats every 2^d bytes, and for d = 7 VPERMI2B ignores bit 7.
 func.func private @nat_codes(%p: !p, %d: index) -> !b {
   %c0 = arith.constant 0 : index
   %c8 = arith.constant 8 : index
@@ -200,18 +202,22 @@ func.func private @nat_codes(%p: !p, %d: index) -> !b {
     %ctrl = arith.muli %i, %dv : !b
     %y = llvm.call_intrinsic "llvm.x86.avx512.pmultishift.qb.512"(%ctrl, %x)
         : (!b, !b) -> !b
-    %one = arith.constant 1 : index
-    %e = arith.shli %one, %d : index
-    %mk = arith.subi %e, %one : index
-    %mv = func.call @splat(%mk) : (index) -> !b
-    %z = arith.andi %y, %mv : !b
-    scf.yield %z : !b
+    scf.yield %y : !b
   }
   return %r : !b
 }
 
+// low_n returns the mask of the n low lanes, for n up to 64. BZHI clears the bits at and above
+// its index, so it already gives all ones once n reaches 64, where @low needs a fix.
+func.func private @low_n(%n: index) -> i64 {
+  %all = arith.constant -1 : i64
+  %n64 = arith.index_castui %n : index to i64
+  %r = llvm.call_intrinsic "llvm.x86.bmi.bzhi.64"(%all, %n64) : (i64, i64) -> i64
+  return %r : i64
+}
+
 func.func private @load_n(%p: !p, %n: index) -> !b {
-  %lm = func.call @low(%n) : (index) -> i64
+  %lm = func.call @low_n(%n) : (index) -> i64
   %m = func.call @bits(%lm) : (i64) -> !m
   %z = arith.constant dense<0> : !b
   %r = ptr.masked_load %p, %m, %z alignment = 1 : !p -> !b
@@ -219,7 +225,7 @@ func.func private @load_n(%p: !p, %n: index) -> !b {
 }
 
 func.func private @store_n(%p: !p, %n: index, %v: !b) {
-  %lm = func.call @low(%n) : (index) -> i64
+  %lm = func.call @low_n(%n) : (index) -> i64
   %m = func.call @bits(%lm) : (i64) -> !m
   ptr.masked_store %v, %p, %m alignment = 1 : !b, !p
   return
