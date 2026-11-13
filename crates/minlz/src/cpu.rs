@@ -32,6 +32,9 @@ pub const PIVCO_AVX2: u32 = 8;
 pub const PIVCO_AVX512: u32 = 16;
 /// The pivco AVX-512 GFNI/BITALG histogram (Go kernel `hasHistAVX512`).
 pub const PIVCO_HIST_AVX512: u32 = 32;
+/// The SVE2 tiers of the XXH3 and CRC32C kernels on aarch64. Detection never reports it (those
+/// kernels check the SVE2 features themselves), so this bit only ever turns a tier off.
+pub const SVE2: u32 = 64;
 
 static DISABLED: AtomicU32 = AtomicU32::new(0);
 
@@ -49,6 +52,14 @@ pub fn enable_all() {
 #[inline]
 pub fn has(mask: u32) -> bool {
     detected() & mask == mask && DISABLED.load(Ordering::Relaxed) & mask == 0
+}
+
+/// Reports whether [`disable`] has turned off any feature in `mask`. The caller still checks the
+/// features themselves: the SVE2 bit in particular is never detected, so this is the only way a
+/// kernel tier gated on it learns it was turned off.
+#[inline]
+pub fn is_disabled(mask: u32) -> bool {
+    DISABLED.load(Ordering::Relaxed) & mask != 0
 }
 
 /// Runs f once per SIMD exec tier this CPU has, with the SIMD block decodes of this thread forced

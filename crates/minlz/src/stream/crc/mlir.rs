@@ -23,6 +23,7 @@
 //! state being the CRC without its final inversion.
 
 use super::CrcFn;
+use crate::cpu;
 
 /// The targets with a kernel.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -107,7 +108,9 @@ fn sve2_available() -> bool {
 impl Isa {
     /// Returns the targets the CPU has, slowest first. SVE2 ranks above NEON, so a CPU that has it
     /// at the vector length the kernel is built for folds with the SVE2 instructions. The tests
-    /// run every tier.
+    /// run every tier. A tier whose instruction set [`cpu::disable`] has turned off is left out:
+    /// the `AVX2` bit gates the AVX2 tier, the `AVX512` bit the AVX-512 tier, the `NEON` bit the
+    /// NEON tier, and the `SVE2` bit the SVE2 tier.
     pub(super) fn available() -> Vec<Isa> {
         let mut v = Vec::new();
         #[cfg(target_arch = "x86_64")]
@@ -117,10 +120,10 @@ impl Isa {
                 v.push(Isa::Sse42);
                 if has!("pclmulqdq") {
                     v.push(Isa::Pclmul);
-                    if has!("vpclmulqdq") && has!("avx2") {
+                    if has!("vpclmulqdq") && has!("avx2") && !cpu::is_disabled(cpu::AVX2) {
                         v.push(Isa::Avx2);
                     }
-                    if has!("vpclmulqdq") && has!("avx512f") {
+                    if has!("vpclmulqdq") && has!("avx512f") && !cpu::is_disabled(cpu::AVX512) {
                         v.push(Isa::Avx512);
                     }
                 }
@@ -131,9 +134,9 @@ impl Isa {
             use std::arch::is_aarch64_feature_detected as has;
             if has!("crc") {
                 v.push(Isa::Crc);
-                if has!("aes") {
+                if has!("aes") && !cpu::is_disabled(cpu::NEON) {
                     v.push(Isa::Neon);
-                    if sve2_available() {
+                    if sve2_available() && !cpu::is_disabled(cpu::SVE2) {
                         v.push(Isa::Sve2);
                     }
                 }
@@ -203,4 +206,38 @@ pub(super) fn best() -> Option<CrcFn> {
 pub(super) unsafe fn update(isa: Isa, crc: u32, data: &[u8]) -> u32 {
     // SAFETY: the caller checked isa's features; the kernel reads the bytes of data.
     !unsafe { isa.kernel()(!crc, data.as_ptr(), data.len()) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Isa;
+    use crate::cpu;
+
+    /// A tier whose instruction set is disabled is not in available(): the bit of each of this
+    /// family's tiers, held on its own, drops that tier.
+    #[test]
+    fn disabled_bit_drops_its_tier() {
+        #[cfg(target_arch = "x86_64")]
+        {
+            {
+                let _d = cpu::Disabled::new(cpu::AVX512);
+                assert!(!Isa::available().contains(&Isa::Avx512), "AVX512 held");
+            }
+            let _d = cpu::Disabled::new(cpu::AVX2);
+            assert!(!Isa::available().contains(&Isa::Avx2), "AVX2 held");
+        }
+        #[cfg(target_arch = "aarch64")]
+        {
+            {
+                let _d = cpu::Disabled::new(cpu::SVE2);
+                assert!(!Isa::available().contains(&Isa::Sve2), "SVE2 held");
+            }
+            let _d = cpu::Disabled::new(cpu::NEON);
+            let v = Isa::available();
+            assert!(
+                !v.contains(&Isa::Neon) && !v.contains(&Isa::Sve2),
+                "NEON held"
+            );
+        }
+    }
 }

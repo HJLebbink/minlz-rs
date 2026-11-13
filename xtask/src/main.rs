@@ -25,6 +25,7 @@
 //! they are the apt.llvm.org packages `llvm-23` and `mlir-23-tools`.
 //!
 //! `cargo xtask bench <rev>` compares the speed of the working tree with commit `rev`; see
+//! `bench.rs`. `cargo xtask bench-hw <rev>` times it on every machine and kernel tier; see
 //! `bench.rs`.
 
 mod bench;
@@ -41,7 +42,10 @@ fn main() -> ExitCode {
     let result = match args.iter().map(String::as_str).collect::<Vec<_>>()[..] {
         ["mlir"] => mlir(),
         ["bench", ref rest @ ..] => bench::bench(rest),
-        _ => Err("usage: cargo xtask mlir | cargo xtask bench <rev> [...]".to_string()),
+        ["bench-hw", ref rest @ ..] => bench::bench_hw(rest),
+        _ => Err("usage: cargo xtask mlir | cargo xtask bench <rev> [...] | \
+                  cargo xtask bench-hw <rev> [...]"
+            .to_string()),
     };
     match result {
         Ok(()) => ExitCode::SUCCESS,

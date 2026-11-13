@@ -18,8 +18,9 @@
 //!
 //! ```text
 //! minlz-bench list                 the cases
-//! minlz-bench run <case> [secs]    one case, as `compare` runs it
-//! minlz-bench compare <base> [--pairs N] [--secs S] [--only TEXT]
+//! minlz-bench tiers                the kernel tiers this machine has
+//! minlz-bench run <case> [secs] [--tier T]         one case, as `compare` runs it
+//! minlz-bench compare <base> [--pairs N] [--secs S] [--only TEXT] [--tier T]
 //! ```
 //!
 //! `compare` runs each case in the base build and in this one, in alternating order, `--pairs`
@@ -27,6 +28,13 @@
 //! speed over the base's. A run reports its fastest sample, which leaves out the samples that
 //! other processes interrupted. Pin the process to one core (`taskset -c 5` on Linux,
 //! `start /affinity 20` on Windows): the runs it starts inherit the pin.
+//!
+//! `--tier` picks the kernel tier a run uses: the fastest one is what the CPU has, and each lower
+//! one turns off the instruction sets above it with `minlz::cpu::disable` before the first
+//! library call, so every dispatcher picks the kernels of that tier once. `compare` passes the
+//! tier to both builds. Only the names every version since `before-MLIR` has may appear here:
+//! the SVE2 bit is written as its number, and an older library, which has no SVE2 tier, does
+//! nothing when it is turned off.
 //!
 //! The cases cover the code that the MLIR kernels replaced: block decode at the SIMD levels runs
 //! the stream checks, the pivco decoder and the operation loops; stream read and write at level
@@ -263,10 +271,17 @@ fn run(case: &Case, secs: f64) -> (f64, usize, u64) {
 }
 
 /// Runs case in exe and returns its fastest time per call in ns, the input's bytes and the
-/// encoding's hash.
-fn run_in(exe: &Path, case: &str, secs: f64) -> Result<(f64, usize, u64), String> {
+/// encoding's hash. The exe runs the case with the tier's instruction sets turned off; an empty
+/// tier turns nothing off, so the exe runs the best tiers its CPU has.
+fn run_in(exe: &Path, case: &str, secs: f64, tier: &str) -> Result<(f64, usize, u64), String> {
+    let secs = secs.to_string();
+    let mut args = vec!["run", case, &secs];
+    let with_tier = ["--tier", tier];
+    if !tier.is_empty() {
+        args.extend_from_slice(&with_tier);
+    }
     let out = Command::new(exe)
-        .args(["run", case, &secs.to_string()])
+        .args(&args)
         .env("MINLZ_TESTDATA", testdata())
         .output()
         .map_err(|e| format!("{}: {e}", exe.display()))?;
@@ -298,9 +313,68 @@ fn median(v: &mut [f64]) -> f64 {
     }
 }
 
+/// The cpu feature bit that gates the SVE2 tiers of XXH3 and CRC32C: `minlz::cpu::SVE2` of a
+/// recent library, written as its number because an older library has no SVE2 tier and turning
+/// an unknown bit off there does nothing.
+const SVE2_BIT: u32 = 64;
+
+/// Returns the features `--tier` turns off so that every dispatcher picks the kernels of that
+/// tier, or None if this architecture has no such tier. The names are those `tiers` prints.
+fn tier_mask(name: &str) -> Option<u32> {
+    match name {
+        #[cfg(target_arch = "x86_64")]
+        "avx512" => Some(0),
+        #[cfg(target_arch = "x86_64")]
+        "avx2" => {
+            Some(minlz::cpu::AVX512 | minlz::cpu::PIVCO_AVX512 | minlz::cpu::PIVCO_HIST_AVX512)
+        }
+        #[cfg(target_arch = "aarch64")]
+        "sve2" => Some(0),
+        #[cfg(target_arch = "aarch64")]
+        "neon" => Some(SVE2_BIT),
+        "generic" => Some(if cfg!(target_arch = "x86_64") {
+            minlz::cpu::AVX2
+                | minlz::cpu::AVX512
+                | minlz::cpu::PIVCO_AVX2
+                | minlz::cpu::PIVCO_AVX512
+                | minlz::cpu::PIVCO_HIST_AVX512
+        } else if cfg!(target_arch = "aarch64") {
+            minlz::cpu::NEON | SVE2_BIT
+        } else {
+            0
+        }),
+        _ => None,
+    }
+}
+
+/// Prints the kernel tiers this machine has, one per line, fastest first: the tier of the best
+/// kernels its CPU runs, then the tiers of the lower instruction sets.
+fn tiers() {
+    let mut v: Vec<&str> = Vec::new();
+    #[cfg(target_arch = "x86_64")]
+    {
+        if std::is_x86_feature_detected!("avx512f") {
+            v.push("avx512");
+        }
+        if std::is_x86_feature_detected!("avx2") {
+            v.push("avx2");
+        }
+    }
+    #[cfg(target_arch = "aarch64")]
+    {
+        if std::arch::is_aarch64_feature_detected!("sve2") {
+            v.push("sve2");
+        }
+        v.push("neon");
+    }
+    v.push("generic");
+    v.iter().for_each(|t| println!("{t}"));
+}
+
 /// Times every case whose name contains only, in base and in this build, alternating which runs
-/// first, and prints a row per case and the geometric mean of the ratios per operation.
-fn compare(base: &Path, pairs: usize, secs: f64, only: &str) -> Result<(), String> {
+/// first, and prints a row per case and the geometric mean of the ratios per operation. Every
+/// run, in both builds, gets the tier's instruction sets turned off.
+fn compare(base: &Path, pairs: usize, secs: f64, only: &str, tier: &str) -> Result<(), String> {
     let me = env::current_exe().map_err(|e| e.to_string())?;
     println!(
         "Speed of this build over {}: median of {pairs} alternating pairs",
@@ -316,13 +390,13 @@ fn compare(base: &Path, pairs: usize, secs: f64, only: &str) -> Result<(), Strin
         let mut same = true;
         for i in 0..pairs {
             let (nb, nt, bytes) = if i % 2 == 0 {
-                let x = run_in(base, &name, secs)?;
-                let y = run_in(&me, &name, secs)?;
+                let x = run_in(base, &name, secs, tier)?;
+                let y = run_in(&me, &name, secs, tier)?;
                 same &= x.2 == y.2;
                 (x.0, y.0, x.1)
             } else {
-                let y = run_in(&me, &name, secs)?;
-                let x = run_in(base, &name, secs)?;
+                let y = run_in(&me, &name, secs, tier)?;
+                let x = run_in(base, &name, secs, tier)?;
                 same &= x.2 == y.2;
                 (x.0, y.0, x.1)
             };
@@ -358,29 +432,54 @@ fn compare(base: &Path, pairs: usize, secs: f64, only: &str) -> Result<(), Strin
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().skip(1).collect();
-    let usage = "usage: minlz-bench list | run <case> [secs] | compare <base> [--pairs N] [--secs S] [--only TEXT]";
+    let usage = "usage: minlz-bench list | tiers | run <case> [secs] [--tier T] | \
+                 compare <base> [--pairs N] [--secs S] [--only TEXT] [--tier T]";
     let result = match args.first().map(String::as_str) {
         Some("list") => {
             cases().iter().for_each(|c| println!("{}", c.name()));
             Ok(())
         }
+        Some("tiers") => {
+            tiers();
+            Ok(())
+        }
         Some("run") if args.len() >= 2 => {
-            let secs = args
-                .get(2)
-                .map_or(Ok(1.0), |s| s.parse())
-                .map_err(|e| format!("secs: {e}"));
-            match (cases().into_iter().find(|c| c.name() == args[1]), secs) {
-                (Some(case), Ok(secs)) => {
-                    let (ns, bytes, hash) = run(&case, secs);
-                    println!("{ns:.1} {bytes} {hash:016x}");
-                    Ok(())
+            let (mut secs, mut mask, mut bad) = (1.0, None, None);
+            let mut i = 2;
+            while i < args.len() {
+                if args[i] == "--tier" {
+                    let t = args.get(i + 1).map(String::as_str).unwrap_or("");
+                    match tier_mask(t) {
+                        Some(m) => mask = Some(m),
+                        None => bad = bad.or(Some(format!("no tier {t} (see minlz-bench tiers)"))),
+                    }
+                    i += 2;
+                } else {
+                    match args[i].parse() {
+                        Ok(s) => secs = s,
+                        Err(e) => bad = bad.or(Some(format!("secs: {e}"))),
+                    }
+                    i += 1;
                 }
-                (None, _) => Err(format!("no case {} (see minlz-bench list)", args[1])),
-                (_, Err(e)) => Err(e),
+            }
+            match bad {
+                Some(e) => Err(e),
+                None => match cases().into_iter().find(|c| c.name() == args[1]) {
+                    Some(case) => {
+                        // The first library call, before any dispatcher picks its kernels.
+                        if let Some(m) = mask {
+                            minlz::cpu::disable(m);
+                        }
+                        let (ns, bytes, hash) = run(&case, secs);
+                        println!("{ns:.1} {bytes} {hash:016x}");
+                        Ok(())
+                    }
+                    None => Err(format!("no case {} (see minlz-bench list)", args[1])),
+                },
             }
         }
         Some("compare") if args.len() >= 2 => {
-            let (mut pairs, mut secs, mut only) = (6, 1.0, String::new());
+            let (mut pairs, mut secs, mut only, mut tier) = (6, 1.0, String::new(), String::new());
             let mut i = 2;
             let mut bad = None;
             while i + 1 < args.len() {
@@ -388,6 +487,13 @@ fn main() -> ExitCode {
                     "--pairs" => pairs = args[i + 1].parse().unwrap_or(0),
                     "--secs" => secs = args[i + 1].parse().unwrap_or(0.0),
                     "--only" => only = args[i + 1].clone(),
+                    "--tier" => {
+                        if tier_mask(&args[i + 1]).is_none() {
+                            bad = bad.or(Some(args[i + 1].clone()));
+                        } else {
+                            tier = args[i + 1].clone();
+                        }
+                    }
                     a => bad = Some(a.to_string()),
                 }
                 i += 2;
@@ -395,7 +501,7 @@ fn main() -> ExitCode {
             if bad.is_some() || i != args.len() || pairs == 0 || secs <= 0.0 {
                 Err(usage.to_string())
             } else {
-                compare(Path::new(&args[1]), pairs, secs, &only)
+                compare(Path::new(&args[1]), pairs, secs, &only, &tier)
             }
         }
         _ => Err(usage.to_string()),

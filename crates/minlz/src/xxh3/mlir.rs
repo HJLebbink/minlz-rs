@@ -24,6 +24,7 @@
 //! so a thread that changes its vector length still hashes correctly.
 
 use super::{BLOCK, KEYS, STRIPE};
+use crate::cpu;
 
 /// The targets with MLIR kernels.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -85,25 +86,30 @@ impl Isa {
     /// and the SVE kernels took about twice the cycles of NEON on every core measured or modeled.
     /// The SVE2 tier builds the NEON kernels with SVE2 on, where LLVM takes `eor3` and a 64-bit
     /// `mul` for some fixed 128-bit operations, and ranks above NEON. The tests run every tier.
+    /// A tier whose instruction set [`cpu::disable`] has turned off is left out: the `AVX2` bit
+    /// gates the AVX2 tier, the `AVX512` bit the AVX-512 tier, the `NEON` bit the NEON and SVE
+    /// tiers, and the `SVE2` bit the SVE2 tier.
     pub(super) fn available() -> Vec<Isa> {
         let mut v = Vec::new();
         #[cfg(target_arch = "x86_64")]
         {
             v.push(Isa::Sse2);
-            if std::is_x86_feature_detected!("avx2") {
+            if std::is_x86_feature_detected!("avx2") && !cpu::is_disabled(cpu::AVX2) {
                 v.push(Isa::Avx2);
-                if std::is_x86_feature_detected!("avx512f") {
+                if std::is_x86_feature_detected!("avx512f") && !cpu::is_disabled(cpu::AVX512) {
                     v.push(Isa::Avx512);
                 }
             }
         }
         #[cfg(target_arch = "aarch64")]
         {
-            if sve_available() {
-                v.push(Isa::Sve);
+            if !cpu::is_disabled(cpu::NEON) {
+                if sve_available() {
+                    v.push(Isa::Sve);
+                }
+                v.push(Isa::Neon);
             }
-            v.push(Isa::Neon);
-            if sve2_available() {
+            if sve2_available() && !cpu::is_disabled(cpu::SVE2) {
                 v.push(Isa::Sve2);
             }
         }
@@ -226,4 +232,38 @@ pub(crate) unsafe fn vl_bytes() -> usize {
         );
     }
     n
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Isa;
+    use crate::cpu;
+
+    /// A tier whose instruction set is disabled is not in available(): the bit of each of this
+    /// family's tiers, held on its own, drops that tier.
+    #[test]
+    fn disabled_bit_drops_its_tier() {
+        #[cfg(target_arch = "x86_64")]
+        {
+            {
+                let _d = cpu::Disabled::new(cpu::AVX512);
+                assert!(!Isa::available().contains(&Isa::Avx512), "AVX512 held");
+            }
+            let _d = cpu::Disabled::new(cpu::AVX2);
+            assert!(!Isa::available().contains(&Isa::Avx2), "AVX2 held");
+        }
+        #[cfg(target_arch = "aarch64")]
+        {
+            {
+                let _d = cpu::Disabled::new(cpu::SVE2);
+                assert!(!Isa::available().contains(&Isa::Sve2), "SVE2 held");
+            }
+            let _d = cpu::Disabled::new(cpu::NEON);
+            let v = Isa::available();
+            assert!(
+                !v.contains(&Isa::Neon) && !v.contains(&Isa::Sve),
+                "NEON held"
+            );
+        }
+    }
 }
