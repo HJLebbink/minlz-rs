@@ -28,9 +28,3 @@ func.func private @lohi4(%v: vector<8xi32>) -> vector<4xi64> {
   %m = arith.muli %l64, %h64 : vector<4xi64>
   return %m : vector<4xi64>
 }
-
-// prefetch does nothing on this target. A prfm four blocks ahead made XXH3 slower on both GB10
-// cores, the Cortex-X925 and the Cortex-A725.
-func.func private @prefetch(%p: !p) {
-  return
-}

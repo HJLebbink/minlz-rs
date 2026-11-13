@@ -1,6 +1,8 @@
 // The stream checks of a SIMD block chunk, for every target: sums, counts and range checks of the
-// token, literal length and offset symbol streams. `cargo xtask mlir` puts common.mlir and a
-// target file (stats/*.mlir) in front of this file and lowers the result once per target. The
+// token, literal length and offset symbol streams. `cargo xtask mlir` puts common.mlir, a target
+// file (stats/*.mlir) and the files that the target shares with the other target of its
+// architecture (stats/x86.mlir for both x86 targets) in front of this file, and the ld.mlir file
+// that this kernel shares with exec.mlir after it, and lowers the result once per target. The
 // naked functions in crates/minlz/src/block/simd/mlir.rs hold the output; block::simd::decode
 // finishes the bytes after the last 64.
 //
@@ -10,8 +12,8 @@
 // best, and adds the lanes up once per group of chunks. The range checks keep the largest byte of
 // each lane.
 //
-// The target file gives:
-// - !acc, the type of an accumulator, and @acc_zero() -> !acc;
+// The target's files give, each in the target file or in the shared file of its architecture:
+// - !acc, the type of an accumulator;
 // - @acc_add(!acc, vector<64xi8>) -> !acc, which adds the bytes to the lanes;
 // - @acc_total(!acc) -> i64, the sum of the lanes;
 // - !cnt, the type of a byte counter, with @cnt_zero() -> !cnt, @cnt_add(!cnt, vector<64xi1>)
@@ -20,11 +22,10 @@
 
 !v = vector<64xi8>
 
-// load returns the 64 bytes at p + o.
-func.func private @load(%p: !p, %o: index) -> !v {
-  %q = func.call @at(%p, %o) : (!p, index) -> !p
-  %r = ptr.load %q alignment = 1 : !p -> !v
-  return %r : !v
+// acc_zero returns an accumulator whose lanes are all zero.
+func.func private @acc_zero() -> !acc {
+  %r = arith.constant dense<0> : !acc
+  return %r : !acc
 }
 
 // bad returns 1 if the largest byte of m is above max, and 0 if not.
@@ -82,7 +83,7 @@ func.func @minlz_stats_tok(%p: !p, %n: i64, %r: !p) -> i64 {
     %g:5 = scf.for %o = %go to %ge step %c64
         iter_args(%ao = %a0, %al = %a0, %ar = %k0, %ae = %k0, %m = %mx)
         -> (!acc, !acc, !cnt, !cnt, !v) {
-      %t = func.call @load(%p, %o) : (!p, index) -> !v
+      %t = func.call @ld(%p, %o) : (!p, index) -> !v
       %ao2 = func.call @acc_add(%ao, %t) : (!acc, !v) -> !acc
       %t3 = arith.andi %t, %v3 : !v
       %al2 = func.call @acc_add(%al, %t3) : (!acc, !v) -> !acc
@@ -141,7 +142,7 @@ func.func @minlz_stats_ll(%p: !p, %n: i64, %r: !p) -> i64 {
     %k0 = func.call @cnt_zero() : () -> !cnt
     %g:3 = scf.for %o = %go to %ge step %c64 iter_args(%as = %a0, %ae = %k0, %m = %mx)
         -> (!acc, !cnt, !v) {
-      %t = func.call @load(%p, %o) : (!p, index) -> !v
+      %t = func.call @ld(%p, %o) : (!p, index) -> !v
       %as2 = func.call @acc_add(%as, %t) : (!acc, !v) -> !acc
       %eq = arith.cmpi eq, %t, %v33 : !v
       %ae2 = func.call @cnt_add(%ae, %eq) : (!cnt, vector<64xi1>) -> !cnt
@@ -179,7 +180,7 @@ func.func @minlz_stats_off(%p: !p, %n: i64, %r: !p) -> i64 {
     %ge = arith.minui %ge0, %ni : index
     %a0 = func.call @acc_zero() : () -> !acc
     %g:2 = scf.for %o = %go to %ge step %c64 iter_args(%ab = %a0, %m = %mx) -> (!acc, !v) {
-      %t = func.call @load(%p, %o) : (!p, index) -> !v
+      %t = func.call @ld(%p, %o) : (!p, index) -> !v
       %t3 = arith.shrui %t, %v3 : !v
       %t31 = arith.maxui %t3, %v1 : !v
       %b = arith.subi %t31, %v1 : !v

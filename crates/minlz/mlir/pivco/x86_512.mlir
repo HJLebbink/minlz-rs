@@ -59,12 +59,6 @@ func.func private @permi2b(%a: !b, %idx: !b, %b: !b) -> !b {
   return %r : !b
 }
 
-// keep_cols returns true: seven columns and the tables fit the 32 zmm registers.
-func.func private @keep_cols(%d: index) -> i1 {
-  %r = arith.constant true
-  return %r : i1
-}
-
 // clean_codes returns false: VPERMB and VPERMI2B ignore the bits above d of a code
 // in the periodic table.
 func.func private @clean_codes() -> i1 {
@@ -229,12 +223,4 @@ func.func private @store_n(%p: !p, %n: index, %v: !b) {
   %m = func.call @bits(%lm) : (i64) -> !m
   ptr.masked_store %v, %p, %m alignment = 1 : !b, !p
   return
-}
-
-// spread returns 255 in the bytes whose bit of t is set: a mask, which LLVM keeps in a mask
-// register where it can.
-func.func private @spread(%t: i64) -> !b {
-  %m = func.call @bits(%t) : (i64) -> !m
-  %r = arith.extsi %m : !m to !b
-  return %r : !b
 }

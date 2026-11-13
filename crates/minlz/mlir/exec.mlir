@@ -1,7 +1,9 @@
 // The operation loops of SIMD block chunks, for every target: the parts that both loop structures
-// use. `cargo xtask mlir` puts common.mlir and a target file (exec/*.mlir) in front of this file,
-// and a structure file, exec64.mlir or exec8.mlir, after it, and lowers the result once per
-// target. The naked functions in crates/minlz/src/block/simd/mlir.rs hold the output.
+// use. `cargo xtask mlir` puts common.mlir, a target file (exec/*.mlir) and the files that the
+// target shares with the other target of its architecture (exec/x86.mlir for both x86 targets) in
+// front of this file, and a structure file, exec64.mlir or exec8.mlir, and the ld.mlir file that
+// this kernel shares with stats.mlir after it, and lowers the result once per target. The naked
+// functions in crates/minlz/src/block/simd/mlir.rs hold the output.
 //
 // Each kernel takes a pointer a to its arguments, 24 words and a buffer:
 // - words 0 to 9: dst, lits, tok, ll, offc, raw, esc, tab, n and pos;
@@ -24,7 +26,7 @@
 // last one. The second, from byte 2048, has 64 rows of 32 bytes for repeats: byte i of row r is
 // i % r for r from 2 to 31, 0 for rows 0 and 1, and i for rows 32 and up.
 //
-// Every target file gives:
+// The target's files give, each in the target file or in the shared file of its architecture:
 // - @tbl8(v: i64, idx: i64) -> i64, whose byte i is byte idx[i] of v, or 0 if idx[i] is 0x80;
 // - @permute(t: vector<32xi8>, idx: vector<32xi8>) -> vector<32xi8>, whose byte i is byte idx[i]
 //   of t, for indexes below 32.
@@ -37,13 +39,6 @@ func.func private @set(%a: !p, %i: index, %x: index) {
   %w = arith.index_castui %x : index to i64
   ptr.store %w, %q alignment = 8 : i64, !p
   return
-}
-
-// ld returns the 32 bytes at p + o.
-func.func private @ld(%p: !p, %o: index) -> !v {
-  %q = func.call @at(%p, %o) : (!p, index) -> !p
-  %r = ptr.load %q alignment = 1 : !p -> !v
-  return %r : !v
 }
 
 // st writes v to the 32 bytes at p + o.

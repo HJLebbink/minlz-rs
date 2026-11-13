@@ -317,21 +317,3 @@ func.func private @nat_codes(%p: !p, %d: index) -> !b {
   }
   return %r : !b
 }
-
-func.func private @load_n(%p: !p, %n: index) -> !b {
-  %r = func.call @load_parts(%p, %n) : (!p, index) -> !b
-  return %r : !b
-}
-
-func.func private @store_n(%p: !p, %n: index, %v: !b) {
-  func.call @store_parts(%p, %n, %v) : (!p, index, !b) -> ()
-  return
-}
-
-// spread returns 255 in the bytes whose bit of t is set: a mask, which LLVM keeps in a mask
-// register where it can.
-func.func private @spread(%t: i64) -> !b {
-  %m = func.call @bits(%t) : (i64) -> !m
-  %r = arith.extsi %m : !m to !b
-  return %r : !b
-}

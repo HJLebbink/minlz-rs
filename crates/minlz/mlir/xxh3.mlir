@@ -1,5 +1,6 @@
 // The XXH3 stripe loop for every target: accumulate_512 and scramble of the xxHash specification.
-// `cargo xtask mlir` puts common.mlir, a target file (target/*.mlir) and a lane layout
+// `cargo xtask mlir` puts common.mlir, a target file (target/*.mlir), the files that the target
+// shares with another target (target/lohi.mlir and target/no_prefetch.mlir) and a lane layout
 // (xxh3_split.mlir or xxh3_whole.mlir) in front of this file and lowers the result once per
 // target. The naked functions in crates/minlz/src/xxh3/mlir.rs hold the output.
 //

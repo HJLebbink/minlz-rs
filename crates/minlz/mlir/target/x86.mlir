@@ -3,18 +3,6 @@
 
 !acc = vector<8xi64>
 
-// lohi returns the product of the low and the high 32-bit half of each lane of x. LLVM makes it
-// one PMULUDQ (VPMULUDQ with AVX), which multiplies the low halves of its operands, of x and
-// x >> 32.
-func.func private @lohi(%x: !acc) -> !acc {
-  %lo32 = arith.constant dense<4294967295> : !acc
-  %c32 = arith.constant dense<32> : !acc
-  %l = arith.andi %x, %lo32 : !acc
-  %h = arith.shrui %x, %c32 : !acc
-  %r = arith.muli %l, %h : !acc
-  return %r : !acc
-}
-
 // prefetch brings the 64 bytes at p into the cache hierarchy, down to the L1 (hint T0). It never
 // faults, so the stripe loops may name an address past the end of the input.
 func.func private @prefetch(%p: !p) {

@@ -4,11 +4,6 @@
 !acc = vector<32xi16>
 !cnt = vector<32xi16>
 
-func.func private @acc_zero() -> !acc {
-  %r = arith.constant dense<0> : !acc
-  return %r : !acc
-}
-
 // pairs returns the sums of each 2 bytes of q: UADDLP.
 func.func private @pairs(%q: vector<16xi8>) -> vector<8xi16> {
   %r = llvm.call_intrinsic "llvm.aarch64.neon.uaddlp"(%q) : (vector<16xi8>) -> vector<8xi16>

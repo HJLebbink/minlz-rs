@@ -179,12 +179,6 @@ func.func private @lut16(%v: !q, %t: !lut, %d: index) -> !q {
   return %r : !q
 }
 
-// keep_cols returns true: seven columns and the tables fit the 32 q registers.
-func.func private @keep_cols(%d: index) -> i1 {
-  %r = arith.constant true
-  return %r : i1
-}
-
 // clean_codes returns true: TBL gives 0 for a code above its table.
 func.func private @clean_codes() -> i1 {
   %r = arith.constant true
@@ -319,16 +313,6 @@ func.func private @nat_codes(%p: !p, %d: index) -> !b {
     scf.yield %x3 : !b
   }
   return %r : !b
-}
-
-func.func private @load_n(%p: !p, %n: index) -> !b {
-  %r = func.call @load_parts(%p, %n) : (!p, index) -> !b
-  return %r : !b
-}
-
-func.func private @store_n(%p: !p, %n: index, %v: !b) {
-  func.call @store_parts(%p, %n, %v) : (!p, index, !b) -> ()
-  return
 }
 
 // spread returns 255 in the bytes whose bit of t is set: TBL copies byte k of t to bytes 8k to

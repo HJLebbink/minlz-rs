@@ -18,19 +18,3 @@ func.func private @join(%e: !h, %o: !h) -> !acc {
   %r = vector.scalable.insert %o, %a[2] : !h into !acc
   return %r : !acc
 }
-
-// lohi returns the product of the low and the high 32-bit half of each lane of x.
-func.func private @lohi(%x: !acc) -> !acc {
-  %lo32 = arith.constant dense<4294967295> : !acc
-  %c32 = arith.constant dense<32> : !acc
-  %l = arith.andi %x, %lo32 : !acc
-  %h = arith.shrui %x, %c32 : !acc
-  %r = arith.muli %l, %h : !acc
-  return %r : !acc
-}
-
-// prefetch does nothing on this target. A prfm four blocks ahead made XXH3 slower on both GB10
-// cores, the Cortex-X925 and the Cortex-A725.
-func.func private @prefetch(%p: !p) {
-  return
-}

@@ -103,26 +103,61 @@ const SPLIT: &str = "xxh3_split.mlir";
 /// The lane layout of XXH3 for fixed-width vectors: the lanes in memory order.
 const WHOLE: &str = "xxh3_whole.mlir";
 
-/// The XXH3 targets: the output folder, the target file in `mlir/target/`, the lane layout, the
-/// architecture and the features. Base SVE uses no SVE2 feature: Graviton 3 has 256-bit SVE but no
-/// SVE2, and the `sve2` row builds the NEON target file with SVE2 on. AVX-512 code takes no feature
-/// beyond AVX-512F, which is all that `xxh3::tiers` checks, and keeps 512-bit vectors whole.
-const XXH3: [(&str, &str, &str, Arch, &str); 7] = [
-    ("sve128", "sve128", SPLIT, Arch::Arm, "-mattr=+v8.2a,+sve"),
-    ("sve256", "sve256", SPLIT, Arch::Arm, "-mattr=+v8.2a,+sve"),
-    ("neon", "neon", WHOLE, Arch::Arm, "-mattr=+v8a,+neon"),
+/// A row of [`XXH3`] or [`BLOCK`]: the output folder, the target file, the shared files, a
+/// file of the kernel (the lane layout or the loop structure), the architecture and the features.
+type Row = (
+    &'static str,
+    &'static str,
+    &'static [&'static str],
+    &'static str,
+    Arch,
+    &'static str,
+);
+
+/// The XXH3 targets: the output folder, the target file in `mlir/target/`, the files that the
+/// target shares with another target, the lane layout, the architecture and the features. Base
+/// SVE uses no SVE2 feature: Graviton 3 has 256-bit SVE but no SVE2, and the `sve2` row builds the
+/// NEON target file with SVE2 on. AVX-512 code takes no feature beyond AVX-512F, which is all that
+/// `xxh3::tiers` checks, and keeps 512-bit vectors whole.
+const XXH3: [Row; 7] = [
+    (
+        "sve128",
+        "sve128",
+        &["lohi", "no_prefetch"],
+        SPLIT,
+        Arch::Arm,
+        "-mattr=+v8.2a,+sve",
+    ),
+    (
+        "sve256",
+        "sve256",
+        &["lohi", "no_prefetch"],
+        SPLIT,
+        Arch::Arm,
+        "-mattr=+v8.2a,+sve",
+    ),
+    (
+        "neon",
+        "neon",
+        &["no_prefetch"],
+        WHOLE,
+        Arch::Arm,
+        "-mattr=+v8a,+neon",
+    ),
     (
         "sve2",
         "neon",
+        &["no_prefetch"],
         WHOLE,
         Arch::Arm,
         "-mattr=+v8.2a,+neon,+sve2",
     ),
-    ("sse2", "x86", WHOLE, Arch::X86, "-mattr=+sse2"),
-    ("avx2", "x86", WHOLE, Arch::X86, "-mattr=+avx2"),
+    ("sse2", "x86", &["lohi"], WHOLE, Arch::X86, "-mattr=+sse2"),
+    ("avx2", "x86", &["lohi"], WHOLE, Arch::X86, "-mattr=+avx2"),
     (
         "avx512",
         "x86",
+        &["lohi"],
         WHOLE,
         Arch::X86,
         "-mattr=+avx512f,-prefer-256-bit",
@@ -133,14 +168,21 @@ const XXH3: [(&str, &str, &str, Arch, &str); 7] = [
 const EXEC64: &str = "exec64.mlir";
 /// The structure of the operation loops in batches of 8, for aarch64.
 const EXEC8: &str = "exec8.mlir";
+/// The file that holds the `@ld` that the statistics and the operation loops share. It follows
+/// the kernel file, because the width it loads is the kernel's `!v`, which only the kernel file
+/// gives.
+const LD: &str = "ld.mlir";
 
 /// The targets of the block kernels, the statistics and the operation loops: the output folder,
-/// the target file in `mlir/stats/` and in `mlir/exec/`, the structure of the operation loops, the
-/// architecture and the features, each among those that `block::simd` checks for its tier.
-const BLOCK: [(&str, &str, &str, Arch, &str); 3] = [
+/// the target file in `mlir/stats/` and in `mlir/exec/`, the files that the target shares with
+/// another target of its architecture (each name is read in the folder of the kernel that uses
+/// it), the structure of the operation loops, the architecture and the features, each among those
+/// that `block::simd` checks for its tier.
+const BLOCK: [Row; 3] = [
     (
         "avx2",
         "x86_256",
+        &["x86"],
         EXEC64,
         Arch::X86,
         "-mattr=+avx2,+bmi2,+popcnt",
@@ -148,24 +190,39 @@ const BLOCK: [(&str, &str, &str, Arch, &str); 3] = [
     (
         "avx512",
         "x86_512",
+        &["x86"],
         EXEC64,
         Arch::X86,
         "-mattr=+avx512f,+avx512bw,+avx512vl,+avx512vbmi,+avx512vbmi2,+bmi2,+popcnt,-prefer-256-bit",
     ),
-    ("neon", "neon", EXEC8, Arch::Arm, "-mattr=+v8a,+neon"),
+    ("neon", "neon", &[], EXEC8, Arch::Arm, "-mattr=+v8a,+neon"),
 ];
 
 /// The targets of the pivco kernels: the output folder, the target file in `mlir/pivco/`, the
-/// architecture and the features, each among those that `pivco::kernel` checks for its tier.
-const PIVCO: [(&str, &str, Arch, &str); 3] = [
-    ("avx2", "x86_256", Arch::X86, "-mattr=+avx2,+bmi2,+popcnt"),
+/// files that the target shares with another target, the architecture and the features, each among
+/// those that `pivco::kernel` checks for its tier.
+const PIVCO: [(&str, &str, &[&str], Arch, &str); 3] = [
+    (
+        "avx2",
+        "x86_256",
+        &["load_store_n", "spread"],
+        Arch::X86,
+        "-mattr=+avx2,+bmi2,+popcnt",
+    ),
     (
         "avx512",
         "x86_512",
+        &["spread", "keep_cols"],
         Arch::X86,
         "-mattr=+avx512f,+avx512bw,+avx512vl,+avx512vbmi,+avx512vbmi2,+avx512vpopcntdq,+bmi2,+popcnt,-prefer-256-bit",
     ),
-    ("neon", "neon", Arch::Arm, "-mattr=+v8a,+neon"),
+    (
+        "neon",
+        "neon",
+        &["load_store_n", "keep_cols"],
+        Arch::Arm,
+        "-mattr=+v8a,+neon",
+    ),
 ];
 
 /// The passes that take the kernels from the dialects they are written in to the LLVM dialect.
@@ -210,7 +267,8 @@ struct Lowering {
     mattr: &'static str,
     /// The functions to write, each to `<out>/<function>.s`.
     functions: &'static [&'static str],
-    /// The MLIR to lower: `common.mlir`, the target's files, and the kernel's own file last.
+    /// The MLIR to lower: `common.mlir`, the target's files, and the kernel's own file, except for
+    /// a shared file whose body names a type the kernel file gives, which follows that file.
     mlir: String,
 }
 
@@ -219,11 +277,18 @@ fn mlir() -> Result<(), String> {
     let dir = mlir_dir();
     let src = root().join("crates/minlz/src");
     let read = |name: &str| fs::read_to_string(dir.join(name)).map_err(|e| format!("{name}: {e}"));
+    // Reads `<folder>/<name>.mlir` for each name and returns the files one after the other.
+    let read_in = |folder: &str, names: &[&str]| -> Result<String, String> {
+        names
+            .iter()
+            .map(|name| read(&format!("{folder}/{name}.mlir")))
+            .collect()
+    };
     let common = read("common.mlir")?;
     let mut lowerings = Vec::new();
 
     let xxh3 = read("xxh3.mlir")?;
-    for (target, file, layout, arch, mattr) in XXH3 {
+    for (target, file, shared, layout, arch, mattr) in XXH3 {
         let file = read(&format!("target/{file}.mlir"))?;
         lowerings.push(Lowering {
             kernel: "xxh3",
@@ -233,7 +298,14 @@ fn mlir() -> Result<(), String> {
             arch,
             mattr,
             functions: &["accum", "blocks"],
-            mlir: [common.as_str(), &file, &read(layout)?, &xxh3].concat(),
+            mlir: [
+                common.as_str(),
+                &file,
+                &read_in("target", shared)?,
+                &read(layout)?,
+                &xxh3,
+            ]
+            .concat(),
         });
     }
 
@@ -255,8 +327,11 @@ fn mlir() -> Result<(), String> {
 
     let stats = read("stats.mlir")?;
     let exec = read("exec.mlir")?;
-    for (target, file, structure, arch, mattr) in BLOCK {
+    let ld = read(LD)?;
+    for (target, file, shared, structure, arch, mattr) in BLOCK {
         let out = src.join("block/simd/mlir").join(target);
+        let stats_shared = read_in("stats", shared)?;
+        let exec_shared = read_in("exec", shared)?;
         lowerings.push(Lowering {
             kernel: "stats",
             source: "stats.mlir",
@@ -268,7 +343,9 @@ fn mlir() -> Result<(), String> {
             mlir: [
                 common.as_str(),
                 &read(&format!("stats/{file}.mlir"))?,
+                &stats_shared,
                 &stats,
+                &ld,
             ]
             .concat(),
         });
@@ -283,15 +360,17 @@ fn mlir() -> Result<(), String> {
             mlir: [
                 common.as_str(),
                 &read(&format!("exec/{file}.mlir"))?,
+                &exec_shared,
                 &exec,
                 &read(structure)?,
+                &ld,
             ]
             .concat(),
         });
     }
 
     let pivco = read("pivco.mlir")?;
-    for (target, file, arch, mattr) in PIVCO {
+    for (target, file, shared, arch, mattr) in PIVCO {
         lowerings.push(Lowering {
             kernel: "pivco",
             source: "pivco.mlir",
@@ -303,6 +382,7 @@ fn mlir() -> Result<(), String> {
             mlir: [
                 common.as_str(),
                 &read(&format!("pivco/{file}.mlir"))?,
+                &read_in("pivco", shared)?,
                 &pivco,
             ]
             .concat(),

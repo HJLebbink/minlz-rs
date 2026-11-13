@@ -1,6 +1,8 @@
 // The pivco decoder kernel of crates/minlz/src/pivco/kernel, for every target. `cargo xtask mlir`
-// puts common.mlir and a target file (pivco/*.mlir) in front of this file and lowers the result
-// once per target. The naked functions in crates/minlz/src/pivco/kernel/mlir.rs hold the output.
+// puts common.mlir, a target file (pivco/*.mlir) and the files that the target shares with another
+// target (pivco/load_store_n.mlir, pivco/spread.mlir and pivco/keep_cols.mlir) in front of this
+// file and lowers the result once per target. The naked functions in
+// crates/minlz/src/pivco/kernel/mlir.rs hold the output.
 //
 // The code works on 64 bytes at a time, and LLVM splits the vectors into the registers of the
 // target. Every target file defines the types !b = vector<64xi8>, !m = vector<64xi1>,
