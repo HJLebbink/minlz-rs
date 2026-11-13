@@ -401,6 +401,9 @@ fn raw_bits(raw: &[u8], pos: usize, nb: usize) -> usize {
 
 /// Runs the first n operations of c (Go `simdExecGo`).
 /// They must end at least [`SLACK`](super::SLACK) bytes before the end of dst.
+// The Go exec loops (this one and `exec_flat_go`) stay out of line. Inlined into the chunk loop
+// of `Decoder::ops`, they slow the SIMD block decoders by 2% on Sapphire Rapids.
+#[inline(never)]
 pub(super) fn exec_go(dst: &mut [u8], lits: &[u8], c: &Chunk, n: usize, st: &mut [usize; 4]) {
     let (mut d, mut l, mut last) = (st[0], st[1], st[2]);
     let (mut li, mut oi, mut gi, mut pos) = (0, 0, 0, 0);
@@ -457,6 +460,7 @@ pub(super) fn exec_go(dst: &mut [u8], lits: &[u8], c: &Chunk, n: usize, st: &mut
 /// Runs operations k0 to k of c, which has the no-overlap flag, from stream positions cur
 /// (Go `simdExecFlatGo`). They must end at least [`SLACK`](super::SLACK) bytes before the end of dst, and
 /// start at [`MAX_LEN`] or later.
+#[inline(never)]
 pub(super) fn exec_flat_go(
     dst: &mut [u8],
     lits: &[u8],
