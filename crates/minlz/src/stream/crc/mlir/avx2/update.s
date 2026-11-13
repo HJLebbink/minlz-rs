@@ -8,7 +8,7 @@
 	vmovd	xmm0, edi
 	movabs	rax, -1224287136463716352
 	vmovq	xmm4, rax
-	vpclmulqdq	xmm3, xmm0, xmm4, 0
+	vpclmulqdq	xmm2, xmm0, xmm4, 0
 	vpxor	xmm0, xmm0, xmm0
 	mov	rax, rcx
 	shr	rax, 8
@@ -16,7 +16,7 @@
 	mul	rdx
 	cmp	rcx, 1792
 	jae	12f
-	vpxor	xmm2, xmm2, xmm2
+	vpxor	xmm3, xmm3, xmm3
 	vpxor	xmm1, xmm1, xmm1
 	imul	rax, rdx, 1792
 	cmp	rax, r8
@@ -37,7 +37,7 @@
 	movabs	rdi, 4449734295027712000
 	movabs	r9, 7311508529481777152
 	mov	r10, rsi
-	vpxor	xmm2, xmm2, xmm2
+	vpxor	xmm3, xmm3, xmm3
 	vpxor	xmm1, xmm1, xmm1
 	.p2align	4
 22:
@@ -59,47 +59,47 @@
 	crc32	r14, qword ptr [r10 + r15 + 1304]
 	crc32	rbx, qword ptr [r10 + r15 + 1560]
 	crc32	r11, qword ptr [r10 + r15 + 1816]
-	vpclmulqdq	ymm9, ymm3, ymm5, 0
-	vpclmulqdq	ymm3, ymm3, ymm6, 17
-	vpxor	ymm3, ymm9, ymm3
-	vpclmulqdq	ymm9, ymm0, ymm5, 0
-	vpclmulqdq	ymm0, ymm0, ymm6, 17
-	vpxor	ymm0, ymm9, ymm0
 	vpclmulqdq	ymm9, ymm2, ymm5, 0
 	vpclmulqdq	ymm2, ymm2, ymm6, 17
+	vpxor	ymm9, ymm9, ymmword ptr [r10 + 4*r15 + 1024]
 	vpxor	ymm2, ymm9, ymm2
+	vpclmulqdq	ymm9, ymm0, ymm5, 0
+	vpclmulqdq	ymm0, ymm0, ymm6, 17
+	vpxor	ymm9, ymm9, ymmword ptr [r10 + 4*r15 + 1056]
+	vpxor	ymm0, ymm9, ymm0
+	vpclmulqdq	ymm9, ymm3, ymm5, 0
+	vpclmulqdq	ymm3, ymm3, ymm6, 17
+	vpxor	ymm9, ymm9, ymmword ptr [r10 + 4*r15 + 1088]
+	vpxor	ymm3, ymm9, ymm3
 	vpclmulqdq	ymm9, ymm1, ymm5, 0
 	vpclmulqdq	ymm1, ymm1, ymm6, 17
+	vpxor	ymm9, ymm9, ymmword ptr [r10 + 4*r15 + 1120]
 	vpxor	ymm1, ymm9, ymm1
-	vpxor	ymm3, ymm3, ymmword ptr [r10 + 4*r15 + 1024]
-	vpxor	ymm0, ymm0, ymmword ptr [r10 + 4*r15 + 1056]
-	vpxor	ymm2, ymm2, ymmword ptr [r10 + 4*r15 + 1088]
-	vpxor	ymm1, ymm1, ymmword ptr [r10 + 4*r15 + 1120]
 	add	r15, 32
 	jne	32b
-	vpclmulqdq	ymm9, ymm3, ymm7, 0
-	vpclmulqdq	ymm3, ymm3, ymm8, 17
-	vpxor	ymm3, ymm9, ymm3
-	vpclmulqdq	ymm9, ymm0, ymm7, 0
-	vpclmulqdq	ymm0, ymm0, ymm8, 17
-	vpxor	ymm0, ymm9, ymm0
 	vpclmulqdq	ymm9, ymm2, ymm7, 0
 	vpclmulqdq	ymm2, ymm2, ymm8, 17
 	vpxor	ymm2, ymm9, ymm2
+	vpclmulqdq	ymm9, ymm0, ymm7, 0
+	vpclmulqdq	ymm0, ymm0, ymm8, 17
+	vpxor	ymm0, ymm9, ymm0
+	vpclmulqdq	ymm9, ymm3, ymm7, 0
+	vpclmulqdq	ymm3, ymm3, ymm8, 17
+	vpxor	ymm3, ymm9, ymm3
 	vpclmulqdq	ymm9, ymm1, ymm7, 0
 	vpclmulqdq	ymm1, ymm1, ymm8, 17
 	vpxor	ymm1, ymm9, ymm1
 	vmovq	xmm9, r14
 	vmovq	xmm10, rdi
 	vpclmulqdq	xmm9, xmm9, xmm10, 0
-	vpxor	ymm3, ymm9, ymm3
+	vpxor	ymm2, ymm9, ymm2
 	vmovq	xmm9, rbx
 	vmovq	xmm10, r9
 	vpclmulqdq	xmm9, xmm9, xmm10, 0
 	vmovq	xmm10, r11
 	vpclmulqdq	xmm10, xmm10, xmm4, 0
 	vpxor	ymm9, ymm9, ymm10
-	vpxor	ymm3, ymm9, ymm3
+	vpxor	ymm2, ymm9, ymm2
 	inc	rax
 	add	r10, 1792
 	cmp	rax, rdx
@@ -115,45 +115,45 @@
 	vpbroadcastq	ymm5, qword ptr [rip + 222f]
 	.p2align	4
 52:
-	vpclmulqdq	ymm6, ymm3, ymm4, 0
-	vpclmulqdq	ymm3, ymm3, ymm5, 17
-	vpxor	ymm3, ymm3, ymm6
-	vpclmulqdq	ymm6, ymm0, ymm4, 0
-	vpclmulqdq	ymm0, ymm0, ymm5, 17
-	vpxor	ymm0, ymm0, ymm6
 	vpclmulqdq	ymm6, ymm2, ymm4, 0
 	vpclmulqdq	ymm2, ymm2, ymm5, 17
-	vpxor	ymm2, ymm2, ymm6
+	vpxor	ymm6, ymm6, ymmword ptr [rsi + rax]
+	vpxor	ymm2, ymm6, ymm2
+	vpclmulqdq	ymm6, ymm0, ymm4, 0
+	vpclmulqdq	ymm0, ymm0, ymm5, 17
+	vpxor	ymm6, ymm6, ymmword ptr [rsi + rax + 32]
+	vpxor	ymm0, ymm6, ymm0
+	vpclmulqdq	ymm6, ymm3, ymm4, 0
+	vpclmulqdq	ymm3, ymm3, ymm5, 17
+	vpxor	ymm6, ymm6, ymmword ptr [rsi + rax + 64]
+	vpxor	ymm3, ymm6, ymm3
 	vpclmulqdq	ymm6, ymm1, ymm4, 0
 	vpclmulqdq	ymm1, ymm1, ymm5, 17
-	vpxor	ymm1, ymm1, ymm6
-	vpxor	ymm3, ymm3, ymmword ptr [rsi + rax]
-	vpxor	ymm0, ymm0, ymmword ptr [rsi + rax + 32]
-	vpxor	ymm2, ymm2, ymmword ptr [rsi + rax + 64]
-	vpxor	ymm1, ymm1, ymmword ptr [rsi + rax + 96]
+	vpxor	ymm6, ymm6, ymmword ptr [rsi + rax + 96]
+	vpxor	ymm1, ymm6, ymm1
 	sub	rax, -128
 	cmp	rax, r8
 	jl	52b
 62:
-	vpclmulqdq	ymm4, ymm3, ymmword ptr [rip + 252f], 0
-	vpclmulqdq	ymm3, ymm3, ymmword ptr [rip + 262f], 17
-	vpxor	ymm3, ymm3, ymm4
+	vpclmulqdq	ymm4, ymm2, ymmword ptr [rip + 252f], 0
+	vpclmulqdq	ymm2, ymm2, ymmword ptr [rip + 262f], 17
+	vpxor	ymm2, ymm2, ymm4
 	vpclmulqdq	ymm4, ymm0, ymmword ptr [rip + 272f], 0
 	vpclmulqdq	ymm0, ymm0, ymmword ptr [rip + 282f], 17
 	vpxor	ymm0, ymm0, ymm4
-	vpclmulqdq	ymm4, ymm2, ymmword ptr [rip + 292f], 0
-	vpclmulqdq	ymm2, ymm2, ymmword ptr [rip + 302f], 17
-	vpxor	ymm2, ymm2, ymm4
+	vpclmulqdq	ymm4, ymm3, ymmword ptr [rip + 292f], 0
+	vpclmulqdq	ymm3, ymm3, ymmword ptr [rip + 302f], 17
+	vpxor	ymm3, ymm3, ymm4
 	vpclmulqdq	ymm4, ymm1, ymmword ptr [rip + 312f], 0
 	vpclmulqdq	ymm1, ymm1, ymmword ptr [rip + 322f], 17
 	vpxor	ymm1, ymm1, ymm4
-	vextracti128	xmm4, ymm3, 1
+	vextracti128	xmm4, ymm2, 1
 	vextracti128	xmm5, ymm0, 1
-	vextracti128	xmm6, ymm2, 1
+	vextracti128	xmm6, ymm3, 1
 	vextracti128	xmm7, ymm1, 1
-	vpxor	xmm0, xmm3, xmm0
+	vpxor	xmm0, xmm2, xmm0
 	vpxor	xmm0, xmm4, xmm0
-	vpxor	xmm2, xmm5, xmm2
+	vpxor	xmm2, xmm5, xmm3
 	vpxor	xmm0, xmm0, xmm2
 	vpxor	xmm1, xmm6, xmm1
 	vpxor	xmm1, xmm1, xmm7

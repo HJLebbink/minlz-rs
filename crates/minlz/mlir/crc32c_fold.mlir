@@ -30,11 +30,17 @@
 //   to one (the last lane's keys multiply by x^0);
 // - @chain_keys() -> vector<3xi64>, for each chain the key that places its CRC in lane 0; the
 //   third also places the starting CRC there;
-// - @clmul2(!st, !st) -> !st, per lane the 128-bit product of the low words xor that of the high
-//   words;
-// - @clmul2_xor(!st, !st, !st) -> !st, @clmul2 with the words of the third argument added to each
-//   lane's product, which one instruction can do where the target has a three-way xor;
+// - @clmul2_xor(!st, !st, !st) -> !st, per lane the 128-bit product of the low words xor that of
+//   the high words, with the words of the third argument added, which one instruction can do
+//   where the target has a three-way xor;
 // - @clmul(i64, i64) -> vector<2xi64>, the 128-bit carry-less product of two words.
+
+// clmul2 is clmul2_xor with nothing added.
+func.func private @clmul2(%x: !st, %k: !st) -> !st {
+  %z = arith.constant dense<0> : !st
+  %r = func.call @clmul2_xor(%x, %k, %z) : (!st, !st, !st) -> !st
+  return %r : !st
+}
 
 // fold returns s moved one stride on, with the stride at p + o added.
 func.func private @fold(%s: !st, %k: !st, %p: !p, %o: index) -> !st {

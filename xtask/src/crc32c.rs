@@ -254,27 +254,20 @@ impl Target {
                 };
                 let title = format!("x86-64 with {insn} on {bits}-bit vectors");
                 let mut s = self.fold(&title, &format!("{reg} registers"));
-                s += &halves(2 * lanes, bits / 64, false);
+                s += &halves(2 * lanes, bits / 64);
                 s += &x86_clmul(bits, insn);
-                s += PLAIN_CLMUL2_XOR;
                 s
             }
             (Kind::Fold { lanes, sve2, .. }, Arch::Arm) => {
-                let (title, clmul_reg) = if sve2 {
-                    ("SVE2 with PMULLB, PMULLT and EOR3", SVE2_CLMUL_REG)
+                let (title, clmul_reg_xor) = if sve2 {
+                    ("SVE2 with PMULLB, PMULLT and EOR3", SVE2_CLMUL_REG_XOR)
                 } else {
-                    ("NEON with PMULL from the AES extension", NEON_CLMUL_REG)
+                    ("NEON with PMULL from the AES extension", NEON_CLMUL_REG_XOR)
                 };
                 let mut s = self.fold(title, "q registers");
-                s += &halves(2 * lanes, 2, false);
-                s += clmul_reg;
+                s += &halves(2 * lanes, 2);
+                s += clmul_reg_xor;
                 s += ARM_CLMUL;
-                if sve2 {
-                    s += &halves(2 * lanes, 2, true);
-                    s += SVE2_CLMUL_REG_XOR;
-                } else {
-                    s += PLAIN_CLMUL2_XOR;
-                }
                 s
             }
             (Kind::Chains { bytes }, arch) => chains(arch, bytes),
@@ -425,19 +418,17 @@ func.func private @shift_key() -> i64 {{
     s
 }
 
-/// Returns clmul2 on `vector<n x i64>` as the same on each half, down to one register of `leaf`
-/// words. With `data` the chain is `clmul2_xor`, `clmul8_xor` and so on: the same functions with
-/// the words to add to each lane carried down to `clmul_reg_xor`.
-fn halves(n: u32, leaf: u32, data: bool) -> String {
+/// Returns clmul2_xor on `vector<n x i64>` as the same on each half, down to `clmul_reg_xor` on
+/// one register of `leaf` words.
+fn halves(n: u32, leaf: u32) -> String {
     let mut s = String::new();
-    let suffix = if data { "_xor" } else { "" };
-    let (mut size, mut name) = (n, format!("clmul2{suffix}"));
+    let (mut size, mut name) = (n, "clmul2_xor".to_string());
     while size > leaf {
         let h = size / 2;
         let sub = if h > leaf {
-            format!("clmul{h}{suffix}")
+            format!("clmul{h}_xor")
         } else {
-            format!("clmul_reg{suffix}")
+            "clmul_reg_xor".to_string()
         };
         let t = if size == n {
             "!st".to_string()
@@ -457,32 +448,17 @@ fn halves(n: u32, leaf: u32, data: bool) -> String {
                 })
                 .collect()
         };
-        // The third operand only fits by starting a new line.
-        let (dsig, ret, csig, with) = if data {
-            (
-                format!(", %d: {t}"),
-                format!("\n    -> {t} {{"),
-                format!("\n      : ({ht}, {ht}, {ht}) -> {ht}"),
-                " with the words added to each lane",
-            )
-        } else {
-            (
-                String::new(),
-                format!(" -> {t} {{"),
-                format!(" : ({ht}, {ht}) -> {ht}"),
-                "",
-            )
-        };
-        let (da, db) = if data { (", %da", ", %db") } else { ("", "") };
-        let dpart = if data { split('d', &t) } else { String::new() };
-        let (xa, ka) = (split('x', &t), split('k', &t));
+        let (xa, ka, da) = (split('x', &t), split('k', &t), split('d', &t));
         write!(
             s,
             r#"
-// {name} is clmul2 on {size} words{with}, as {sub} on each half.
-func.func private @{name}(%x: {t}, %k: {t}{dsig}){ret}
-{xa}{ka}{dpart}  %ra = func.call @{sub}(%xa, %ka{da}){csig}
-  %rb = func.call @{sub}(%xb, %kb{db}){csig}
+// {name} is clmul2_xor on {size} words, as {sub} on each half.
+func.func private @{name}(%x: {t}, %k: {t}, %d: {t})
+    -> {t} {{
+{xa}{ka}{da}  %ra = func.call @{sub}(%xa, %ka, %da)
+      : ({ht}, {ht}, {ht}) -> {ht}
+  %rb = func.call @{sub}(%xb, %kb, %db)
+      : ({ht}, {ht}, {ht}) -> {ht}
   %r = vector.shuffle %ra, %rb [
       {idx}
     ] : {ht}, {ht}
@@ -496,7 +472,7 @@ func.func private @{name}(%x: {t}, %k: {t}{dsig}){ret}
     s
 }
 
-/// Returns the x86-64 carry-less multiplies: clmul2 on one register, and clmul.
+/// Returns the x86-64 carry-less multiplies: clmul2_xor on one register, and clmul.
 fn x86_clmul(bits: u32, insn: &str) -> String {
     let vt = format!("vector<{}xi64>", bits / 64);
     let intr = match bits {
@@ -505,16 +481,17 @@ fn x86_clmul(bits: u32, insn: &str) -> String {
     };
     format!(
         r#"
-// clmul_reg is clmul2 on one register: {insn} multiplies the low words of each 128-bit lane
-// (immediate 0x00) or the high words (0x11).
-func.func private @clmul_reg(%x: {vt}, %k: {vt}) -> {vt} {{
+// clmul_reg_xor is clmul2_xor on one register: {insn} multiplies the low words of each 128-bit
+// lane (immediate 0x00) or the high words (0x11).
+func.func private @clmul_reg_xor(%x: {vt}, %k: {vt}, %d: {vt}) -> {vt} {{
   %lo = llvm.mlir.constant(0 : i8) : i8
   %hi = llvm.mlir.constant(17 : i8) : i8
   %a = llvm.call_intrinsic "{intr}"(%x, %k, %lo)
       : ({vt}, {vt}, i8) -> {vt}
   %b = llvm.call_intrinsic "{intr}"(%x, %k, %hi)
       : ({vt}, {vt}, i8) -> {vt}
-  %r = arith.xori %a, %b : {vt}
+  %ab = arith.xori %a, %b : {vt}
+  %r = arith.xori %ab, %d : {vt}
   return %r : {vt}
 }}
 
@@ -532,37 +509,21 @@ func.func private @clmul(%a: i64, %b: i64) -> vector<2xi64> {{
     )
 }
 
-/// The NEON `clmul_reg`, the fold's carry-less multiply on one register.
-const NEON_CLMUL_REG: &str = r#"
-// clmul_reg is clmul2 on one register: PMULL multiplies the low words, PMULL2 the high words.
-func.func private @clmul_reg(%x: vector<2xi64>, %k: vector<2xi64>) -> vector<2xi64> {
+/// The NEON `clmul_reg_xor`, the fold's carry-less multiply on one register.
+const NEON_CLMUL_REG_XOR: &str = r#"
+// clmul_reg_xor is clmul2_xor on one register: PMULL multiplies the low words, PMULL2 the high
+// words.
+func.func private @clmul_reg_xor(%x: vector<2xi64>, %k: vector<2xi64>, %d: vector<2xi64>)
+    -> vector<2xi64> {
   %x0 = vector.extract %x[0] : i64 from vector<2xi64>
   %x1 = vector.extract %x[1] : i64 from vector<2xi64>
   %k0 = vector.extract %k[0] : i64 from vector<2xi64>
   %k1 = vector.extract %k[1] : i64 from vector<2xi64>
   %a = func.call @clmul(%x0, %k0) : (i64, i64) -> vector<2xi64>
   %b = func.call @clmul(%x1, %k1) : (i64, i64) -> vector<2xi64>
-  %r = arith.xori %a, %b : vector<2xi64>
+  %ab = arith.xori %a, %b : vector<2xi64>
+  %r = arith.xori %ab, %d : vector<2xi64>
   return %r : vector<2xi64>
-}
-"#;
-
-/// The SVE2 `clmul_reg`, the fold's carry-less multiply on one register.
-const SVE2_CLMUL_REG: &str = r#"
-// clmul_reg is clmul2 on one register: pmullb multiplies the low words, pmullt the high words. At
-// a 16-byte vector length a register is the two words, so pmullb takes element 0 of each operand
-// and pmullt element 1, each into the whole register.
-func.func private @clmul_reg(%x: vector<2xi64>, %k: vector<2xi64>) -> vector<2xi64> {
-  %z = ub.poison : vector<[2]xi64>
-  %sx = vector.scalable.insert %x, %z[0] : vector<2xi64> into vector<[2]xi64>
-  %sk = vector.scalable.insert %k, %z[0] : vector<2xi64> into vector<[2]xi64>
-  %a = llvm.call_intrinsic "llvm.aarch64.sve.pmullb.pair"(%sx, %sk)
-      : (vector<[2]xi64>, vector<[2]xi64>) -> vector<[2]xi64>
-  %b = llvm.call_intrinsic "llvm.aarch64.sve.pmullt.pair"(%sx, %sk)
-      : (vector<[2]xi64>, vector<[2]xi64>) -> vector<[2]xi64>
-  %r = arith.xori %a, %b : vector<[2]xi64>
-  %f = vector.scalable.extract %r[0] : vector<2xi64> from vector<[2]xi64>
-  return %f : vector<2xi64>
 }
 "#;
 
@@ -576,22 +537,14 @@ func.func private @clmul(%a: i64, %b: i64) -> vector<2xi64> {
 }
 "#;
 
-/// `clmul2_xor` for the targets that add the words to the products with a plain xor.
-const PLAIN_CLMUL2_XOR: &str = r#"
-// clmul2_xor is clmul2 with d added to each lane's product.
-func.func private @clmul2_xor(%x: !st, %k: !st, %d: !st) -> !st {
-  %f = func.call @clmul2(%x, %k) : (!st, !st) -> !st
-  %r = arith.xori %f, %d : !st
-  return %r : !st
-}
-"#;
-
 /// The SVE2 leaf of the `clmul2_xor` chain.
 const SVE2_CLMUL_REG_XOR: &str = r#"
-// clmul_reg_xor is clmul_reg with d added to the product: eor3 takes the two products and d in
-// one instruction. eor3 also writes its last operand, so that is the product of the low words:
-// its register is the one the next fold reads as the state, and with either other operand last
-// the loop needs a copy of the state per lane.
+// clmul_reg_xor is clmul2_xor on one register: pmullb multiplies the low words, pmullt the high
+// words, and eor3 adds the two products and d in one instruction. At a 16-byte vector length a
+// register is the two words, so pmullb takes element 0 of each operand and pmullt element 1, each
+// into the whole register. eor3 also writes its last operand, so that is the product of the low
+// words: its register is the one the next fold reads as the state, and with either other operand
+// last the loop needs a copy of the state per lane.
 func.func private @clmul_reg_xor(%x: vector<2xi64>, %k: vector<2xi64>, %d: vector<2xi64>)
     -> vector<2xi64> {
   %z = ub.poison : vector<[2]xi64>

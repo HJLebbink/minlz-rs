@@ -60,16 +60,16 @@
 	crc32	r11, qword ptr [rdi + r15 + 256]
 	vpclmulqdq	zmm11, zmm1, zmm5, 0
 	vpclmulqdq	zmm1, zmm1, zmm6, 17
-	vpclmulqdq	zmm12, zmm0, zmm5, 0
-	vpclmulqdq	zmm0, zmm0, zmm6, 17
-	vpclmulqdq	zmm13, zmm3, zmm5, 0
-	vpclmulqdq	zmm3, zmm3, zmm6, 17
-	vpclmulqdq	zmm14, zmm2, zmm5, 0
-	vpclmulqdq	zmm2, zmm2, zmm6, 17
 	vpternlogq	zmm1, zmm11, zmmword ptr [r12], 150
-	vpternlogq	zmm0, zmm12, zmmword ptr [r12 + 64], 150
-	vpternlogq	zmm3, zmm13, zmmword ptr [r12 + 128], 150
-	vpternlogq	zmm2, zmm14, zmmword ptr [r12 + 192], 150
+	vpclmulqdq	zmm11, zmm0, zmm5, 0
+	vpclmulqdq	zmm0, zmm0, zmm6, 17
+	vpternlogq	zmm0, zmm11, zmmword ptr [r12 + 64], 150
+	vpclmulqdq	zmm11, zmm3, zmm5, 0
+	vpclmulqdq	zmm3, zmm3, zmm6, 17
+	vpternlogq	zmm3, zmm11, zmmword ptr [r12 + 128], 150
+	vpclmulqdq	zmm11, zmm2, zmm5, 0
+	vpclmulqdq	zmm2, zmm2, zmm6, 17
+	vpternlogq	zmm2, zmm11, zmmword ptr [r12 + 192], 150
 	add	r12, 256
 	add	r15, 16
 	jne	32b
@@ -111,16 +111,16 @@
 52:
 	vpclmulqdq	zmm6, zmm1, zmm4, 0
 	vpclmulqdq	zmm1, zmm1, zmm5, 17
-	vpclmulqdq	zmm7, zmm0, zmm4, 0
-	vpclmulqdq	zmm0, zmm0, zmm5, 17
-	vpclmulqdq	zmm8, zmm3, zmm4, 0
-	vpclmulqdq	zmm3, zmm3, zmm5, 17
-	vpclmulqdq	zmm9, zmm2, zmm4, 0
-	vpclmulqdq	zmm2, zmm2, zmm5, 17
 	vpternlogq	zmm1, zmm6, zmmword ptr [rsi + rdx], 150
-	vpternlogq	zmm0, zmm7, zmmword ptr [rsi + rdx + 64], 150
-	vpternlogq	zmm3, zmm8, zmmword ptr [rsi + rdx + 128], 150
-	vpternlogq	zmm2, zmm9, zmmword ptr [rsi + rdx + 192], 150
+	vpclmulqdq	zmm6, zmm0, zmm4, 0
+	vpclmulqdq	zmm0, zmm0, zmm5, 17
+	vpternlogq	zmm0, zmm6, zmmword ptr [rsi + rdx + 64], 150
+	vpclmulqdq	zmm6, zmm3, zmm4, 0
+	vpclmulqdq	zmm3, zmm3, zmm5, 17
+	vpternlogq	zmm3, zmm6, zmmword ptr [rsi + rdx + 128], 150
+	vpclmulqdq	zmm6, zmm2, zmm4, 0
+	vpclmulqdq	zmm2, zmm2, zmm5, 17
+	vpternlogq	zmm2, zmm6, zmmword ptr [rsi + rdx + 192], 150
 	add	rdx, 256
 	cmp	rdx, r8
 	jl	52b

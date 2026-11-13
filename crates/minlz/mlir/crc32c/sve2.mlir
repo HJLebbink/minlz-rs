@@ -66,84 +66,7 @@ func.func private @chain_keys() -> vector<3xi64> {
   return %r : vector<3xi64>
 }
 
-// clmul2 is clmul2 on 16 words, as clmul8 on each half.
-func.func private @clmul2(%x: !st, %k: !st) -> !st {
-  %xa = vector.extract_strided_slice %x {offsets = [0], sizes = [8], strides = [1]}
-      : !st to vector<8xi64>
-  %xb = vector.extract_strided_slice %x {offsets = [8], sizes = [8], strides = [1]}
-      : !st to vector<8xi64>
-  %ka = vector.extract_strided_slice %k {offsets = [0], sizes = [8], strides = [1]}
-      : !st to vector<8xi64>
-  %kb = vector.extract_strided_slice %k {offsets = [8], sizes = [8], strides = [1]}
-      : !st to vector<8xi64>
-  %ra = func.call @clmul8(%xa, %ka) : (vector<8xi64>, vector<8xi64>) -> vector<8xi64>
-  %rb = func.call @clmul8(%xb, %kb) : (vector<8xi64>, vector<8xi64>) -> vector<8xi64>
-  %r = vector.shuffle %ra, %rb [
-      0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
-    ] : vector<8xi64>, vector<8xi64>
-  return %r : !st
-}
-
-// clmul8 is clmul2 on 8 words, as clmul4 on each half.
-func.func private @clmul8(%x: vector<8xi64>, %k: vector<8xi64>) -> vector<8xi64> {
-  %xa = vector.extract_strided_slice %x {offsets = [0], sizes = [4], strides = [1]}
-      : vector<8xi64> to vector<4xi64>
-  %xb = vector.extract_strided_slice %x {offsets = [4], sizes = [4], strides = [1]}
-      : vector<8xi64> to vector<4xi64>
-  %ka = vector.extract_strided_slice %k {offsets = [0], sizes = [4], strides = [1]}
-      : vector<8xi64> to vector<4xi64>
-  %kb = vector.extract_strided_slice %k {offsets = [4], sizes = [4], strides = [1]}
-      : vector<8xi64> to vector<4xi64>
-  %ra = func.call @clmul4(%xa, %ka) : (vector<4xi64>, vector<4xi64>) -> vector<4xi64>
-  %rb = func.call @clmul4(%xb, %kb) : (vector<4xi64>, vector<4xi64>) -> vector<4xi64>
-  %r = vector.shuffle %ra, %rb [
-      0, 1, 2, 3, 4, 5, 6, 7
-    ] : vector<4xi64>, vector<4xi64>
-  return %r : vector<8xi64>
-}
-
-// clmul4 is clmul2 on 4 words, as clmul_reg on each half.
-func.func private @clmul4(%x: vector<4xi64>, %k: vector<4xi64>) -> vector<4xi64> {
-  %xa = vector.extract_strided_slice %x {offsets = [0], sizes = [2], strides = [1]}
-      : vector<4xi64> to vector<2xi64>
-  %xb = vector.extract_strided_slice %x {offsets = [2], sizes = [2], strides = [1]}
-      : vector<4xi64> to vector<2xi64>
-  %ka = vector.extract_strided_slice %k {offsets = [0], sizes = [2], strides = [1]}
-      : vector<4xi64> to vector<2xi64>
-  %kb = vector.extract_strided_slice %k {offsets = [2], sizes = [2], strides = [1]}
-      : vector<4xi64> to vector<2xi64>
-  %ra = func.call @clmul_reg(%xa, %ka) : (vector<2xi64>, vector<2xi64>) -> vector<2xi64>
-  %rb = func.call @clmul_reg(%xb, %kb) : (vector<2xi64>, vector<2xi64>) -> vector<2xi64>
-  %r = vector.shuffle %ra, %rb [
-      0, 1, 2, 3
-    ] : vector<2xi64>, vector<2xi64>
-  return %r : vector<4xi64>
-}
-
-// clmul_reg is clmul2 on one register: pmullb multiplies the low words, pmullt the high words. At
-// a 16-byte vector length a register is the two words, so pmullb takes element 0 of each operand
-// and pmullt element 1, each into the whole register.
-func.func private @clmul_reg(%x: vector<2xi64>, %k: vector<2xi64>) -> vector<2xi64> {
-  %z = ub.poison : vector<[2]xi64>
-  %sx = vector.scalable.insert %x, %z[0] : vector<2xi64> into vector<[2]xi64>
-  %sk = vector.scalable.insert %k, %z[0] : vector<2xi64> into vector<[2]xi64>
-  %a = llvm.call_intrinsic "llvm.aarch64.sve.pmullb.pair"(%sx, %sk)
-      : (vector<[2]xi64>, vector<[2]xi64>) -> vector<[2]xi64>
-  %b = llvm.call_intrinsic "llvm.aarch64.sve.pmullt.pair"(%sx, %sk)
-      : (vector<[2]xi64>, vector<[2]xi64>) -> vector<[2]xi64>
-  %r = arith.xori %a, %b : vector<[2]xi64>
-  %f = vector.scalable.extract %r[0] : vector<2xi64> from vector<[2]xi64>
-  return %f : vector<2xi64>
-}
-
-// clmul returns the 128-bit carry-less product of a and b.
-func.func private @clmul(%a: i64, %b: i64) -> vector<2xi64> {
-  %p = llvm.call_intrinsic "llvm.aarch64.neon.pmull64"(%a, %b) : (i64, i64) -> vector<16xi8>
-  %r = vector.bitcast %p : vector<16xi8> to vector<2xi64>
-  return %r : vector<2xi64>
-}
-
-// clmul2_xor is clmul2 on 16 words with the words added to each lane, as clmul8_xor on each half.
+// clmul2_xor is clmul2_xor on 16 words, as clmul8_xor on each half.
 func.func private @clmul2_xor(%x: !st, %k: !st, %d: !st)
     -> !st {
   %xa = vector.extract_strided_slice %x {offsets = [0], sizes = [8], strides = [1]}
@@ -168,7 +91,7 @@ func.func private @clmul2_xor(%x: !st, %k: !st, %d: !st)
   return %r : !st
 }
 
-// clmul8_xor is clmul2 on 8 words with the words added to each lane, as clmul4_xor on each half.
+// clmul8_xor is clmul2_xor on 8 words, as clmul4_xor on each half.
 func.func private @clmul8_xor(%x: vector<8xi64>, %k: vector<8xi64>, %d: vector<8xi64>)
     -> vector<8xi64> {
   %xa = vector.extract_strided_slice %x {offsets = [0], sizes = [4], strides = [1]}
@@ -193,7 +116,7 @@ func.func private @clmul8_xor(%x: vector<8xi64>, %k: vector<8xi64>, %d: vector<8
   return %r : vector<8xi64>
 }
 
-// clmul4_xor is clmul2 on 4 words with the words added to each lane, as clmul_reg_xor on each half.
+// clmul4_xor is clmul2_xor on 4 words, as clmul_reg_xor on each half.
 func.func private @clmul4_xor(%x: vector<4xi64>, %k: vector<4xi64>, %d: vector<4xi64>)
     -> vector<4xi64> {
   %xa = vector.extract_strided_slice %x {offsets = [0], sizes = [2], strides = [1]}
@@ -218,10 +141,12 @@ func.func private @clmul4_xor(%x: vector<4xi64>, %k: vector<4xi64>, %d: vector<4
   return %r : vector<4xi64>
 }
 
-// clmul_reg_xor is clmul_reg with d added to the product: eor3 takes the two products and d in
-// one instruction. eor3 also writes its last operand, so that is the product of the low words:
-// its register is the one the next fold reads as the state, and with either other operand last
-// the loop needs a copy of the state per lane.
+// clmul_reg_xor is clmul2_xor on one register: pmullb multiplies the low words, pmullt the high
+// words, and eor3 adds the two products and d in one instruction. At a 16-byte vector length a
+// register is the two words, so pmullb takes element 0 of each operand and pmullt element 1, each
+// into the whole register. eor3 also writes its last operand, so that is the product of the low
+// words: its register is the one the next fold reads as the state, and with either other operand
+// last the loop needs a copy of the state per lane.
 func.func private @clmul_reg_xor(%x: vector<2xi64>, %k: vector<2xi64>, %d: vector<2xi64>)
     -> vector<2xi64> {
   %z = ub.poison : vector<[2]xi64>
@@ -241,6 +166,13 @@ func.func private @clmul_reg_xor(%x: vector<2xi64>, %k: vector<2xi64>, %d: vecto
   %w = vector.bitcast %r : vector<[16]xi8> to vector<[2]xi64>
   %f = vector.scalable.extract %w[0] : vector<2xi64> from vector<[2]xi64>
   return %f : vector<2xi64>
+}
+
+// clmul returns the 128-bit carry-less product of a and b.
+func.func private @clmul(%a: i64, %b: i64) -> vector<2xi64> {
+  %p = llvm.call_intrinsic "llvm.aarch64.neon.pmull64"(%a, %b) : (i64, i64) -> vector<16xi8>
+  %r = vector.bitcast %p : vector<16xi8> to vector<2xi64>
+  return %r : vector<2xi64>
 }
 
 // crc32 returns the CRC state c, low 32 bits, after the word w: CRC32CX.

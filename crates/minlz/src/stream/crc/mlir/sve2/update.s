@@ -14,14 +14,15 @@
 	movk	x14, #30797, lsl #48
 	movk	x10, #61186, lsl #48
 	mov	x9, xzr
-	movi	v6.2d, #0000000000000000
+	movi	v18.2d, #0000000000000000
 	movk	x12, #18724, lsl #32
 	fmov	d1, x10
 	mov	x15, x1
+	movi	v6.2d, #0000000000000000
 	movi	v5.2d, #0000000000000000
 	movi	v4.2d, #0000000000000000
-	movi	v3.2d, #0000000000000000
 	movk	x12, #9362, lsl #48
+	movi	v3.2d, #0000000000000000
 	movi	v2.2d, #0000000000000000
 	umulh	x11, x11, x12
 	mov	w12, w0
@@ -41,102 +42,102 @@
 	.p2align	5, , 16
 2:
 	mov	w0, #8
-	mov	w5, wzr
-	mov	w3, wzr
 	mov	w4, wzr
+	mov	w3, wzr
+	mov	w5, wzr
 	mov	x16, x13
 	mov	x17, x15
 	.p2align	5, , 16
 12:
 	ldp	x6, x7, [x16]
-	ldp	q19, q18, [x17, #96]
-	pmullb	z26.q, z7.d, z16.d
-	ldp	q21, q20, [x17, #64]
-	ldp	q23, q22, [x17, #32]
-	ldp	q25, q24, [x17], #128
+	ldp	q20, q19, [x17, #96]
+	pmullb	z27.q, z7.d, z16.d
+	ldp	q22, q21, [x17, #64]
+	ldp	q24, q23, [x17, #32]
+	ldp	q26, q25, [x17], #128
 	pmullt	z7.q, z7.d, z16.d
 	subs	x0, x0, #1
-	crc32cx	w4, w4, x6
+	crc32cx	w5, w5, x6
 	ldp	x6, x19, [x16, #256]
-	crc32cx	w4, w4, x7
-	eor3	z7.d, z7.d, z25.d, z26.d
-	pmullb	z25.q, z6.d, z16.d
+	crc32cx	w5, w5, x7
+	eor3	z7.d, z7.d, z26.d, z27.d
+	pmullb	z26.q, z6.d, z16.d
 	pmullt	z6.q, z6.d, z16.d
 	crc32cx	w3, w3, x6
 	ldr	x6, [x16, #512]
-	eor3	z6.d, z6.d, z24.d, z25.d
-	pmullb	z24.q, z5.d, z16.d
+	eor3	z6.d, z6.d, z25.d, z26.d
+	pmullb	z25.q, z5.d, z16.d
 	pmullt	z5.q, z5.d, z16.d
 	crc32cx	w3, w3, x19
-	eor3	z5.d, z5.d, z23.d, z24.d
-	pmullb	z23.q, z4.d, z16.d
+	eor3	z5.d, z5.d, z24.d, z25.d
+	pmullb	z24.q, z4.d, z16.d
 	pmullt	z4.q, z4.d, z16.d
-	crc32cx	w5, w5, x6
-	ldr	x6, [x16, #520]
-	eor3	z4.d, z4.d, z22.d, z23.d
-	pmullb	z22.q, z3.d, z16.d
-	pmullt	z3.q, z3.d, z16.d
-	eor3	z3.d, z3.d, z21.d, z22.d
-	pmullb	z21.q, z2.d, z16.d
-	pmullt	z2.q, z2.d, z16.d
-	crc32cx	w5, w5, x6
-	ldp	x6, x7, [x16, #16]
-	eor3	z2.d, z2.d, z20.d, z21.d
-	pmullb	z20.q, z1.d, z16.d
-	pmullt	z1.q, z1.d, z16.d
-	eor3	z1.d, z1.d, z19.d, z20.d
-	pmullb	z19.q, z0.d, z16.d
-	pmullt	z0.q, z0.d, z16.d
 	crc32cx	w4, w4, x6
+	ldr	x6, [x16, #520]
+	eor3	z4.d, z4.d, z23.d, z24.d
+	pmullb	z23.q, z3.d, z16.d
+	pmullt	z3.q, z3.d, z16.d
+	eor3	z3.d, z3.d, z22.d, z23.d
+	pmullb	z22.q, z2.d, z16.d
+	pmullt	z2.q, z2.d, z16.d
+	crc32cx	w4, w4, x6
+	ldp	x6, x7, [x16, #16]
+	eor3	z2.d, z2.d, z21.d, z22.d
+	pmullb	z21.q, z1.d, z16.d
+	pmullt	z1.q, z1.d, z16.d
+	eor3	z1.d, z1.d, z20.d, z21.d
+	pmullb	z20.q, z0.d, z16.d
+	pmullt	z0.q, z0.d, z16.d
+	crc32cx	w5, w5, x6
 	ldp	x6, x19, [x16, #272]
-	eor3	z0.d, z0.d, z18.d, z19.d
-	crc32cx	w4, w4, x7
+	eor3	z0.d, z0.d, z19.d, z20.d
+	crc32cx	w5, w5, x7
 	crc32cx	w3, w3, x6
 	ldr	x6, [x16, #528]
 	crc32cx	w3, w3, x19
-	crc32cx	w5, w5, x6
+	crc32cx	w4, w4, x6
 	ldr	x6, [x16, #536]
 	add	x16, x16, #32
-	crc32cx	w5, w5, x6
+	crc32cx	w4, w4, x6
 	b.ne	12b
+	pmullb	z22.q, z6.d, z17.d
+	pmullt	z6.q, z6.d, z17.d
+	fmov	d19, x5
+	fmov	d20, x3
 	pmullb	z21.q, z7.d, z17.d
 	pmullt	z7.q, z7.d, z17.d
-	fmov	d18, x4
-	fmov	d19, x3
 	add	x9, x9, #1
 	add	x15, x15, #1792
 	add	x13, x13, #1792
-	eor	z7.d, z21.d, z7.d
-	pmullb	z21.q, z6.d, z17.d
-	pmullt	z6.q, z6.d, z17.d
-	fmov	d20, x5
-	eor	z6.d, z21.d, z6.d
-	pmullb	z21.q, z5.d, z17.d
+	eor3	z6.d, z6.d, z18.d, z22.d
+	pmullb	z22.q, z5.d, z17.d
 	pmullt	z5.q, z5.d, z17.d
-	eor	z5.d, z21.d, z5.d
-	pmullb	z21.q, z4.d, z17.d
+	eor3	z7.d, z7.d, z18.d, z21.d
+	fmov	d21, x4
+	eor3	z5.d, z5.d, z18.d, z22.d
+	pmullb	z22.q, z4.d, z17.d
 	pmullt	z4.q, z4.d, z17.d
-	eor	z4.d, z21.d, z4.d
-	pmullb	z21.q, z3.d, z17.d
+	eor3	z4.d, z4.d, z18.d, z22.d
+	pmullb	z22.q, z3.d, z17.d
 	pmullt	z3.q, z3.d, z17.d
-	eor	z3.d, z21.d, z3.d
-	pmullb	z21.q, z2.d, z17.d
+	eor3	z3.d, z3.d, z18.d, z22.d
+	pmullb	z22.q, z2.d, z17.d
 	pmullt	z2.q, z2.d, z17.d
-	eor	z2.d, z21.d, z2.d
-	pmullb	z21.q, z1.d, z17.d
+	eor3	z2.d, z2.d, z18.d, z22.d
+	pmullb	z22.q, z1.d, z17.d
 	pmullt	z1.q, z1.d, z17.d
-	eor	z1.d, z21.d, z1.d
-	pmullb	z21.q, z0.d, z17.d
+	eor3	z1.d, z1.d, z18.d, z22.d
+	pmullb	z22.q, z0.d, z17.d
 	pmullt	z0.q, z0.d, z17.d
-	eor	z0.d, z21.d, z0.d
-	fmov	d21, x14
-	pmull	v18.1q, v18.1d, v21.1d
-	eor	v7.16b, v18.16b, v7.16b
-	fmov	d18, x12
-	pmull	v18.1q, v19.1d, v18.1d
-	fmov	d19, x10
+	eor3	z0.d, z0.d, z18.d, z22.d
+	fmov	d22, x14
+	pmull	v19.1q, v19.1d, v22.1d
+	eor	v7.16b, v19.16b, v7.16b
+	fmov	d19, x12
 	pmull	v19.1q, v20.1d, v19.1d
-	eor3	z7.d, z7.d, z18.d, z19.d
+	fmov	d20, x10
+	pmull	v20.1q, v21.1d, v20.1d
+	eor3	z7.d, z7.d, z19.d, z20.d
 	cmp	x9, x11
 	b.ne	2b
 	lsl	x9, x11, #11
@@ -195,64 +196,65 @@
 	mov	x10, #168830869438464
 	movk	x9, #27189, lsl #48
 	movk	x10, #51503, lsl #48
-	index	z17.d, x10, x9
+	index	z18.d, x10, x9
 	mov	x9, #109903918137344
 	mov	x10, #239981297664000
 	movk	x9, #20805, lsl #48
 	movk	x10, #7234, lsl #48
-	pmullb	z18.q, z7.d, z16.d
+	pmullb	z17.q, z7.d, z16.d
 	pmullt	z7.q, z7.d, z16.d
-	pmullb	z16.q, z6.d, z17.d
-	pmullt	z6.q, z6.d, z17.d
-	eor	z7.d, z18.d, z7.d
-	eor	z6.d, z16.d, z6.d
+	movi	v16.2d, #0000000000000000
+	eor3	z7.d, z7.d, z16.d, z17.d
+	pmullb	z17.q, z6.d, z18.d
+	pmullt	z6.q, z6.d, z18.d
+	eor3	z6.d, z6.d, z16.d, z17.d
 	eor	v6.16b, v6.16b, v7.16b
-	index	z16.d, x10, x9
+	index	z17.d, x10, x9
 	mov	x9, #140874927308800
 	mov	x10, #39835821670400
 	movk	x9, #22946, lsl #48
 	movk	x10, #7193, lsl #48
-	index	z17.d, x10, x9
+	index	z18.d, x10, x9
 	mov	x9, #52316996632576
 	mov	x10, #269010981617664
 	movk	x9, #48098, lsl #48
 	movk	x10, #42094, lsl #48
-	pmullb	z18.q, z5.d, z16.d
-	pmullt	z5.q, z5.d, z16.d
-	pmullb	z16.q, z4.d, z17.d
-	pmullt	z4.q, z4.d, z17.d
-	eor	z5.d, z18.d, z5.d
-	eor	z4.d, z16.d, z4.d
+	pmullb	z19.q, z5.d, z17.d
+	pmullt	z5.q, z5.d, z17.d
+	pmullb	z17.q, z4.d, z18.d
+	pmullt	z4.q, z4.d, z18.d
+	eor3	z5.d, z5.d, z16.d, z19.d
+	eor3	z4.d, z4.d, z16.d, z17.d
 	eor3	z6.d, z6.d, z5.d, z4.d
-	index	z16.d, x10, x9
+	index	z17.d, x10, x9
 	mov	x9, #228114303025152
 	mov	x10, #206416128245760
 	movk	x9, #28232, lsl #48
 	movk	x10, #13260, lsl #48
-	index	z17.d, x10, x9
+	index	z18.d, x10, x9
 	mov	x9, #242386479349760
 	mov	x10, #272391120879616
 	movk	x9, #64045, lsl #48
 	movk	x10, #14147, lsl #48
-	pmullb	z18.q, z3.d, z16.d
-	pmullt	z3.q, z3.d, z16.d
-	pmullb	z16.q, z2.d, z17.d
-	pmullt	z2.q, z2.d, z17.d
-	eor	z3.d, z18.d, z3.d
-	eor	z2.d, z16.d, z2.d
+	pmullb	z19.q, z3.d, z17.d
+	pmullt	z3.q, z3.d, z17.d
+	pmullb	z17.q, z2.d, z18.d
+	pmullt	z2.q, z2.d, z18.d
+	eor3	z3.d, z3.d, z16.d, z19.d
+	eor3	z2.d, z2.d, z16.d, z17.d
 	eor3	z6.d, z6.d, z3.d, z2.d
-	index	z16.d, x10, x9
+	index	z17.d, x10, x9
 	mov	x9, #224545185202176
 	mov	x10, #187707250704384
 	movk	x9, #10406, lsl #48
 	movk	x10, #56645, lsl #48
-	index	z17.d, x10, x9
-	pmullb	z18.q, z1.d, z16.d
-	pmullt	z1.q, z1.d, z16.d
-	pmullb	z16.q, z0.d, z17.d
-	pmullt	z0.q, z0.d, z17.d
-	eor	z1.d, z18.d, z1.d
-	eor	z0.d, z16.d, z0.d
+	index	z18.d, x10, x9
+	pmullb	z19.q, z1.d, z17.d
+	pmullt	z1.q, z1.d, z17.d
+	pmullb	z17.q, z0.d, z18.d
+	pmullt	z0.q, z0.d, z18.d
+	eor3	z1.d, z1.d, z16.d, z19.d
+	eor3	z0.d, z0.d, z16.d, z17.d
 	eor3	z6.d, z6.d, z1.d, z0.d
 	fmov	d0, x11
 	fmov	d1, x10

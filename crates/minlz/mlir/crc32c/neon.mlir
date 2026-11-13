@@ -66,8 +66,9 @@ func.func private @chain_keys() -> vector<3xi64> {
   return %r : vector<3xi64>
 }
 
-// clmul2 is clmul2 on 16 words, as clmul8 on each half.
-func.func private @clmul2(%x: !st, %k: !st) -> !st {
+// clmul2_xor is clmul2_xor on 16 words, as clmul8_xor on each half.
+func.func private @clmul2_xor(%x: !st, %k: !st, %d: !st)
+    -> !st {
   %xa = vector.extract_strided_slice %x {offsets = [0], sizes = [8], strides = [1]}
       : !st to vector<8xi64>
   %xb = vector.extract_strided_slice %x {offsets = [8], sizes = [8], strides = [1]}
@@ -76,16 +77,23 @@ func.func private @clmul2(%x: !st, %k: !st) -> !st {
       : !st to vector<8xi64>
   %kb = vector.extract_strided_slice %k {offsets = [8], sizes = [8], strides = [1]}
       : !st to vector<8xi64>
-  %ra = func.call @clmul8(%xa, %ka) : (vector<8xi64>, vector<8xi64>) -> vector<8xi64>
-  %rb = func.call @clmul8(%xb, %kb) : (vector<8xi64>, vector<8xi64>) -> vector<8xi64>
+  %da = vector.extract_strided_slice %d {offsets = [0], sizes = [8], strides = [1]}
+      : !st to vector<8xi64>
+  %db = vector.extract_strided_slice %d {offsets = [8], sizes = [8], strides = [1]}
+      : !st to vector<8xi64>
+  %ra = func.call @clmul8_xor(%xa, %ka, %da)
+      : (vector<8xi64>, vector<8xi64>, vector<8xi64>) -> vector<8xi64>
+  %rb = func.call @clmul8_xor(%xb, %kb, %db)
+      : (vector<8xi64>, vector<8xi64>, vector<8xi64>) -> vector<8xi64>
   %r = vector.shuffle %ra, %rb [
       0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
     ] : vector<8xi64>, vector<8xi64>
   return %r : !st
 }
 
-// clmul8 is clmul2 on 8 words, as clmul4 on each half.
-func.func private @clmul8(%x: vector<8xi64>, %k: vector<8xi64>) -> vector<8xi64> {
+// clmul8_xor is clmul2_xor on 8 words, as clmul4_xor on each half.
+func.func private @clmul8_xor(%x: vector<8xi64>, %k: vector<8xi64>, %d: vector<8xi64>)
+    -> vector<8xi64> {
   %xa = vector.extract_strided_slice %x {offsets = [0], sizes = [4], strides = [1]}
       : vector<8xi64> to vector<4xi64>
   %xb = vector.extract_strided_slice %x {offsets = [4], sizes = [4], strides = [1]}
@@ -94,16 +102,23 @@ func.func private @clmul8(%x: vector<8xi64>, %k: vector<8xi64>) -> vector<8xi64>
       : vector<8xi64> to vector<4xi64>
   %kb = vector.extract_strided_slice %k {offsets = [4], sizes = [4], strides = [1]}
       : vector<8xi64> to vector<4xi64>
-  %ra = func.call @clmul4(%xa, %ka) : (vector<4xi64>, vector<4xi64>) -> vector<4xi64>
-  %rb = func.call @clmul4(%xb, %kb) : (vector<4xi64>, vector<4xi64>) -> vector<4xi64>
+  %da = vector.extract_strided_slice %d {offsets = [0], sizes = [4], strides = [1]}
+      : vector<8xi64> to vector<4xi64>
+  %db = vector.extract_strided_slice %d {offsets = [4], sizes = [4], strides = [1]}
+      : vector<8xi64> to vector<4xi64>
+  %ra = func.call @clmul4_xor(%xa, %ka, %da)
+      : (vector<4xi64>, vector<4xi64>, vector<4xi64>) -> vector<4xi64>
+  %rb = func.call @clmul4_xor(%xb, %kb, %db)
+      : (vector<4xi64>, vector<4xi64>, vector<4xi64>) -> vector<4xi64>
   %r = vector.shuffle %ra, %rb [
       0, 1, 2, 3, 4, 5, 6, 7
     ] : vector<4xi64>, vector<4xi64>
   return %r : vector<8xi64>
 }
 
-// clmul4 is clmul2 on 4 words, as clmul_reg on each half.
-func.func private @clmul4(%x: vector<4xi64>, %k: vector<4xi64>) -> vector<4xi64> {
+// clmul4_xor is clmul2_xor on 4 words, as clmul_reg_xor on each half.
+func.func private @clmul4_xor(%x: vector<4xi64>, %k: vector<4xi64>, %d: vector<4xi64>)
+    -> vector<4xi64> {
   %xa = vector.extract_strided_slice %x {offsets = [0], sizes = [2], strides = [1]}
       : vector<4xi64> to vector<2xi64>
   %xb = vector.extract_strided_slice %x {offsets = [2], sizes = [2], strides = [1]}
@@ -112,23 +127,32 @@ func.func private @clmul4(%x: vector<4xi64>, %k: vector<4xi64>) -> vector<4xi64>
       : vector<4xi64> to vector<2xi64>
   %kb = vector.extract_strided_slice %k {offsets = [2], sizes = [2], strides = [1]}
       : vector<4xi64> to vector<2xi64>
-  %ra = func.call @clmul_reg(%xa, %ka) : (vector<2xi64>, vector<2xi64>) -> vector<2xi64>
-  %rb = func.call @clmul_reg(%xb, %kb) : (vector<2xi64>, vector<2xi64>) -> vector<2xi64>
+  %da = vector.extract_strided_slice %d {offsets = [0], sizes = [2], strides = [1]}
+      : vector<4xi64> to vector<2xi64>
+  %db = vector.extract_strided_slice %d {offsets = [2], sizes = [2], strides = [1]}
+      : vector<4xi64> to vector<2xi64>
+  %ra = func.call @clmul_reg_xor(%xa, %ka, %da)
+      : (vector<2xi64>, vector<2xi64>, vector<2xi64>) -> vector<2xi64>
+  %rb = func.call @clmul_reg_xor(%xb, %kb, %db)
+      : (vector<2xi64>, vector<2xi64>, vector<2xi64>) -> vector<2xi64>
   %r = vector.shuffle %ra, %rb [
       0, 1, 2, 3
     ] : vector<2xi64>, vector<2xi64>
   return %r : vector<4xi64>
 }
 
-// clmul_reg is clmul2 on one register: PMULL multiplies the low words, PMULL2 the high words.
-func.func private @clmul_reg(%x: vector<2xi64>, %k: vector<2xi64>) -> vector<2xi64> {
+// clmul_reg_xor is clmul2_xor on one register: PMULL multiplies the low words, PMULL2 the high
+// words.
+func.func private @clmul_reg_xor(%x: vector<2xi64>, %k: vector<2xi64>, %d: vector<2xi64>)
+    -> vector<2xi64> {
   %x0 = vector.extract %x[0] : i64 from vector<2xi64>
   %x1 = vector.extract %x[1] : i64 from vector<2xi64>
   %k0 = vector.extract %k[0] : i64 from vector<2xi64>
   %k1 = vector.extract %k[1] : i64 from vector<2xi64>
   %a = func.call @clmul(%x0, %k0) : (i64, i64) -> vector<2xi64>
   %b = func.call @clmul(%x1, %k1) : (i64, i64) -> vector<2xi64>
-  %r = arith.xori %a, %b : vector<2xi64>
+  %ab = arith.xori %a, %b : vector<2xi64>
+  %r = arith.xori %ab, %d : vector<2xi64>
   return %r : vector<2xi64>
 }
 
@@ -137,13 +161,6 @@ func.func private @clmul(%a: i64, %b: i64) -> vector<2xi64> {
   %p = llvm.call_intrinsic "llvm.aarch64.neon.pmull64"(%a, %b) : (i64, i64) -> vector<16xi8>
   %r = vector.bitcast %p : vector<16xi8> to vector<2xi64>
   return %r : vector<2xi64>
-}
-
-// clmul2_xor is clmul2 with d added to each lane's product.
-func.func private @clmul2_xor(%x: !st, %k: !st, %d: !st) -> !st {
-  %f = func.call @clmul2(%x, %k) : (!st, !st) -> !st
-  %r = arith.xori %f, %d : !st
-  return %r : !st
 }
 
 // crc32 returns the CRC state c, low 32 bits, after the word w: CRC32CX.

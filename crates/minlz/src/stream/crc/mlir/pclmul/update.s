@@ -39,55 +39,6 @@
 	xor	r15d, r15d
 	.p2align	4
 12:
-	movdqu	xmm12, xmmword ptr [r11 + 4*r12 + 1024]
-	movq	xmm9, rdi
-	movdqa	xmm13, xmm7
-	pclmulqdq	xmm13, xmm9, 0
-	pxor	xmm13, xmm12
-	movdqu	xmm12, xmmword ptr [r11 + 4*r12 + 1040]
-	pclmulqdq	xmm7, xmm8, 17
-	pxor	xmm7, xmm13
-	movdqa	xmm13, xmm5
-	pclmulqdq	xmm13, xmm9, 0
-	pxor	xmm13, xmm12
-	movdqu	xmm12, xmmword ptr [r11 + 4*r12 + 1056]
-	pclmulqdq	xmm5, xmm8, 17
-	pxor	xmm5, xmm13
-	movdqa	xmm13, xmm6
-	pclmulqdq	xmm13, xmm9, 0
-	pxor	xmm13, xmm12
-	movdqu	xmm12, xmmword ptr [r11 + 4*r12 + 1072]
-	pclmulqdq	xmm6, xmm8, 17
-	pxor	xmm6, xmm13
-	movdqa	xmm13, xmm3
-	pclmulqdq	xmm13, xmm9, 0
-	pxor	xmm13, xmm12
-	movdqu	xmm12, xmmword ptr [r11 + 4*r12 + 1088]
-	pclmulqdq	xmm3, xmm8, 17
-	pxor	xmm3, xmm13
-	movdqa	xmm13, xmm4
-	pclmulqdq	xmm13, xmm9, 0
-	pxor	xmm13, xmm12
-	movdqu	xmm12, xmmword ptr [r11 + 4*r12 + 1104]
-	pclmulqdq	xmm4, xmm8, 17
-	pxor	xmm4, xmm13
-	movdqa	xmm13, xmm1
-	pclmulqdq	xmm13, xmm9, 0
-	pxor	xmm13, xmm12
-	movdqu	xmm12, xmmword ptr [r11 + 4*r12 + 1120]
-	pclmulqdq	xmm1, xmm8, 17
-	pxor	xmm1, xmm13
-	movdqa	xmm13, xmm2
-	pclmulqdq	xmm13, xmm9, 0
-	pxor	xmm13, xmm12
-	movdqu	xmm12, xmmword ptr [r11 + 4*r12 + 1136]
-	pclmulqdq	xmm2, xmm8, 17
-	pxor	xmm2, xmm13
-	movdqa	xmm13, xmm0
-	pclmulqdq	xmm13, xmm9, 0
-	pxor	xmm13, xmm12
-	pclmulqdq	xmm0, xmm8, 17
-	pxor	xmm0, xmm13
 	crc32	r15, qword ptr [r11 + r12 + 1280]
 	crc32	r14, qword ptr [r11 + r12 + 1536]
 	crc32	rbx, qword ptr [r11 + r12 + 1792]
@@ -100,6 +51,56 @@
 	crc32	r15, qword ptr [r11 + r12 + 1304]
 	crc32	r14, qword ptr [r11 + r12 + 1560]
 	crc32	rbx, qword ptr [r11 + r12 + 1816]
+	movq	xmm9, rdi
+	movdqa	xmm12, xmm7
+	pclmulqdq	xmm12, xmm9, 0
+	movdqa	xmm13, xmm7
+	pclmulqdq	xmm13, xmm8, 17
+	movdqu	xmm7, xmmword ptr [r11 + 4*r12 + 1024]
+	pxor	xmm7, xmm12
+	pxor	xmm7, xmm13
+	movdqu	xmm12, xmmword ptr [r11 + 4*r12 + 1040]
+	movdqu	xmm13, xmmword ptr [r11 + 4*r12 + 1056]
+	movdqu	xmm14, xmmword ptr [r11 + 4*r12 + 1072]
+	movdqa	xmm15, xmm5
+	pclmulqdq	xmm15, xmm9, 0
+	pxor	xmm15, xmm12
+	pclmulqdq	xmm5, xmm8, 17
+	pxor	xmm5, xmm15
+	movdqa	xmm12, xmm6
+	pclmulqdq	xmm12, xmm9, 0
+	pxor	xmm12, xmm13
+	pclmulqdq	xmm6, xmm8, 17
+	pxor	xmm6, xmm12
+	movdqa	xmm12, xmm3
+	pclmulqdq	xmm12, xmm9, 0
+	pxor	xmm12, xmm14
+	pclmulqdq	xmm3, xmm8, 17
+	pxor	xmm3, xmm12
+	movdqu	xmm12, xmmword ptr [r11 + 4*r12 + 1088]
+	movdqu	xmm13, xmmword ptr [r11 + 4*r12 + 1104]
+	movdqa	xmm14, xmm4
+	pclmulqdq	xmm14, xmm9, 0
+	pxor	xmm14, xmm12
+	pclmulqdq	xmm4, xmm8, 17
+	pxor	xmm4, xmm14
+	movdqa	xmm12, xmm1
+	pclmulqdq	xmm12, xmm9, 0
+	pxor	xmm12, xmm13
+	pclmulqdq	xmm1, xmm8, 17
+	pxor	xmm1, xmm12
+	movdqu	xmm12, xmmword ptr [r11 + 4*r12 + 1120]
+	movdqu	xmm13, xmmword ptr [r11 + 4*r12 + 1136]
+	movdqa	xmm14, xmm2
+	pclmulqdq	xmm14, xmm9, 0
+	pxor	xmm14, xmm12
+	pclmulqdq	xmm2, xmm8, 17
+	pxor	xmm2, xmm14
+	movdqa	xmm12, xmm0
+	pclmulqdq	xmm12, xmm9, 0
+	pxor	xmm12, xmm13
+	pclmulqdq	xmm0, xmm8, 17
+	pxor	xmm0, xmm12
 	add	r12, 32
 	jne	12b
 	movq	xmm12, r9
@@ -157,54 +158,54 @@
 	jge	32f
 	.p2align	4
 22:
-	movdqu	xmm10, xmmword ptr [rsi + rax]
-	movdqa	xmm11, xmm7
-	pclmulqdq	xmm11, xmm9, 0
-	pxor	xmm11, xmm10
-	movdqu	xmm10, xmmword ptr [rsi + rax + 16]
+	movdqa	xmm10, xmm7
+	pclmulqdq	xmm10, xmm9, 0
 	pclmulqdq	xmm7, xmm8, 17
+	movdqu	xmm11, xmmword ptr [rsi + rax]
+	pxor	xmm11, xmm10
 	pxor	xmm7, xmm11
-	movdqa	xmm11, xmm5
-	pclmulqdq	xmm11, xmm9, 0
-	pxor	xmm11, xmm10
-	movdqu	xmm10, xmmword ptr [rsi + rax + 32]
+	movdqu	xmm10, xmmword ptr [rsi + rax + 16]
+	movdqu	xmm11, xmmword ptr [rsi + rax + 32]
+	movdqu	xmm12, xmmword ptr [rsi + rax + 48]
+	movdqa	xmm13, xmm5
+	pclmulqdq	xmm13, xmm9, 0
+	pxor	xmm13, xmm10
 	pclmulqdq	xmm5, xmm8, 17
-	pxor	xmm5, xmm11
-	movdqa	xmm11, xmm6
-	pclmulqdq	xmm11, xmm9, 0
-	pxor	xmm11, xmm10
-	movdqu	xmm10, xmmword ptr [rsi + rax + 48]
+	pxor	xmm5, xmm13
+	movdqa	xmm10, xmm6
+	pclmulqdq	xmm10, xmm9, 0
+	pxor	xmm10, xmm11
 	pclmulqdq	xmm6, xmm8, 17
-	pxor	xmm6, xmm11
-	movdqa	xmm11, xmm3
-	pclmulqdq	xmm11, xmm9, 0
-	pxor	xmm11, xmm10
-	movdqu	xmm10, xmmword ptr [rsi + rax + 64]
+	pxor	xmm6, xmm10
+	movdqa	xmm10, xmm3
+	pclmulqdq	xmm10, xmm9, 0
+	pxor	xmm10, xmm12
 	pclmulqdq	xmm3, xmm8, 17
-	pxor	xmm3, xmm11
-	movdqa	xmm11, xmm4
-	pclmulqdq	xmm11, xmm9, 0
-	pxor	xmm11, xmm10
-	movdqu	xmm10, xmmword ptr [rsi + rax + 80]
+	pxor	xmm3, xmm10
+	movdqu	xmm10, xmmword ptr [rsi + rax + 64]
+	movdqu	xmm11, xmmword ptr [rsi + rax + 80]
+	movdqa	xmm12, xmm4
+	pclmulqdq	xmm12, xmm9, 0
+	pxor	xmm12, xmm10
 	pclmulqdq	xmm4, xmm8, 17
-	pxor	xmm4, xmm11
-	movdqa	xmm11, xmm1
-	pclmulqdq	xmm11, xmm9, 0
-	pxor	xmm11, xmm10
-	movdqu	xmm10, xmmword ptr [rsi + rax + 96]
+	pxor	xmm4, xmm12
+	movdqa	xmm10, xmm1
+	pclmulqdq	xmm10, xmm9, 0
+	pxor	xmm10, xmm11
 	pclmulqdq	xmm1, xmm8, 17
-	pxor	xmm1, xmm11
-	movdqa	xmm11, xmm2
-	pclmulqdq	xmm11, xmm9, 0
-	pxor	xmm11, xmm10
-	movdqu	xmm10, xmmword ptr [rsi + rax + 112]
+	pxor	xmm1, xmm10
+	movdqu	xmm10, xmmword ptr [rsi + rax + 96]
+	movdqu	xmm11, xmmword ptr [rsi + rax + 112]
+	movdqa	xmm12, xmm2
+	pclmulqdq	xmm12, xmm9, 0
+	pxor	xmm12, xmm10
 	pclmulqdq	xmm2, xmm8, 17
-	pxor	xmm2, xmm11
-	movdqa	xmm11, xmm0
-	pclmulqdq	xmm11, xmm9, 0
-	pxor	xmm11, xmm10
+	pxor	xmm2, xmm12
+	movdqa	xmm10, xmm0
+	pclmulqdq	xmm10, xmm9, 0
+	pxor	xmm10, xmm11
 	pclmulqdq	xmm0, xmm8, 17
-	pxor	xmm0, xmm11
+	pxor	xmm0, xmm10
 	sub	rax, -128
 	cmp	rax, r8
 	jl	22b
