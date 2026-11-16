@@ -20,7 +20,7 @@
 
 use core::sync::atomic::{AtomicU32, Ordering};
 
-/// The SIMD exec loops and stats on x86-64: AVX2 and BMI2 (Go `cpu.AVX2`).
+/// The SIMD exec loops and stats on x86-64: AVX2, BMI2 and POPCNT (Go `cpu.AVX2`).
 pub const AVX2: u32 = 1;
 /// The AVX-512 exec loops and stats (Go `cpu.AVX512`).
 pub const AVX512: u32 = 2;
@@ -32,6 +32,13 @@ pub const PIVCO_AVX2: u32 = 8;
 pub const PIVCO_AVX512: u32 = 16;
 /// The pivco AVX-512 GFNI/BITALG histogram (Go kernel `hasHistAVX512`).
 pub const PIVCO_HIST_AVX512: u32 = 32;
+/// The SVE2 tiers of the XXH3 and CRC32C kernels on aarch64. Detection never reports it (those
+/// kernels check the SVE2 features themselves), so this bit only ever turns a tier off.
+#[cfg_attr(
+    not(all(target_arch = "aarch64", target_endian = "little", not(miri))),
+    allow(dead_code)
+)]
+pub const SVE2: u32 = 64;
 
 static DISABLED: AtomicU32 = AtomicU32::new(0);
 
@@ -51,6 +58,14 @@ pub fn enable_all() {
 #[inline]
 pub fn has(mask: u32) -> bool {
     detected() & mask == mask && DISABLED.load(Ordering::Relaxed) & mask == 0
+}
+
+/// Reports whether [`disable`] has turned off any feature in `mask`. The caller still checks the
+/// features themselves: the SVE2 bit in particular is never detected, so this is the only way a
+/// kernel tier gated on it learns it was turned off.
+#[inline]
+pub fn is_disabled(mask: u32) -> bool {
+    DISABLED.load(Ordering::Relaxed) & mask != 0
 }
 
 /// Runs f once per SIMD exec tier this CPU has, with the SIMD block decodes of this thread forced
@@ -90,6 +105,46 @@ impl Drop for Disabled {
     }
 }
 
+/// Checks that each bit of `cases`, disabled on its own, drops its tiers from `available()`.
+#[cfg(all(test, minlz_mlir, not(miri)))]
+pub(crate) fn assert_disabled_drops<T: PartialEq + core::fmt::Debug>(
+    available: fn() -> Vec<T>,
+    cases: &[(u32, &[T])],
+) {
+    for &(bit, tiers) in cases {
+        let _d = Disabled::new(bit);
+        let v = available();
+        for t in tiers {
+            assert!(
+                !v.contains(t),
+                "{t:?} is available with bit {bit:#x} disabled"
+            );
+        }
+    }
+}
+
+/// Returns the SVE vector length in bytes.
+///
+/// # Safety
+///
+/// The CPU has SVE.
+#[cfg(all(target_arch = "aarch64", minlz_mlir, not(miri)))]
+#[inline]
+pub(crate) unsafe fn vl_bytes() -> usize {
+    let n: usize;
+    // SAFETY: the caller checked SVE. The asm is not `pure`: the vector length can change between
+    // calls, so the compiler must not merge two reads.
+    unsafe {
+        core::arch::asm!(
+            ".arch_extension sve",
+            "rdvl {n}, #1",
+            n = out(reg) n,
+            options(nomem, nostack, preserves_flags)
+        );
+    }
+    n
+}
+
 #[inline]
 fn detected() -> u32 {
     use std::sync::OnceLock;
@@ -101,20 +156,16 @@ fn detected() -> u32 {
 fn detect() -> u32 {
     use std::arch::is_x86_feature_detected as f;
     let mut m = 0;
-    if f!("avx2") && f!("bmi2") {
-        m |= AVX2;
+    if f!("avx2") && f!("bmi2") && f!("popcnt") {
+        m |= AVX2 | PIVCO_AVX2;
         if f!("avx512f")
             && f!("avx512bw")
             && f!("avx512vl")
             && f!("avx512vbmi")
             && f!("avx512vbmi2")
-            && f!("popcnt")
         {
             m |= AVX512;
         }
-    }
-    if f!("avx2") && f!("bmi2") && f!("popcnt") {
-        m |= PIVCO_AVX2;
     }
     if m & AVX512 != 0 && f!("avx512vpopcntdq") {
         m |= PIVCO_AVX512;
@@ -131,13 +182,7 @@ fn detect() -> u32 {
     NEON
 }
 
-#[cfg(any(
-    miri,
-    not(any(
-        target_arch = "x86_64",
-        all(target_arch = "aarch64", target_endian = "little")
-    ))
-))]
+#[cfg(any(miri, not(minlz_mlir)))]
 fn detect() -> u32 {
     0
 }

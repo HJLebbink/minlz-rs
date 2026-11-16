@@ -25,7 +25,7 @@ mod encode;
 mod exec;
 
 use super::Tier;
-pub(super) use crate::pivco::testutil::{Pcg, new_rng, rand_bits, rand_bytes};
+pub(super) use crate::pivco::testutil::{GUARD_BYTE, Pcg, intact, new_rng, rand_bits, rand_bytes};
 
 /// 0..=300 and the sizes around the layout blocks.
 pub(super) fn test_sizes() -> Vec<usize> {
@@ -42,7 +42,6 @@ pub(super) fn test_sizes() -> Vec<usize> {
 /// A few sizes that reach every layout and tail path, for Miri, which is slow.
 pub(super) const MIRI_SIZES: [usize; 4] = [0, 9, 129, 640];
 
-pub(super) const GUARD_BYTE: u8 = 0xAA;
 pub(super) const GUARD_LEN: usize = 64;
 
 /// Returns the usable tiers other than [`Tier::Generic`].
@@ -73,10 +72,6 @@ pub(super) fn guarded(b: &[u8]) -> Vec<u8> {
     let mut all = b.to_vec();
     all.resize(b.len() + GUARD_LEN, GUARD_BYTE);
     all
-}
-
-pub(super) fn intact(b: &[u8]) -> bool {
-    b.iter().all(|&c| c == GUARD_BYTE)
 }
 
 pub(super) fn bit(bm: &[u8], j: usize) -> bool {

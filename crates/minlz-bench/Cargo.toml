@@ -8,7 +8,7 @@ license.workspace = true
 publish = false
 
 [dependencies]
-minlz = { package = "minio-minlz", path = "../minlz" }
+minlz = { package = "minio-minlz", path = "../minlz", features = ["unstable-internals"] }
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }

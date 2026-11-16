@@ -467,7 +467,7 @@ fn emit_size_predictors() {
 /// Try to locate `testdata/<name>` in the upstream Go repo.  Honours the
 /// `MINLZ_TESTDATA` env override so CI can point at a different path.
 /// Returns `None` if not found (tests then skip with an `eprintln`).
-fn locate_testdata(name: &str) -> Option<Vec<u8>> {
+pub(super) fn locate_testdata(name: &str) -> Option<Vec<u8>> {
     let candidates: Vec<std::path::PathBuf> = {
         let mut v = Vec::new();
         if let Ok(d) = std::env::var("MINLZ_TESTDATA") {

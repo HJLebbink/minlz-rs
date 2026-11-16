@@ -16,9 +16,6 @@
 //! warmup, coding and the kernels must not allocate. A counting global allocator needs its
 //! own test binary.
 
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::cell::Cell;
-
 use minlz::pivco::kernel::{
     ARENA_SLACK, FLAG_DST, HIST_SCRATCH, OP_NAT, OP_VV, Op, Program, R2S_LEN, RANK_SLACK, Tier,
 };
@@ -31,61 +28,14 @@ mod testutil;
 
 use testutil::*;
 
-thread_local! {
-    static ALLOCS: Cell<usize> = const { Cell::new(0) };
-}
+#[path = "support/alloc_count.rs"]
+mod alloc_count;
 
-/// Counts the allocations of the current thread.
-struct Counting;
-
-fn count() {
-    let _ = ALLOCS.try_with(|c| c.set(c.get() + 1));
-}
-
-// SAFETY: forwards to the system allocator; counting does not allocate.
-unsafe impl GlobalAlloc for Counting {
-    unsafe fn alloc(&self, l: Layout) -> *mut u8 {
-        count();
-        // SAFETY: the caller upholds the GlobalAlloc contract.
-        unsafe { System.alloc(l) }
-    }
-
-    unsafe fn alloc_zeroed(&self, l: Layout) -> *mut u8 {
-        count();
-        // SAFETY: as for alloc.
-        unsafe { System.alloc_zeroed(l) }
-    }
-
-    unsafe fn realloc(&self, p: *mut u8, l: Layout, n: usize) -> *mut u8 {
-        count();
-        // SAFETY: as for alloc.
-        unsafe { System.realloc(p, l, n) }
-    }
-
-    unsafe fn dealloc(&self, p: *mut u8, l: Layout) {
-        // SAFETY: as for alloc.
-        unsafe { System.dealloc(p, l) }
-    }
-}
-
-#[global_allocator]
-static GLOBAL: Counting = Counting;
-
-fn check_allocs(what: &str, mut f: impl FnMut()) {
-    f(); // warm up
-    let before = ALLOCS.with(Cell::get);
-    for _ in 0..20 {
-        f();
-    }
-    let n = ALLOCS.with(Cell::get) - before;
-    assert_eq!(n, 0, "{what}: {n} allocs in 20 runs");
-}
+use alloc_count::{assert_counter_counts, check_allocs};
 
 #[test]
 fn counter_counts() {
-    let before = ALLOCS.with(Cell::get);
-    drop(std::hint::black_box(vec![0u8; 100]));
-    assert!(ALLOCS.with(Cell::get) > before);
+    assert_counter_counts();
 }
 
 #[test]
@@ -98,7 +48,7 @@ fn allocs() {
         let (enc, dec) = (&mut c.enc, &mut c.dec);
         let mut buf = vec![0u8; 2 * MAX_BLOCK_SIZE];
         let mut out = vec![0u8; MAX_BLOCK_SIZE];
-        check_allocs("heap buffers", || {
+        check_allocs("heap buffers", 20, || {
             let mut h = [0u64; 256];
             enc.histogram(&mut h, &big);
             let mut l = [0u8; 256];
@@ -109,7 +59,7 @@ fn allocs() {
             dec.decode(&mut out, b, &tb).unwrap();
         });
         // Tables, histograms and buffers on the stack must stay there.
-        check_allocs("stack locals", || {
+        check_allocs("stack locals", 20, || {
             let mut src = [0u8; 4096];
             src.copy_from_slice(&small);
             let mut h = [0u64; 256];
@@ -124,7 +74,7 @@ fn allocs() {
             let mut dec1 = [0u8; 4096];
             dec.decode(&mut dec1, b, &t1).unwrap();
         });
-        check_allocs("errors", || {
+        check_allocs("errors", 20, || {
             let mut t1 = Table::default();
             let mut d = [0u8; 64];
             assert!(enc.encode(&mut d, &small, &t1).is_err());
@@ -152,7 +102,7 @@ fn kernel_allocs() {
     let mut arena = vec![0u8; 3 * N + ARENA_SLACK];
     let mut scratch = vec![0u8; HIST_SCRATCH];
     for tier in Tier::tiers() {
-        check_allocs(&tier.to_string(), || {
+        check_allocs(&tier.to_string(), 20, || {
             let s2r = [0u8; 256];
             let r2s = [0u8; R2S_LEN];
             let (mut ranks, mut right) = ([0u8; N + RANK_SLACK], [0u8; N + RANK_SLACK]);

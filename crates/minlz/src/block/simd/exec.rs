@@ -61,22 +61,17 @@
 //! they still run such a match, within the rules above.
 
 use super::decode::Chunk;
-#[cfg(all(target_arch = "x86_64", not(miri)))]
-use super::exec_avx2::{
-    exec_avx2, exec_delta_avx2, exec_flat_avx2, exec_flat_delta_avx2, ll_stats_avx2,
-    off_stats_avx2, tok_stats_avx2,
-};
 use super::{MAX_LEN, OFF_TAB};
 #[cfg(any(test, fuzzing))]
 use crate::pivco::kernel::Tier as PivcoTier;
 
 /// The exec loops and stats of a CPU tier: Go's `cpu` flags that `simdExec`, `simdExecFlat`
-/// and the stats dispatch on. A vector tier whose loops aren't built for the target runs the Go
-/// loops, and [`Tier::usable`] reports it unusable so tests don't run them twice.
+/// and the stats dispatch on. A vector tier runs the MLIR kernels of its target
+/// ([`super::mlir`]). A vector tier whose kernels aren't built for the target runs the Go loops,
+/// and [`Tier::usable`] reports it unusable so tests don't run them twice.
 ///
-/// A vector tier's arms call `#[target_feature]` loops without checking the CPU again, so a
-/// vector variant may only run on a CPU with its features, as [`Tier::best`] and [`Tier::tiers`]
-/// check.
+/// A vector tier calls its kernels without checking the CPU again, so a vector variant may only
+/// run on a CPU with its features, as [`Tier::best`] and [`Tier::tiers`] check.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Tier {
     /// The Go loops and the SWAR stats, on every CPU.
@@ -85,11 +80,8 @@ pub(crate) enum Tier {
     Avx2,
     /// AVX-512 on x86-64 (Go `cpu.AVX512`).
     Avx512,
-    /// The per-operation NEON loops on aarch64 (Go `cpu.NEON` without `simdBatchNEON`).
-    #[allow(dead_code, reason = "only tests and fuzzing run it, as Go's simdTiers")]
+    /// NEON on aarch64 (Go `cpu.NEON`).
     Neon,
-    /// The batched NEON loops on aarch64 (Go `simdBatchNEON`).
-    NeonBatch,
 }
 
 #[cfg(any(test, fuzzing))]
@@ -121,7 +113,7 @@ pub(crate) fn fuzz_tiers(mut f: impl FnMut(Tier, PivcoTier)) {
             Tier::Go => PivcoTier::Generic,
             Tier::Avx2 => PivcoTier::Avx2,
             Tier::Avx512 => PivcoTier::Avx512,
-            Tier::Neon | Tier::NeonBatch => PivcoTier::Neon,
+            Tier::Neon => PivcoTier::Neon,
         };
         // The kernels of a tier the CPU lacks run the generic ones. Tests can't check this:
         // cpu::Disabled of another test may hide a tier while they run.
@@ -153,142 +145,19 @@ pub(super) fn forced_pivco() -> Option<PivcoTier> {
     FORCED.get().map(|(_, p)| p)
 }
 
-/// The signature of the AVX2 and NEON exec loops, Go's
-/// `simdExecAVX2(dst, lits, tok, ll, offc, raw, esc *byte, n int, st *[4]int)`: `exec_avx2`,
-/// `exec_delta_avx2`, `exec_neon`, `exec_delta_neon`, `exec_batch_neon` and
-/// `exec_batch_delta_neon`. They run the first n operations of a chunk, from the start of its
-/// streams, as [`exec_go`] does (the delta variants for chunks with delta literals).
-///
-/// # Safety
-///
-/// The CPU has the features of the loop's tier, and the pointers come from `dst`, `lits` and the
-/// streams of a [`Chunk`] that keep the [memory rules](self) for these operations.
-pub(super) type ExecFn = unsafe fn(
-    dst: *mut u8,
-    lits: *const u8,
-    tok: *const u8,
-    ll: *const u8,
-    offc: *const u8,
-    raw: *const u8,
-    esc: *const u8,
-    n: usize,
-    st: &mut [usize; 4],
-);
-
-/// [`ExecFn`] of the AVX-512 loops, Go's `simdExecAVX512`: `exec_avx512` and `exec_delta_avx512`.
-/// `nraw` is the readable size of `raw`.
-///
-/// # Safety
-///
-/// As for [`ExecFn`].
-pub(super) type ExecRawFn = unsafe fn(
-    dst: *mut u8,
-    lits: *const u8,
-    tok: *const u8,
-    ll: *const u8,
-    offc: *const u8,
-    raw: *const u8,
-    nraw: usize,
-    esc: *const u8,
-    n: usize,
-    st: &mut [usize; 4],
-);
-
-/// The signature of the AVX2 and NEON exec loops for chunks with the no-overlap flag, Go's
-/// `simdExecFlatAVX2(dst, lits, tok, ll, offc, raw, esc *byte, n, pos int, st *[4]int)`:
-/// `exec_flat_avx2`, `exec_flat_delta_avx2`, `exec_flat_neon`, `exec_flat_delta_neon`,
-/// `exec_batch_flat_neon` and `exec_batch_flat_delta_neon`. They run n operations as
-/// [`exec_flat_go`] does, from `tok`, `ll`, `offc` and `esc` at the operation's stream positions
-/// and from bit `pos` of `raw`. The operations start at output position [`MAX_LEN`] or later.
-///
-/// # Safety
-///
-/// As for [`ExecFn`].
-pub(super) type ExecFlatFn = unsafe fn(
-    dst: *mut u8,
-    lits: *const u8,
-    tok: *const u8,
-    ll: *const u8,
-    offc: *const u8,
-    raw: *const u8,
-    esc: *const u8,
-    n: usize,
-    pos: usize,
-    st: &mut [usize; 4],
-);
-
-/// [`ExecFlatFn`] of the AVX-512 loops, Go's `simdExecFlatAVX512`: `exec_flat_avx512` and
-/// `exec_flat_delta_avx512`. `nraw` is the readable size of `raw` from its start, not from `pos`.
-///
-/// # Safety
-///
-/// As for [`ExecFn`].
-pub(super) type ExecFlatRawFn = unsafe fn(
-    dst: *mut u8,
-    lits: *const u8,
-    tok: *const u8,
-    ll: *const u8,
-    offc: *const u8,
-    raw: *const u8,
-    nraw: usize,
-    esc: *const u8,
-    n: usize,
-    pos: usize,
-    st: &mut [usize; 4],
-);
-
-/// The token stats of a vector tier over all of `b` (Go `simdTokStatsAVX2` and friends):
-/// the summed match length codes, the operations with literals, the repeats and the escaped
-/// matches, and whether every token is at most 135. Go's AVX2 and AVX-512 loops count literals
-/// twice and escapes four times, which [`Tier::tok_stats_asm`] undoes.
-///
-/// # Safety
-///
-/// The CPU has the features of the tier. AVX2 takes a multiple of 32 bytes, NEON a multiple of
-/// 16 bytes, AVX-512 any length above 0.
-#[allow(dead_code, reason = "the signature of the vector tiers")]
-pub(super) type TokStatsFn = unsafe fn(b: &[u8]) -> (usize, usize, usize, usize, bool);
-
-/// The literal length stats of a vector tier over all of `b` (Go `simdLLStatsAVX2`): the sum of
-/// the bytes, how many are 33, and whether every byte is 1 to 33. The sum must be exact for
-/// any bytes, as escapes are summed with it. Lengths as for [`TokStatsFn`].
-///
-/// # Safety
-///
-/// As for [`TokStatsFn`].
-#[allow(dead_code, reason = "the signature of the vector tiers")]
-pub(super) type LLStatsFn = unsafe fn(b: &[u8]) -> (usize, usize, bool);
-
-/// The offset symbol stats of a vector tier over all of `b`, and whether every byte is 1 to 175.
-/// Go's AVX2 and AVX-512 loops return the sum of `b >> 3` and how often it is 0, which
-/// [`Tier::off_stats_asm`] turns into raw bits; NEON returns the raw bits and 0. Lengths as for
-/// [`TokStatsFn`].
-///
-/// # Safety
-///
-/// As for [`TokStatsFn`].
-#[allow(dead_code, reason = "the signature of the vector tiers")]
-pub(super) type OffStatsFn = unsafe fn(b: &[u8]) -> (usize, usize, bool);
-
 impl Tier {
     /// Every usable tier, the Go loops first, as Go's `simdTiers` runs them.
     #[cfg_attr(not(test), allow(dead_code, reason = "for tests"))]
     pub(crate) fn tiers() -> Vec<Tier> {
-        [
-            Tier::Go,
-            Tier::Avx2,
-            Tier::Avx512,
-            Tier::Neon,
-            Tier::NeonBatch,
-        ]
-        .into_iter()
-        .filter(|t| t.usable())
-        .collect()
+        [Tier::Go, Tier::Avx2, Tier::Avx512, Tier::Neon]
+            .into_iter()
+            .filter(|t| t.usable())
+            .collect()
     }
 
     /// The tier Go dispatches to on this CPU.
     pub(crate) fn best() -> Tier {
-        [Tier::Avx512, Tier::Avx2, Tier::NeonBatch]
+        [Tier::Avx512, Tier::Avx2, Tier::Neon]
             .into_iter()
             .find(|t| t.usable())
             .unwrap_or(Tier::Go)
@@ -311,8 +180,8 @@ impl Tier {
             Tier::Go => true,
             Tier::Avx2 => crate::cpu::has(crate::cpu::AVX2),
             Tier::Avx512 => crate::cpu::has(crate::cpu::AVX512),
-            // cpu.rs detects NEON only where exec_neon is built.
-            Tier::Neon | Tier::NeonBatch => crate::cpu::has(crate::cpu::NEON),
+            // cpu.rs detects NEON only where the NEON kernels are built.
+            Tier::Neon => crate::cpu::has(crate::cpu::NEON),
         }
     }
 
@@ -332,44 +201,12 @@ impl Tier {
         n: usize,
         st: &mut [usize; 4],
     ) {
-        match self {
-            #[cfg(all(target_arch = "x86_64", not(miri)))]
-            Tier::Avx512 => {
-                use super::exec_avx512::{exec_avx512, exec_delta_avx512};
-                let f: ExecRawFn = if c.delta {
-                    exec_delta_avx512
-                } else {
-                    exec_avx512
-                };
-                // SAFETY: the caller keeps the CPU and memory rules (see # Safety).
-                unsafe { exec_raw_vec(f, dst, lits, c, n, st) }
-            }
-            #[cfg(not(all(target_arch = "x86_64", not(miri))))]
-            Tier::Avx512 => exec_go(dst, lits, c, n, st),
-            #[cfg(all(target_arch = "x86_64", not(miri)))]
-            Tier::Avx2 => {
-                let f: ExecFn = if c.delta { exec_delta_avx2 } else { exec_avx2 };
-                // SAFETY: as for Avx512.
-                unsafe { exec_vec(f, dst, lits, c, n, st) }
-            }
-            #[cfg(not(all(target_arch = "x86_64", not(miri))))]
-            Tier::Avx2 => exec_go(dst, lits, c, n, st),
-            #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
-            Tier::NeonBatch | Tier::Neon => {
-                use super::exec_neon::*;
-                let f: ExecFn = match (self, c.delta) {
-                    (Tier::NeonBatch, true) => exec_batch_delta_neon,
-                    (Tier::NeonBatch, false) => exec_batch_neon,
-                    (_, true) => exec_delta_neon,
-                    (_, false) => exec_neon,
-                };
-                // SAFETY: as for Avx512.
-                unsafe { exec_vec(f, dst, lits, c, n, st) }
-            }
-            #[cfg(not(all(target_arch = "aarch64", target_endian = "little", not(miri))))]
-            Tier::NeonBatch | Tier::Neon => exec_go(dst, lits, c, n, st),
-            Tier::Go => exec_go(dst, lits, c, n, st),
+        #[cfg(all(minlz_mlir, not(miri)))]
+        if let Some(isa) = self.isa() {
+            // SAFETY: the caller keeps the CPU and memory rules (see # Safety).
+            return unsafe { exec_vec(isa, false, dst, lits, c, 0, n, [0; 4], st) };
         }
+        exec_go(dst, lits, c, n, st)
     }
 
     /// Runs operations k0 to k of c, which has the no-overlap flag, from stream positions cur
@@ -390,151 +227,69 @@ impl Tier {
         cur: [usize; 4],
         st: &mut [usize; 4],
     ) {
+        #[cfg(all(minlz_mlir, not(miri)))]
+        if let Some(isa) = self.isa() {
+            // SAFETY: the caller keeps the CPU and memory rules (see # Safety).
+            return unsafe { exec_vec(isa, true, dst, lits, c, k0, k, cur, st) };
+        }
+        exec_flat_go(dst, lits, c, k0, k, cur, st)
+    }
+
+    /// Returns the target of the tier's MLIR kernels, if it has one.
+    #[cfg(all(minlz_mlir, not(miri)))]
+    fn isa(self) -> Option<super::mlir::Isa> {
         match self {
-            #[cfg(all(target_arch = "x86_64", not(miri)))]
-            Tier::Avx512 => {
-                use super::exec_avx512::{exec_flat_avx512, exec_flat_delta_avx512};
-                let f: ExecFlatRawFn = if c.delta {
-                    exec_flat_delta_avx512
-                } else {
-                    exec_flat_avx512
-                };
-                // SAFETY: the caller keeps the CPU and memory rules (see # Safety).
-                unsafe { exec_flat_raw_vec(f, dst, lits, c, k0, k, cur, st) }
-            }
-            #[cfg(not(all(target_arch = "x86_64", not(miri))))]
-            Tier::Avx512 => exec_flat_go(dst, lits, c, k0, k, cur, st),
-            #[cfg(all(target_arch = "x86_64", not(miri)))]
-            Tier::Avx2 => {
-                let f: ExecFlatFn = if c.delta {
-                    exec_flat_delta_avx2
-                } else {
-                    exec_flat_avx2
-                };
-                // SAFETY: as in exec.
-                unsafe { exec_flat_vec(f, dst, lits, c, k0, k, cur, st) }
-            }
-            #[cfg(not(all(target_arch = "x86_64", not(miri))))]
-            Tier::Avx2 => exec_flat_go(dst, lits, c, k0, k, cur, st),
-            #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
-            Tier::NeonBatch | Tier::Neon => {
-                use super::exec_neon::*;
-                let f: ExecFlatFn = match (self, c.delta) {
-                    (Tier::NeonBatch, true) => exec_batch_flat_delta_neon,
-                    (Tier::NeonBatch, false) => exec_batch_flat_neon,
-                    (_, true) => exec_flat_delta_neon,
-                    (_, false) => exec_flat_neon,
-                };
-                // SAFETY: as in exec.
-                unsafe { exec_flat_vec(f, dst, lits, c, k0, k, cur, st) }
-            }
-            #[cfg(not(all(target_arch = "aarch64", target_endian = "little", not(miri))))]
-            Tier::NeonBatch | Tier::Neon => exec_flat_go(dst, lits, c, k0, k, cur, st),
-            Tier::Go => exec_flat_go(dst, lits, c, k0, k, cur, st),
+            #[cfg(target_arch = "x86_64")]
+            Tier::Avx512 => Some(super::mlir::Isa::Avx512),
+            #[cfg(target_arch = "x86_64")]
+            Tier::Avx2 => Some(super::mlir::Isa::Avx2),
+            #[cfg(target_arch = "aarch64")]
+            Tier::Neon => Some(super::mlir::Isa::Neon),
+            _ => None,
         }
     }
 
     /// Returns the statistics of a prefix of tok and its length (Go `simdTokStatsAsm`):
     /// the summed match length codes, the operations with literals, the repeats and the escaped
     /// matches. ok is false if the prefix has a token above 135. See `tok_stats`.
-    /// A vector arm runs only when the CPU has the tier's features, so any tier is safe to pass:
+    /// A vector kernel runs only when the CPU has the tier's features, so any tier is safe to pass:
     /// without them the prefix is empty.
     pub(super) fn tok_stats_asm(self, _tok: &[u8]) -> (usize, usize, usize, usize, usize, bool) {
-        match self {
-            #[cfg(all(target_arch = "x86_64", not(miri)))]
-            Tier::Avx512 if self.usable() && !_tok.is_empty() => {
-                // SAFETY: the guard checked the CPU features.
-                let (out, lit, rep, esc, ok) =
-                    unsafe { super::exec_avx512::tok_stats_avx512(_tok) };
-                (out, lit >> 1, rep, esc >> 2, _tok.len(), ok)
-            }
-            #[cfg(all(target_arch = "x86_64", not(miri)))]
-            Tier::Avx2 if self.usable() => {
-                let n = _tok.len() & !31;
-                if n == 0 {
-                    return (0, 0, 0, 0, 0, true);
-                }
-                // SAFETY: the guard checked the CPU features, AVX2 and BMI2.
-                let (out, lit, rep, esc, ok) = unsafe { tok_stats_avx2(&_tok[..n]) };
-                (out, lit >> 1, rep, esc >> 2, n, ok)
-            }
-            Tier::Avx2 | Tier::Avx512 => (0, 0, 0, 0, 0, true),
-            #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
-            Tier::NeonBatch | Tier::Neon if self.usable() => {
-                let n = _tok.len() & !15;
-                // SAFETY: the guard checked the CPU features.
-                let (out, lit, rep, esc, ok) =
-                    unsafe { super::exec_neon::tok_stats_neon(&_tok[..n]) };
-                (out, lit, rep, esc, n, ok)
-            }
-            Tier::NeonBatch | Tier::Neon | Tier::Go => (0, 0, 0, 0, 0, true),
+        #[cfg(all(minlz_mlir, not(miri)))]
+        if self.usable()
+            && let Some(isa) = self.isa()
+        {
+            // SAFETY: the guard checked the CPU features.
+            return unsafe { super::mlir::tok(isa, _tok) };
         }
+        (0, 0, 0, 0, 0, true)
     }
 
     /// Returns the sum and escapes of a prefix of ll and its length (Go `simdLLStatsAsm`).
     /// ok is false if the prefix has a length outside 1-33; the sum is exact regardless.
     /// See `ll_stats`.
     pub(super) fn ll_stats_asm(self, _ll: &[u8]) -> (usize, usize, usize, bool) {
-        match self {
-            #[cfg(all(target_arch = "x86_64", not(miri)))]
-            Tier::Avx512 if self.usable() && !_ll.is_empty() => {
-                // SAFETY: as in tok_stats_asm.
-                let (sum, n_esc, ok) = unsafe { super::exec_avx512::ll_stats_avx512(_ll) };
-                (sum, n_esc, _ll.len(), ok)
-            }
-            #[cfg(all(target_arch = "x86_64", not(miri)))]
-            Tier::Avx2 if self.usable() => {
-                let n = _ll.len() & !31;
-                if n == 0 {
-                    return (0, 0, 0, true);
-                }
-                // SAFETY: as in tok_stats_asm.
-                let (sum, n_esc, ok) = unsafe { ll_stats_avx2(&_ll[..n]) };
-                (sum, n_esc, n, ok)
-            }
-            Tier::Avx2 | Tier::Avx512 => (0, 0, 0, true),
-            #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
-            Tier::NeonBatch | Tier::Neon if self.usable() => {
-                let n = _ll.len() & !15;
-                // SAFETY: as in tok_stats_asm.
-                let (sum, esc, ok) = unsafe { super::exec_neon::ll_stats_neon(&_ll[..n]) };
-                (sum, esc, n, ok)
-            }
-            Tier::NeonBatch | Tier::Neon | Tier::Go => (0, 0, 0, true),
+        #[cfg(all(minlz_mlir, not(miri)))]
+        if self.usable()
+            && let Some(isa) = self.isa()
+        {
+            // SAFETY: as in tok_stats_asm.
+            return unsafe { super::mlir::ll(isa, _ll) };
         }
+        (0, 0, 0, true)
     }
 
     /// Returns the raw bits of a prefix of offc and its length (Go `simdOffStatsAsm`).
     /// ok is false if the prefix has a symbol outside 1-175. See `off_stats`.
     pub(super) fn off_stats_asm(self, _offc: &[u8]) -> (usize, usize, bool) {
-        match self {
-            #[cfg(all(target_arch = "x86_64", not(miri)))]
-            Tier::Avx512 if self.usable() && !_offc.is_empty() => {
-                // SAFETY: as in tok_stats_asm.
-                let (sum, zeros, ok) = unsafe { super::exec_avx512::off_stats_avx512(_offc) };
-                (sum + zeros - _offc.len(), _offc.len(), ok)
-            }
-            #[cfg(all(target_arch = "x86_64", not(miri)))]
-            Tier::Avx2 if self.usable() => {
-                let n = _offc.len() & !31;
-                if n == 0 {
-                    return (0, 0, true);
-                }
-                // SAFETY: as in tok_stats_asm.
-                let (sum, zeros, ok) = unsafe { off_stats_avx2(&_offc[..n]) };
-                // Go's sum - n + zeros, ordered so it can't underflow: each byte adds to one.
-                (sum + zeros - n, n, ok)
-            }
-            Tier::Avx2 | Tier::Avx512 => (0, 0, true),
-            #[cfg(all(target_arch = "aarch64", target_endian = "little", not(miri)))]
-            Tier::NeonBatch | Tier::Neon if self.usable() => {
-                let n = _offc.len() & !15;
-                // SAFETY: as in tok_stats_asm.
-                let (bits, _, ok) = unsafe { super::exec_neon::off_stats_neon(&_offc[..n]) };
-                (bits, n, ok)
-            }
-            Tier::NeonBatch | Tier::Neon | Tier::Go => (0, 0, true),
+        #[cfg(all(minlz_mlir, not(miri)))]
+        if self.usable()
+            && let Some(isa) = self.isa()
+        {
+            // SAFETY: as in tok_stats_asm.
+            return unsafe { super::mlir::off(isa, _offc) };
         }
+        (0, 0, true)
     }
 }
 
@@ -550,148 +305,45 @@ impl Chunk<'_> {
     }
 }
 
-/// Runs the vector loop f on the first n operations of c, as [`Tier::exec`] does.
+/// Runs operations k0 to k of c from stream positions cur with the MLIR loop of isa, as
+/// [`Tier::exec`] does, or as [`Tier::exec_flat`] does if flat.
 ///
 /// # Safety
 ///
-/// The CPU has the features of f's tier, and the operations keep memory rules 1 and 2: they
-/// end at least `SLACK` bytes before the end of dst, and lits is readable `SLACK` bytes past
-/// their literals. [`Chunk::run`] splits chunks for rule 1, and the decoder passes lits as rule 2
-/// says. c's counts are at least what its operations read. Rule 3 is checked here against those
-/// counts; rule 4 is the loops' own.
-#[allow(dead_code, reason = "called by the vector tiers")]
-pub(super) unsafe fn exec_vec(
-    f: ExecFn,
+/// The CPU has the features of isa, and the operations keep memory rules 1 and 2: they end at
+/// least `SLACK` bytes before the end of dst, and lits is readable `SLACK` bytes past their
+/// literals. [`Chunk::run`] splits chunks for rule 1, and the decoder passes lits as rule 2 says.
+/// c's counts are at least what operations 0 to k read, and cur are the stream positions after
+/// operations 0 to k0. Rule 3 is checked here against those counts; rule 4 is the loops' own.
+#[cfg(all(minlz_mlir, not(miri)))]
+#[allow(clippy::too_many_arguments)]
+unsafe fn exec_vec(
+    isa: super::mlir::Isa,
+    flat: bool,
     dst: &mut [u8],
     lits: &[u8],
     c: &Chunk,
-    n: usize,
+    k0: usize,
+    k: usize,
+    cur: [usize; 4],
     st: &mut [usize; 4],
 ) {
-    assert!(n <= c.n_tok && c.readable() && st[1] <= lits.len() && st[0] <= dst.len());
+    assert!(k0 <= k && k <= c.n_tok && c.readable() && st[1] <= lits.len() && st[0] <= dst.len());
+    assert!(cur[0] <= c.n_ll && cur[1] <= c.n_off && cur[2] <= c.n_esc && cur[3] <= c.bits);
+    let streams = [
+        c.tok[k0..].as_ptr(),
+        c.ll[cur[0]..].as_ptr(),
+        c.offc[cur[1]..].as_ptr(),
+        c.raw.as_ptr(),
+        c.esc[cur[2]..].as_ptr(),
+    ];
+    let (dp, lp) = (dst.as_mut_ptr(), lits.as_ptr());
+    let mut a = super::mlir::Exec::new(dp, lp, streams, c.raw.len(), k - k0, cur[3], *st);
     // SAFETY: the pointers cover their slices, which keep the memory rules: the streams are
     // checked above against c's counts, and the counts, dst and lits are the caller's (see
     // # Safety).
-    unsafe {
-        f(
-            dst.as_mut_ptr(),
-            lits.as_ptr(),
-            c.tok.as_ptr(),
-            c.ll.as_ptr(),
-            c.offc.as_ptr(),
-            c.raw.as_ptr(),
-            c.esc.as_ptr(),
-            n,
-            st,
-        )
-    }
-}
-
-/// [`exec_vec`] for the AVX-512 loops.
-///
-/// # Safety
-///
-/// As for [`exec_vec`].
-#[allow(dead_code, reason = "called by the vector tiers")]
-pub(super) unsafe fn exec_raw_vec(
-    f: ExecRawFn,
-    dst: &mut [u8],
-    lits: &[u8],
-    c: &Chunk,
-    n: usize,
-    st: &mut [usize; 4],
-) {
-    assert!(n <= c.n_tok && c.readable() && st[1] <= lits.len() && st[0] <= dst.len());
-    // SAFETY: as in exec_vec.
-    unsafe {
-        f(
-            dst.as_mut_ptr(),
-            lits.as_ptr(),
-            c.tok.as_ptr(),
-            c.ll.as_ptr(),
-            c.offc.as_ptr(),
-            c.raw.as_ptr(),
-            c.raw.len(),
-            c.esc.as_ptr(),
-            n,
-            st,
-        )
-    }
-}
-
-/// Runs the vector loop f on operations k0 to k of c from stream positions cur, as
-/// [`Tier::exec_flat`] does.
-///
-/// # Safety
-///
-/// As for [`exec_vec`] with operations 0 to k, and cur are the stream positions after
-/// operations 0 to k0 (see [`Chunk::head`]).
-#[allow(dead_code, reason = "called by the vector tiers")]
-#[allow(clippy::too_many_arguments)]
-pub(super) unsafe fn exec_flat_vec(
-    f: ExecFlatFn,
-    dst: &mut [u8],
-    lits: &[u8],
-    c: &Chunk,
-    k0: usize,
-    k: usize,
-    cur: [usize; 4],
-    st: &mut [usize; 4],
-) {
-    assert!(k0 <= k && k <= c.n_tok && c.readable() && st[1] <= lits.len() && st[0] <= dst.len());
-    assert!(cur[0] <= c.n_ll && cur[1] <= c.n_off && cur[2] <= c.n_esc && cur[3] <= c.bits);
-    // SAFETY: as in exec_vec; the stream positions are inside the streams.
-    unsafe {
-        f(
-            dst.as_mut_ptr(),
-            lits.as_ptr(),
-            c.tok[k0..].as_ptr(),
-            c.ll[cur[0]..].as_ptr(),
-            c.offc[cur[1]..].as_ptr(),
-            c.raw.as_ptr(),
-            c.esc[cur[2]..].as_ptr(),
-            k - k0,
-            cur[3],
-            st,
-        )
-    }
-}
-
-/// [`exec_flat_vec`] for the AVX-512 loops.
-///
-/// # Safety
-///
-/// As for [`exec_flat_vec`].
-#[allow(dead_code, reason = "called by the vector tiers")]
-#[allow(clippy::too_many_arguments)]
-pub(super) unsafe fn exec_flat_raw_vec(
-    f: ExecFlatRawFn,
-    dst: &mut [u8],
-    lits: &[u8],
-    c: &Chunk,
-    k0: usize,
-    k: usize,
-    cur: [usize; 4],
-    st: &mut [usize; 4],
-) {
-    assert!(k0 <= k && k <= c.n_tok && c.readable() && st[1] <= lits.len() && st[0] <= dst.len());
-    assert!(cur[0] <= c.n_ll && cur[1] <= c.n_off && cur[2] <= c.n_esc && cur[3] <= c.bits);
-    // SAFETY: as in exec_flat_vec.
-    unsafe {
-        f(
-            dst.as_mut_ptr(),
-            lits.as_ptr(),
-            c.tok[k0..].as_ptr(),
-            c.ll[cur[0]..].as_ptr(),
-            c.offc[cur[1]..].as_ptr(),
-            c.raw.as_ptr(),
-            c.raw.len(),
-            c.esc[cur[2]..].as_ptr(),
-            k - k0,
-            cur[3],
-            st,
-        )
-    }
+    unsafe { super::mlir::exec(isa, c.delta, flat, &mut a) };
+    *st = a.st;
 }
 
 #[inline(always)]

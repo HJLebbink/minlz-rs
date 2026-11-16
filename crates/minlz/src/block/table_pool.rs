@@ -46,10 +46,16 @@ pub(super) fn get<E: Copy + Default, const N: usize>(p: &'static Pool<[E; N]>) -
             t.fill(E::default());
             t
         }
-        None => match vec![E::default(); N].into_boxed_slice().try_into() {
-            Ok(t) => t,
-            Err(_) => unreachable!("the vector has N entries"),
-        },
+        None => zeroed(),
+    }
+}
+
+/// Allocates `[T::default(); N]` on the heap: `Box::new` builds it on the stack first, and the
+/// large tables would overflow a small thread stack.
+pub(super) fn zeroed<T: Clone + Default, const N: usize>() -> Box<[T; N]> {
+    match vec![T::default(); N].into_boxed_slice().try_into() {
+        Ok(b) => b,
+        Err(_) => unreachable!("the vector has N elements"),
     }
 }
 
